@@ -1,23 +1,51 @@
-# Entorno de desarrollo remoto portable: idéntico en tu PC y en el server del amigo.
-# Levantar:   docker compose up -d --build
-# Entrar:     docker exec -it remoteclaude-devbox bash
-# Ver navegador: http://<host-tailscale>:6080/vnc.html?autoconnect=1&resize=remote
+# Despliegue agnóstico: lo único que necesita el host es Docker + /dev/net/tun.
+# Tailscale, sshd, mosh, tmux, navegador y Playwright viven todos en contenedores.
+#
+#   1. cp .env.example .env   y poné tu TS_AUTHKEY (admin console de Tailscale)
+#   2. poné tu clave pública en  ssh/authorized_keys
+#   3. docker compose up -d --build
+#
+# Acceso (por el nombre de MagicDNS, ej. "remoteclaude"):
+#   Terminal :  mosh root@remoteclaude   ->   tmux new -A -s dev
+#   Navegador:  http://remoteclaude:6080/vnc.html?autoconnect=1&resize=remote
 services:
+  # --- Red: une el stack a tu tailnet. Aporta la IP/MagicDNS. ---
+  tailscale:
+    image: tailscale/tailscale:latest
+    container_name: remoteclaude-ts
+    hostname: remoteclaude            # este es el nombre de MagicDNS
+    environment:
+      - TS_AUTHKEY=${TS_AUTHKEY:?falta TS_AUTHKEY (ver .env.example)}
+      - TS_STATE_DIR=/var/lib/tailscale
+      - TS_USERSPACE=false
+    volumes:
+      - ts-state:/var/lib/tailscale
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    cap_add:
+      - NET_ADMIN
+    # Opcional: exponer puertos también en el host (para probar localmente).
+    ports:
+      - "6080:6080"   # noVNC
+      - "9323:9323"   # Playwright UI / report
+    restart: unless-stopped
+
+  # --- Devbox: comparte la red de Tailscale, así es alcanzable por MagicDNS. ---
   devbox:
     build: .
     container_name: remoteclaude-devbox
-    # shm chico hace crashear a Chromium; subilo.
-    shm_size: "1gb"
-    ports:
-      - "6080:6080"   # noVNC  -> ver el navegador real en el celular
-      - "9323:9323"   # Playwright UI mode / report (npx playwright test --ui)
-      - "3000:3000"   # tu app bajo test (ajustá a tu framework)
-      - "5173:5173"   # Vite dev server (ajustá / agregá los que uses)
+    network_mode: service:tailscale   # <- clave: misma IP que el contenedor de Tailscale
+    depends_on:
+      - tailscale
+    shm_size: "1gb"                   # Chromium crashea con shm chico
     volumes:
-      - ./:/work      # tu código, editable en vivo
+      - ./:/work
+      - ./ssh/authorized_keys:/root/.ssh/authorized_keys:ro
     environment:
       - DISPLAY=:99
       - SCREEN_GEOMETRY=1360x768x24
-    # Reinicia solo si el host se reinicia (server siempre prendido).
     restart: unless-stopped
     command: ["sleep", "infinity"]
+
+volumes:
+  ts-state:

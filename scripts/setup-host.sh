@@ -1,33 +1,13 @@
 #!/usr/bin/env bash
-# Prepara un host Linux (tu PC ahora, el server del amigo después) para trabajo
-# remoto estable desde el celular:
-#   - Tailscale : red que sobrevive cambios de IP / sueño / roaming, sin IP pública
-#   - mosh+tmux : terminal que sobrevive al bloqueo del celular
-#   - Docker    : para el entorno portable con navegador (docker-compose.yml)
+# Con el enfoque containerizado, el host casi no necesita nada: solo Docker
+# y el device /dev/net/tun (para que el contenedor de Tailscale arme la VPN).
+# Todo lo demás (Tailscale, sshd, mosh, tmux, navegador) vive en contenedores.
 #
 # Uso:  bash scripts/setup-host.sh
 set -euo pipefail
 
-echo "==> Instalando Tailscale, mosh, tmux y Docker (host Linux)"
+echo "==> Preparando host (solo Docker + /dev/net/tun)"
 
-# --- Tailscale ---
-if ! command -v tailscale >/dev/null 2>&1; then
-    curl -fsSL https://tailscale.com/install.sh | sh
-else
-    echo "    tailscale ya instalado"
-fi
-
-# --- mosh + tmux + SSH (mosh necesita SSH para iniciar la sesión) ---
-if command -v apt-get >/dev/null 2>&1; then
-    sudo apt-get update
-    sudo apt-get install -y mosh tmux openssh-server
-elif command -v dnf >/dev/null 2>&1; then
-    sudo dnf install -y mosh tmux openssh-server
-else
-    echo "!! Gestor de paquetes no reconocido: instalá mosh, tmux y openssh-server a mano."
-fi
-
-# --- Docker ---
 if ! command -v docker >/dev/null 2>&1; then
     curl -fsSL https://get.docker.com | sh
     sudo usermod -aG docker "$USER" || true
@@ -36,21 +16,28 @@ else
     echo "    docker ya instalado"
 fi
 
-# --- Activar SSH (mosh lo usa para el handshake inicial) ---
-sudo systemctl enable --now ssh 2>/dev/null || sudo systemctl enable --now sshd 2>/dev/null || true
+# /dev/net/tun: presente en casi todo kernel Linux; lo cargamos por las dudas.
+if [ ! -e /dev/net/tun ]; then
+    sudo modprobe tun || true
+fi
 
 cat <<'EOF'
 
 ============================================================
- Falta un paso manual: autenticar Tailscale
-   sudo tailscale up
- (te da un link para loguearte; corré lo mismo en el celular
-  instalando la app de Tailscale con la MISMA cuenta)
+ Falta configurar 2 cosas antes de levantar:
 
- Evitar que la PC se suspenda y mate todo (escritorio):
-   sudo systemctl mask sleep.target suspend.target hibernate.target hybrid-sleep.target
+ 1) Auth key de Tailscale:
+      cp .env.example .env   y pegá tu TS_AUTHKEY
+      (Admin console -> Settings -> Keys -> Generate auth key, "Reusable")
 
- Ver el nombre/IP del host en tu tailnet:
-   tailscale status
+ 2) Tu clave pública SSH (para entrar con mosh):
+      cp ssh/authorized_keys.example ssh/authorized_keys
+      y pegá la pública de tu celular
+
+ Después:
+      docker compose up -d --build
+
+ Tip: que la PC no se suspenda y mate todo (escritorio):
+      sudo systemctl mask sleep.target suspend.target hibernate.target hybrid-sleep.target
 ============================================================
 EOF

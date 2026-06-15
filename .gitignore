@@ -1,6 +1,9 @@
 node_modules/
 test-results/
 playwright-report/
-.env
-.env.*
+.log
 *.log
+
+# Secretos / config local (no commitear)
+.env
+ssh/authorized_keys

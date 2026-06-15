@@ -1,19 +1,31 @@
 #!/usr/bin/env bash
-# Levanta el entorno gráfico persistente DENTRO del contenedor:
-#   Xvfb (display virtual)  ->  x11vnc (lo comparte por VNC)  ->  noVNC (lo sirve por web)
-# Como todo vive del lado del servidor, bloquear el celular NO rompe nada:
-# recargás la pestaña de noVNC y el navegador sigue donde estaba.
+# Levanta TODO el entorno remoto dentro del contenedor:
+#   - sshd + mosh : terminal a la que entrás directo por la tailnet (sobrevive al bloqueo)
+#   - Xvfb -> x11vnc -> noVNC : navegador real visible desde el celular
+# Como el contenedor comparte la red del contenedor de Tailscale, es alcanzable por su
+# nombre de MagicDNS sin exponer puertos en el host.
 set -euo pipefail
 
 GEOMETRY="${SCREEN_GEOMETRY:-1360x768x24}"
 NOVNC_PORT="${NOVNC_PORT:-6080}"
 VNC_PORT=5900
 
+# --- Terminal remota (sshd para que entre mosh) ---
+if [ -s /root/.ssh/authorized_keys ]; then
+    chmod 700 /root/.ssh && chmod 600 /root/.ssh/authorized_keys
+    ssh-keygen -A >/dev/null 2>&1   # genera host keys si faltan
+    /usr/sbin/sshd
+    echo "[entrypoint] sshd activo -> entrá con:  mosh root@<host-tailscale>"
+else
+    echo "[entrypoint] !! sin /root/.ssh/authorized_keys: sshd desactivado."
+    echo "[entrypoint]    Montá tu clave pública (ver ssh/authorized_keys.example)."
+fi
+
+# --- Entorno gráfico ---
 echo "[entrypoint] Display virtual ${DISPLAY} (${GEOMETRY})"
 Xvfb "${DISPLAY}" -screen 0 "${GEOMETRY}" -ac +extension RANDR +extension GLX &
-# esperar a que el display esté listo
-for i in $(seq 1 30); do
-    if xdpyinfo -display "${DISPLAY}" >/dev/null 2>&1; then break; fi
+for _ in $(seq 1 30); do
+    xdpyinfo -display "${DISPLAY}" >/dev/null 2>&1 && break
     sleep 0.2
 done
 
@@ -29,11 +41,9 @@ websockify --web=/usr/share/novnc "${NOVNC_PORT}" "localhost:${VNC_PORT}" &
 cat <<EOF
 
   ============================================================
-   Entorno listo.
-   Abrí en el navegador del celular (vía Tailscale):
-     http://<nombre-tailscale-del-host>:${NOVNC_PORT}/vnc.html?autoconnect=1&resize=remote
-   Entrá a la shell del contenedor desde el host con:
-     docker exec -it remoteclaude-devbox bash
+   Entorno listo (todo dentro del contenedor).
+   Navegador:  http://<host-tailscale>:${NOVNC_PORT}/vnc.html?autoconnect=1&resize=remote
+   Terminal :  mosh root@<host-tailscale>   ->   tmux new -A -s dev
   ============================================================
 
 EOF
