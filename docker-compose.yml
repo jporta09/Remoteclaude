@@ -1,0 +1,23 @@
+# Entorno de desarrollo remoto portable: idéntico en tu PC y en el server del amigo.
+# Levantar:   docker compose up -d --build
+# Entrar:     docker exec -it remoteclaude-devbox bash
+# Ver navegador: http://<host-tailscale>:6080/vnc.html?autoconnect=1&resize=remote
+services:
+  devbox:
+    build: .
+    container_name: remoteclaude-devbox
+    # shm chico hace crashear a Chromium; subilo.
+    shm_size: "1gb"
+    ports:
+      - "6080:6080"   # noVNC  -> ver el navegador real en el celular
+      - "9323:9323"   # Playwright UI mode / report (npx playwright test --ui)
+      - "3000:3000"   # tu app bajo test (ajustá a tu framework)
+      - "5173:5173"   # Vite dev server (ajustá / agregá los que uses)
+    volumes:
+      - ./:/work      # tu código, editable en vivo
+    environment:
+      - DISPLAY=:99
+      - SCREEN_GEOMETRY=1360x768x24
+    # Reinicia solo si el host se reinicia (server siempre prendido).
+    restart: unless-stopped
+    command: ["sleep", "infinity"]
