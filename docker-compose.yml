@@ -46,6 +46,20 @@ services:
     restart: unless-stopped
     command: ["sleep", "infinity"]
 
+  # Pantalla virtual aislada para ver el navegador headed del host desde el celu.
+  # El navegador corre EN EL HOST (DISPLAY=localhost:99) y dibuja en este Xvfb.
+  display:
+    build:
+      context: .
+      dockerfile: Dockerfile.display
+    container_name: remoteclaude-display
+    environment:
+      - SCREEN_GEOMETRY=${SCREEN_GEOMETRY:-1360x768x24}
+    ports:
+      - "6080:6080"             # noVNC -> visible por la tailnet (lo ves en el celu)
+      - "127.0.0.1:6099:6099"   # Xvfb TCP -> solo el host local dibuja acá (X es inseguro)
+    restart: unless-stopped
+
 volumes:
   ts-state:
   ssh-hostkeys:

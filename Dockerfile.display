@@ -1,0 +1,24 @@
+# Pantalla virtual AISLADA para ver el navegador headed del host desde el celu.
+# El navegador corre en el HOST (DISPLAY=localhost:99) y dibuja en este Xvfb;
+# x11vnc + noVNC lo exponen por web. Acá NO corre ningún navegador ni stack.
+FROM debian:bookworm-slim
+
+RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+        xvfb \
+        x11vnc \
+        novnc \
+        websockify \
+        fluxbox \
+        x11-utils \
+        procps \
+    && rm -rf /var/lib/apt/lists/* \
+    && ln -sf /usr/share/novnc/vnc.html /usr/share/novnc/index.html
+
+ENV SCREEN_GEOMETRY=1360x768x24
+ENV NOVNC_PORT=6080
+
+COPY scripts/display-entrypoint.sh /usr/local/bin/display-entrypoint.sh
+RUN chmod +x /usr/local/bin/display-entrypoint.sh
+
+ENTRYPOINT ["/usr/local/bin/display-entrypoint.sh"]
+CMD ["sleep", "infinity"]

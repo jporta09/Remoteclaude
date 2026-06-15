@@ -76,6 +76,29 @@ claude                        # Claude Code con tu historial
 - Cualquier server/dev-server que levantes en el host es alcanzable desde el celu
   como `http://remoteclaude:<puerto>` (Tailscale carga la red del host).
 
+## Ver el navegador headed (servicio `display`)
+
+El servicio `display` levanta una **pantalla virtual aislada** (Xvfb) + noVNC. Tu
+navegador/Playwright corre **en el host** pero dibuja en esa pantalla; vos la mirás
+desde el celular. No expone tu escritorio real y anda igual en un server sin monitor.
+
+En la shell del host (vía mosh), apuntá el navegador a la pantalla con `DISPLAY`:
+
+```bash
+DISPLAY=localhost:99 npx playwright test --headed
+DISPLAY=localhost:99 google-chrome https://ejemplo.com   # cualquier app X sirve
+```
+
+Y miralo desde el celular:
+
+```
+http://remoteclaude:6080/vnc.html?autoconnect=1&resize=scale
+```
+
+- El puerto X (`6099`) queda **solo en localhost del host** (X es inseguro); el
+  noVNC (`6080`) sí es visible por la tailnet.
+- Resolución: variable `SCREEN_GEOMETRY` (ej. `SCREEN_GEOMETRY=1920x1080x24`).
+
 ## Mover al server del amigo
 
 Idéntico: cloná el repo, `bash scripts/setup-host.sh`, poné `.env`
@@ -93,7 +116,4 @@ Cambiá `TS_HOSTNAME` si querés otro nombre de MagicDNS.
 
 ## Pendiente
 
-- **Visual / navegador headed** (ver Playwright corriendo): bajo este diseño la
-  ejecución es en el host, así que lo visual será "ver la pantalla del host" o
-  acceder a sus dev-servers por el browser del celular. A definir.
 - App Android propia (wrapper de terminal nativa) como proyecto aparte.
