@@ -1,52 +1,48 @@
-# Despliegue agnóstico: lo único que necesita el host es Docker + /dev/net/tun.
-# Tailscale, sshd, mosh, tmux, navegador y Playwright viven todos en contenedores.
+# Gateway de conexión remota agnóstico.
+#   - tailscale: pone al HOST en tu tailnet (red que sobrevive cortes/roaming).
+#   - gateway  : sshd + mosh; al loguearte, la shell salta al HOST (nsenter).
+# La EJECUCIÓN ocurre en el host, no en el contenedor. Nada se instala en el host.
 #
-#   1. cp .env.example .env   y poné tu TS_AUTHKEY (admin console de Tailscale)
+#   1. cp .env.example .env   y completá TS_AUTHKEY y HOST_USER
 #   2. poné tu clave pública en  ssh/authorized_keys
 #   3. docker compose up -d --build
-#
-# Acceso (por el nombre de MagicDNS, ej. "remoteclaude"):
-#   Terminal :  mosh root@remoteclaude   ->   tmux new -A -s dev
-#   Navegador:  http://remoteclaude:6080/vnc.html?autoconnect=1&resize=remote
+#   Desde el celular:  mosh root@remoteclaude   ->   shell del host
 services:
-  # --- Red: une el stack a tu tailnet. Aporta la IP/MagicDNS. ---
+  # Red: une el HOST a la tailnet (network_mode: host => la IP de la tailnet vive
+  # en la red del host, así los servicios que levantes en el host son alcanzables).
   tailscale:
     image: tailscale/tailscale:latest
     container_name: remoteclaude-ts
-    hostname: remoteclaude            # este es el nombre de MagicDNS
+    network_mode: host
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    devices:
+      - /dev/net/tun:/dev/net/tun
     environment:
       - TS_AUTHKEY=${TS_AUTHKEY:?falta TS_AUTHKEY (ver .env.example)}
       - TS_STATE_DIR=/var/lib/tailscale
-      - TS_USERSPACE=false
+      - TS_EXTRA_ARGS=--hostname=${TS_HOSTNAME:-remoteclaude}
     volumes:
       - ts-state:/var/lib/tailscale
-    devices:
-      - /dev/net/tun:/dev/net/tun
-    cap_add:
-      - NET_ADMIN
-    # Opcional: exponer puertos también en el host (para probar localmente).
-    ports:
-      - "6080:6080"   # noVNC
-      - "9323:9323"   # Playwright UI / report
     restart: unless-stopped
 
-  # --- Devbox: comparte la red de Tailscale, así es alcanzable por MagicDNS. ---
-  devbox:
+  # Gateway: provee sshd/mosh y salta al host. Privilegiado a propósito: entrar a
+  # los namespaces del host (pid: host) es lo que permite ejecutar EN el host.
+  gateway:
     build: .
-    container_name: remoteclaude-devbox
-    network_mode: service:tailscale   # <- clave: misma IP que el contenedor de Tailscale
+    container_name: remoteclaude-gw
+    network_mode: host        # sshd/mosh en la red del host -> alcanzable por la tailnet
+    pid: host                 # ver PID 1 del host para nsenter
+    privileged: true          # entrar a los namespaces del host
+    environment:
+      - HOST_USER=${HOST_USER:-root}   # usuario del host al que saltás
+      - SSH_PORT=${SSH_PORT:-22}
+    volumes:
+      - ./ssh/authorized_keys:/etc/remoteclaude/authorized_keys:ro
+      - ssh-hostkeys:/etc/ssh/keys
     depends_on:
       - tailscale
-    shm_size: "1gb"                   # Chromium crashea con shm chico
-    volumes:
-      - ./:/work
-      # staging read-only; el entrypoint la copia a /root/.ssh con dueño root + 600
-      - ./ssh/authorized_keys:/etc/remoteclaude/authorized_keys:ro
-      # host keys SSH persistentes -> la huella no cambia entre rebuilds
-      - ssh-hostkeys:/etc/ssh/keys
-    environment:
-      - DISPLAY=:99
-      - SCREEN_GEOMETRY=1360x768x24
     restart: unless-stopped
     command: ["sleep", "infinity"]
 

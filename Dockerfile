@@ -1,50 +1,31 @@
-# Entorno de desarrollo remoto autocontenido: navegador visible (noVNC) +
-# terminal estable (sshd + mosh + tmux) + Playwright, todo dentro del contenedor.
-# Lo único que vive en el host es Docker. La red la aporta el contenedor de Tailscale.
-FROM mcr.microsoft.com/playwright:v1.49.0-jammy
+# Gateway de conexión remota AGNÓSTICO. El contenedor SOLO provee la conexión
+# (sshd + mosh). La shell se ejecuta en el HOST vía nsenter: ve el filesystem,
+# PATH, proyectos, claude y configs del host de forma nativa. No instala nada en
+# el host ni depende de su stack de desarrollo; solo asume "Linux con Docker".
+#
+# La distro base acá da igual: NO ejecutamos binarios del host adentro, saltamos
+# al host. Por eso una base mínima alcanza.
+FROM debian:bookworm-slim
 
-# - Entorno gráfico:  Xvfb (display virtual) + x11vnc + noVNC/websockify + fluxbox
-# - Acceso remoto:    openssh-server + mosh (la terminal que sobrevive al bloqueo) + tmux
-# TZ + DEBIAN_FRONTEND (inline): evitan que tzdata abra un prompt interactivo y cuelgue
-# el build. DEBIAN_FRONTEND va inline para no afectar apt en runtime.
-ENV TZ=America/Argentina/Cordoba
-RUN DEBIAN_FRONTEND=noninteractive apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-        xvfb \
-        x11vnc \
-        fluxbox \
-        novnc \
-        websockify \
+RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
         openssh-server \
         mosh \
         tmux \
+        util-linux \
         locales \
         procps \
-        net-tools \
-    && locale-gen en_US.UTF-8 \
+        ca-certificates \
+    && printf 'en_US.UTF-8 UTF-8\nes_ES.UTF-8 UTF-8\n' >> /etc/locale.gen && locale-gen \
     && rm -rf /var/lib/apt/lists/* \
-    && ln -sf /usr/share/novnc/vnc.html /usr/share/novnc/index.html
+    && mkdir -p /run/sshd /etc/ssh/keys /etc/remoteclaude
 
-# /work lo monta el host (uid del usuario) pero adentro somos root: git lo marca
-# como "dubious ownership". Lo declaramos seguro a nivel sistema (persiste en la imagen).
-RUN git config --system --add safe.directory /work
-
-# sshd: solo clave pública, sin password. Host keys en /etc/ssh/keys (volumen
-# persistente) para que la huella no cambie en cada rebuild del contenedor.
-RUN mkdir -p /run/sshd /root/.ssh /etc/ssh/keys \
-    && printf 'PermitRootLogin prohibit-password\nPasswordAuthentication no\nPubkeyAuthentication yes\nHostKey /etc/ssh/keys/ssh_host_ed25519_key\nHostKey /etc/ssh/keys/ssh_host_rsa_key\n' \
-        > /etc/ssh/sshd_config.d/remoteclaude.conf
-
-ENV DISPLAY=:99
-ENV SCREEN_GEOMETRY=1360x768x24
-ENV NOVNC_PORT=6080
-# Locale UTF-8: sin esto mosh-server se niega a arrancar.
+# mosh-server (que corre en el contenedor) exige un locale UTF-8.
 ENV LANG=en_US.UTF-8
 ENV LC_ALL=en_US.UTF-8
 
-WORKDIR /work
-
 COPY scripts/entrypoint.sh /usr/local/bin/entrypoint.sh
-RUN chmod +x /usr/local/bin/entrypoint.sh
+COPY scripts/host-shell.sh /usr/local/bin/host-shell
+RUN chmod +x /usr/local/bin/entrypoint.sh /usr/local/bin/host-shell
 
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
 CMD ["sleep", "infinity"]

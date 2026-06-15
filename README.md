@@ -1,100 +1,99 @@
-# Remoteclaude — trabajo remoto estable desde el celular
+# Remoteclaude — gateway de trabajo remoto desde el celular
 
-Setup para programar, levantar servers, deployar y testear webs con **Playwright
-(navegador visible)** desde el celular, **sin que se rompa al bloquear el teléfono**.
+Conecta tu celular con tu PC (o un server) de forma **estable** y **agnóstica**,
+para programar de verdad: terminal nativa que **ejecuta en el host**, sobreviviendo
+al bloqueo del teléfono.
 
-## El problema que resuelve
+## Idea central
 
-El escritorio remoto clásico (TeamViewer/AnyDesk/RustDesk) se cae al bloquear el
-celular porque **la app del teléfono mantiene un túnel vivo** que el sistema
-operativo suspende. Acá es al revés: **toda la persistencia vive en el servidor** y
-el celular es solo un visor *descartable*. Bloqueás → se cierra el visor, no la
-sesión. Desbloqueás, recargás, y seguís donde estabas.
-
-## Diseño: todo containerizado (despliegue agnóstico)
-
-Lo único que necesita el host es **Docker** (+ el device `/dev/net/tun`). Todo lo
-demás vive en contenedores, así que cualquier máquina con Docker se vuelve drop-in:
+El contenedor **NO** es donde trabajás: es solo la **capa de conexión**. La
+ejecución ocurre en el **host**, con sus herramientas, proyectos, `claude` e
+historial de conversaciones — todo nativo, sin instalar ni montar nada del host.
 
 ```
-┌─ host: solo Docker ─────────────────────────────────┐
-│  ┌─ contenedor tailscale ─┐  ┌─ contenedor devbox ─┐ │
-│  │ une el stack a tu      │←─┤ sshd + mosh + tmux  │ │
-│  │ tailnet (IP/MagicDNS)  │  │ Xvfb+x11vnc+noVNC   │ │
-│  └────────────────────────┘  │ Playwright/Chromium │ │
-│         (red compartida)      └─────────────────────┘ │
-└──────────────────────────────────────────────────────┘
+┌─ host (PC o server): solo necesita Docker ───────────────────────┐
+│                                                                   │
+│   ┌─ contenedor tailscale ─┐   ┌─ contenedor gateway ─────────┐   │
+│   │ pone al HOST en tu     │   │ sshd + mosh                  │   │
+│   │ tailnet (network=host) │   │ al loguearte: nsenter -> HOST│   │
+│   └────────────────────────┘   └──────────────┬───────────────┘   │
+│                                                │ nsenter PID 1     │
+│                                  ╔═════════════▼═══════════════╗   │
+│                                  ║  SHELL DEL HOST (jporta)    ║   │
+│                                  ║  uv · node · claude · ~/... ║   │
+│                                  ╚═════════════════════════════╝   │
+└───────────────────────────────────────────────────────────────────┘
 ```
 
-| Necesidad | Dónde corre | Por qué aguanta el bloqueo |
-|---|---|---|
-| Red sin IP pública ni cortes | contenedor **Tailscale** | Sobrevive cambios de IP, sueño y roaming |
-| Terminal / servers / deploys | **mosh + tmux** en el devbox | mosh resume al reconectar; tmux mantiene los procesos vivos |
-| Navegador real / Playwright | **noVNC** en el devbox | El display vive en el server; el celular solo lo mira |
+- **Agnóstico**: el contenedor solo asume "Linux con Docker". Lo mismo en tu PC y
+  en el server del amigo; lo único que cambia es `HOST_USER` en `.env`.
+- **Sin duplicar tu stack**: no reinstalás nada. La shell salta al host y usa lo
+  que el host ya tiene (uv, node, claude, libs, configs, conversaciones).
+- **Estable al bloqueo**: `mosh` resume al reconectar; `tmux` (del host) persiste.
 
-## Instalación (una sola vez por host)
+## Cómo funciona el "salto al host"
+
+El gateway corre **privilegiado** con `pid: host`. Al loguearte por SSH/mosh, la
+shell de login es `host-shell`, que hace `nsenter --target 1` a los namespaces de
+`systemd` (PID 1) y abre la sesión como `HOST_USER`. Esa shell **es un proceso del
+host**: ve el filesystem, el `$PATH`, los procesos y los archivos del host.
+
+> El contenedor privilegiado con acceso a los namespaces del host es inherente a
+> "controlar remotamente la propia máquina". Es tu equipo y tu tailnet privada.
+
+## Instalación (una vez por host)
+
+Requisito del host: **Docker** + `/dev/net/tun` (universal en Linux).
 
 ```bash
-bash scripts/setup-host.sh              # instala Docker (lo único del host)
+bash scripts/setup-host.sh        # instala Docker si falta
 
-cp .env.example .env                    # 1) pegá tu TS_AUTHKEY de Tailscale
-cp ssh/authorized_keys.example ssh/authorized_keys   # 2) pegá tu clave pública
+cp .env.example .env              # completá:
+#   TS_AUTHKEY   -> Admin console de Tailscale -> Settings -> Keys (Reusable)
+#   HOST_USER    -> el usuario del host (ej. jporta)
+cp ssh/authorized_keys.example ssh/authorized_keys   # pegá tu clave pública
 
-docker compose up -d --build            # levanta tailscale + devbox
+docker compose up -d --build
 ```
 
-- **TS_AUTHKEY**: Admin console de Tailscale → Settings → Keys → *Generate auth key*
-  (marcala **Reusable** para que el nodo conserve el nombre `remoteclaude`).
-- **Clave pública**: la generás/copiás desde la app de SSH del celular.
+En el **celular**: app **Tailscale** (mismo login) + **Termux** (desde F-Droid),
+con `pkg install openssh mosh`.
 
-En el **celular** instalá: app de **Tailscale** (mismo login) + un cliente
-**mosh/SSH** (Termius o Blink en iOS; Termux o Termius en Android).
+## Uso diario (desde el celular)
 
-> Evitá que la PC se duerma:
-> `sudo systemctl mask sleep.target suspend.target hibernate.target hybrid-sleep.target`
+```bash
+mosh root@remoteclaude        # 'remoteclaude' = nombre de MagicDNS del host
+# -> caés directo en la shell del host como tu usuario
+tmux new -A -s dev            # sesión persistente (tmux del host)
+cd ~/proyectos/...            # tus proyectos reales
+claude                        # Claude Code con tu historial
+```
 
-## Flujo de trabajo diario (desde el celular)
-
-1. **Terminal estable** — entrás directo al contenedor por su nombre de MagicDNS:
-   ```bash
-   mosh root@remoteclaude        # "remoteclaude" = hostname del compose
-   tmux new -A -s dev            # sesión que nunca muere
-   ```
-   Si bloqueás el celular, al volver mosh resume solo. Si se cortó del todo:
-   `mosh root@remoteclaude` de nuevo y `tmux attach -t dev` — todo intacto.
-
-2. **Ver el navegador** — en el navegador del celular:
-   ```
-   http://remoteclaude:6080/vnc.html?autoconnect=1&resize=remote
-   ```
-
-3. **Playwright con navegador visible** (dentro del devbox, dir. `/work`):
-   ```bash
-   npx playwright test --headed     # lo ves en la pestaña de noVNC
-   npx playwright test --ui         # UI mode -> http://remoteclaude:9323
-   npx playwright show-report       # reporte  -> http://remoteclaude:9323
-   ```
-
-4. **Levantar tu app / deployar** — corré tus servers dentro de `tmux` para que
-   sigan vivos. Como el devbox comparte la red de Tailscale, cualquier puerto que
-   abras es alcanzable como `http://remoteclaude:<puerto>` desde el celular.
+- Te conectás como `root` (usuario del *contenedor*); la shell salta solo al
+  `HOST_USER` configurado. El comando es el mismo sin importar el usuario del host.
+- Bloqueás el celular → `mosh` resume al volver. Si mosh muere, reconectás y
+  `tmux attach -t dev`.
+- Cualquier server/dev-server que levantes en el host es alcanzable desde el celu
+  como `http://remoteclaude:<puerto>` (Tailscale carga la red del host).
 
 ## Mover al server del amigo
 
-Idéntico: cloná el repo, `bash scripts/setup-host.sh`, poné `.env` +
-`ssh/authorized_keys`, `docker compose up -d --build`. Cambiá el `hostname:` del
-servicio `tailscale` en `docker-compose.yml` si querés otro nombre de MagicDNS.
+Idéntico: cloná el repo, `bash scripts/setup-host.sh`, poné `.env`
+(`HOST_USER` el de ese server) + `ssh/authorized_keys`, `docker compose up -d --build`.
+Cambiá `TS_HOSTNAME` si querés otro nombre de MagicDNS.
 
-## Tradeoffs de containerizar Tailscale
+## Configuración (`.env`)
 
-- El contenedor de Tailscale necesita cap `NET_ADMIN` y el device `/dev/net/tun`
-  (levemente privilegiado). En tu PC y el server del amigo no hay problema; algunos
-  hosts gestionados lo bloquean.
-- `.env` y `ssh/authorized_keys` quedan fuera de git (ver `.gitignore`).
+| Variable | Qué es | Default |
+|---|---|---|
+| `TS_AUTHKEY` | Auth key de Tailscale | (obligatorio) |
+| `HOST_USER` | Usuario del host al que salta la shell | `root` |
+| `TS_HOSTNAME` | Nombre del nodo en la tailnet (MagicDNS) | `remoteclaude` |
+| `SSH_PORT` | Puerto del sshd del gateway | `22` |
 
-## Ajustes frecuentes
+## Pendiente
 
-- **Resolución del navegador**: variable `SCREEN_GEOMETRY` (ej. `1920x1080x24`).
-- **Acceso local en el host** (sin Tailscale): puertos publicados en el servicio
-  `tailscale` (`6080`, `9323`); agregá los de tu app ahí.
-- **Chromium crashea**: ya está `shm_size: 1gb`; subilo si hace falta.
+- **Visual / navegador headed** (ver Playwright corriendo): bajo este diseño la
+  ejecución es en el host, así que lo visual será "ver la pantalla del host" o
+  acceder a sus dev-servers por el browser del celular. A definir.
+- App Android propia (wrapper de terminal nativa) como proyecto aparte.
