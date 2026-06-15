@@ -11,13 +11,17 @@ NOVNC_PORT="${NOVNC_PORT:-6080}"
 VNC_PORT=5900
 
 # --- Terminal remota (sshd para que entre mosh) ---
-if [ -s /root/.ssh/authorized_keys ]; then
-    chmod 700 /root/.ssh && chmod 600 /root/.ssh/authorized_keys
+# La clave se monta read-only en una ruta de staging; la copiamos a /root/.ssh con
+# dueño root y permisos 600 (si no, sshd la rechaza por StrictModes).
+AUTH_SRC="/etc/remoteclaude/authorized_keys"
+if [ -s "${AUTH_SRC}" ]; then
+    install -d -m 700 /root/.ssh
+    install -m 600 "${AUTH_SRC}" /root/.ssh/authorized_keys
     ssh-keygen -A >/dev/null 2>&1   # genera host keys si faltan
     /usr/sbin/sshd
     echo "[entrypoint] sshd activo -> entrá con:  mosh root@<host-tailscale>"
 else
-    echo "[entrypoint] !! sin /root/.ssh/authorized_keys: sshd desactivado."
+    echo "[entrypoint] !! sin ${AUTH_SRC}: sshd desactivado."
     echo "[entrypoint]    Montá tu clave pública (ver ssh/authorized_keys.example)."
 fi
 

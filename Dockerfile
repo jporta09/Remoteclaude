@@ -5,7 +5,10 @@ FROM mcr.microsoft.com/playwright:v1.49.0-jammy
 
 # - Entorno gráfico:  Xvfb (display virtual) + x11vnc + noVNC/websockify + fluxbox
 # - Acceso remoto:    openssh-server + mosh (la terminal que sobrevive al bloqueo) + tmux
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# TZ + DEBIAN_FRONTEND (inline): evitan que tzdata abra un prompt interactivo y cuelgue
+# el build. DEBIAN_FRONTEND va inline para no afectar apt en runtime.
+ENV TZ=America/Argentina/Cordoba
+RUN DEBIAN_FRONTEND=noninteractive apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
         xvfb \
         x11vnc \
         fluxbox \

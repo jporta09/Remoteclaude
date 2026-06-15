@@ -40,7 +40,8 @@ services:
     shm_size: "1gb"                   # Chromium crashea con shm chico
     volumes:
       - ./:/work
-      - ./ssh/authorized_keys:/root/.ssh/authorized_keys:ro
+      # staging read-only; el entrypoint la copia a /root/.ssh con dueño root + 600
+      - ./ssh/authorized_keys:/etc/remoteclaude/authorized_keys:ro
     environment:
       - DISPLAY=:99
       - SCREEN_GEOMETRY=1360x768x24
