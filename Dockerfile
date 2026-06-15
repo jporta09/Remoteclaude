@@ -24,6 +24,10 @@ RUN DEBIAN_FRONTEND=noninteractive apt-get update && DEBIAN_FRONTEND=noninteract
     && rm -rf /var/lib/apt/lists/* \
     && ln -sf /usr/share/novnc/vnc.html /usr/share/novnc/index.html
 
+# /work lo monta el host (uid del usuario) pero adentro somos root: git lo marca
+# como "dubious ownership". Lo declaramos seguro a nivel sistema (persiste en la imagen).
+RUN git config --system --add safe.directory /work
+
 # sshd: solo clave pública, sin password. Host keys en /etc/ssh/keys (volumen
 # persistente) para que la huella no cambie en cada rebuild del contenedor.
 RUN mkdir -p /run/sshd /root/.ssh /etc/ssh/keys \
