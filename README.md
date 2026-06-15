@@ -99,6 +99,12 @@ http://remoteclaude:6080/vnc.html?autoconnect=1&resize=scale
   noVNC (`6080`) sí es visible por la tailnet.
 - Resolución: variable `SCREEN_GEOMETRY` (ej. `SCREEN_GEOMETRY=1920x1080x24`).
 
+> **Navegadores sí, OpenGL nativo no.** Chromium/Playwright headed renderizan bien
+> sobre esta pantalla (con `--disable-gpu`, que Playwright headed ya aplica). Las
+> apps OpenGL nativas (p.ej. Kivy) NO dibujan bien sobre X remoto/TCP; para eso
+> habría que correrlas en un contenedor con su propio Xvfb local. Para testing de
+> webs, que es el caso de uso, funciona.
+
 ## Mover al server del amigo
 
 Idéntico: cloná el repo, `bash scripts/setup-host.sh`, poné `.env`
