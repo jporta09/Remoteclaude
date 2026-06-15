@@ -24,9 +24,10 @@ RUN DEBIAN_FRONTEND=noninteractive apt-get update && DEBIAN_FRONTEND=noninteract
     && rm -rf /var/lib/apt/lists/* \
     && ln -sf /usr/share/novnc/vnc.html /usr/share/novnc/index.html
 
-# sshd: solo clave pública, sin password.
-RUN mkdir -p /run/sshd /root/.ssh \
-    && printf 'PermitRootLogin prohibit-password\nPasswordAuthentication no\nPubkeyAuthentication yes\n' \
+# sshd: solo clave pública, sin password. Host keys en /etc/ssh/keys (volumen
+# persistente) para que la huella no cambie en cada rebuild del contenedor.
+RUN mkdir -p /run/sshd /root/.ssh /etc/ssh/keys \
+    && printf 'PermitRootLogin prohibit-password\nPasswordAuthentication no\nPubkeyAuthentication yes\nHostKey /etc/ssh/keys/ssh_host_ed25519_key\nHostKey /etc/ssh/keys/ssh_host_rsa_key\n' \
         > /etc/ssh/sshd_config.d/remoteclaude.conf
 
 ENV DISPLAY=:99

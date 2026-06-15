@@ -17,7 +17,11 @@ AUTH_SRC="/etc/remoteclaude/authorized_keys"
 if [ -s "${AUTH_SRC}" ]; then
     install -d -m 700 /root/.ssh
     install -m 600 "${AUTH_SRC}" /root/.ssh/authorized_keys
-    ssh-keygen -A >/dev/null 2>&1   # genera host keys si faltan
+    # Host keys persistentes (en el volumen /etc/ssh/keys): se generan una sola
+    # vez; así la huella SSH no cambia entre rebuilds y el cliente no la rechaza.
+    install -d -m 700 /etc/ssh/keys
+    [ -f /etc/ssh/keys/ssh_host_ed25519_key ] || ssh-keygen -q -t ed25519 -N "" -f /etc/ssh/keys/ssh_host_ed25519_key
+    [ -f /etc/ssh/keys/ssh_host_rsa_key ] || ssh-keygen -q -t rsa -b 3072 -N "" -f /etc/ssh/keys/ssh_host_rsa_key
     /usr/sbin/sshd
     echo "[entrypoint] sshd activo -> entrá con:  mosh root@<host-tailscale>"
 else

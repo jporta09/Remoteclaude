@@ -42,6 +42,8 @@ services:
       - ./:/work
       # staging read-only; el entrypoint la copia a /root/.ssh con dueño root + 600
       - ./ssh/authorized_keys:/etc/remoteclaude/authorized_keys:ro
+      # host keys SSH persistentes -> la huella no cambia entre rebuilds
+      - ssh-hostkeys:/etc/ssh/keys
     environment:
       - DISPLAY=:99
       - SCREEN_GEOMETRY=1360x768x24
@@ -50,3 +52,4 @@ services:
 
 volumes:
   ts-state:
+  ssh-hostkeys:
