@@ -26,10 +26,16 @@ else
 fi
 
 # --- Entorno gráfico ---
+# Limpiar locks de una corrida anterior. Sin esto, al reiniciar el contenedor
+# Xvfb encuentra /tmp/.X99-lock viejo, no arranca, y el entrypoint entra en loop.
+XNUM="${DISPLAY#:}"
+rm -f "/tmp/.X${XNUM}-lock" "/tmp/.X11-unix/X${XNUM}" 2>/dev/null || true
+
 echo "[entrypoint] Display virtual ${DISPLAY} (${GEOMETRY})"
 Xvfb "${DISPLAY}" -screen 0 "${GEOMETRY}" -ac +extension RANDR +extension GLX &
-for _ in $(seq 1 30); do
-    xdpyinfo -display "${DISPLAY}" >/dev/null 2>&1 && break
+# esperar a que exista el socket del display (sin depender de xdpyinfo)
+for _ in $(seq 1 50); do
+    [ -S "/tmp/.X11-unix/X${XNUM}" ] && break
     sleep 0.2
 done
 
