@@ -17,8 +17,10 @@ RUN DEBIAN_FRONTEND=noninteractive apt-get update && DEBIAN_FRONTEND=noninteract
         openssh-server \
         mosh \
         tmux \
+        locales \
         procps \
         net-tools \
+    && locale-gen en_US.UTF-8 \
     && rm -rf /var/lib/apt/lists/* \
     && ln -sf /usr/share/novnc/vnc.html /usr/share/novnc/index.html
 
@@ -30,6 +32,9 @@ RUN mkdir -p /run/sshd /root/.ssh \
 ENV DISPLAY=:99
 ENV SCREEN_GEOMETRY=1360x768x24
 ENV NOVNC_PORT=6080
+# Locale UTF-8: sin esto mosh-server se niega a arrancar.
+ENV LANG=en_US.UTF-8
+ENV LC_ALL=en_US.UTF-8
 
 WORKDIR /work
 
