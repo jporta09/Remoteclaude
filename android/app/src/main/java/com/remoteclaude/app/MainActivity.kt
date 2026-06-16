@@ -44,7 +44,9 @@ class MainActivity : AppCompatActivity() {
         terminalView.setTextSize(sizePx)
         terminalView.setTypeface(Typeface.MONOSPACE)
 
-        session = EchoTerminalSession(sessionClient)
+        // M2: sesión SSH al gateway (clave de prueba desde assets; gestión real en M7).
+        val keyChars = assets.open("m2_test_key").bufferedReader().use { it.readText() }.toCharArray()
+        session = SshTerminalSession("remoteclaude", 22, "root", keyChars, sessionClient)
         terminalView.attachSession(session)
 
         setContentView(terminalView)
