@@ -105,6 +105,27 @@ http://remoteclaude:6080/vnc.html?autoconnect=1&resize=scale
 > habría que correrlas en un contenedor con su propio Xvfb local. Para testing de
 > webs, que es el caso de uso, funciona.
 
+## Skill de Claude: `headed-browser`
+
+El repo trae una skill publicable en `skills/headed-browser/` que le enseña a Claude
+a correr **cualquier** automatización de browser **headed** (Playwright, nodriver,
+Selenium, Chromium) sobre la pantalla virtual `:99`, visible desde el celular. Útil
+para mirar tests en vivo y para scraping que **necesita** display real (anti-bot tipo
+DataDome). Compone con la skill oficial `webapp-testing` (que corre headless para los
+screenshots de Claude); ésta agrega el modo headed+visible.
+
+Helper:
+```bash
+skills/headed-browser/scripts/run-visible.sh <comando>     # setea DISPLAY=localhost:99
+# ej: run-visible.sh uv run python scraper.py
+#     run-visible.sh npx playwright test --headed
+```
+
+Instalar para usarla en todos tus proyectos (symlink o copia a las skills de usuario):
+```bash
+ln -sfn "$PWD/skills/headed-browser" ~/.claude/skills/headed-browser
+```
+
 ## Mover al server del amigo
 
 Idéntico: cloná el repo, `bash scripts/setup-host.sh`, poné `.env`
