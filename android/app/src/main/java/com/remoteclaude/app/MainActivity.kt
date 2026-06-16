@@ -6,6 +6,7 @@ import android.os.Bundle
 import android.util.TypedValue
 import android.view.KeyEvent
 import android.view.MotionEvent
+import android.view.WindowManager
 import android.view.inputmethod.InputMethodManager
 import androidx.appcompat.app.AppCompatActivity
 import com.termux.terminal.TerminalSession
@@ -25,8 +26,17 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        // El teclado se muestra al ganar foco, y la terminal se reajusta cuando aparece.
+        window.setSoftInputMode(
+            WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE or
+                WindowManager.LayoutParams.SOFT_INPUT_STATE_VISIBLE
+        )
+
         terminalView = TerminalView(this, null)
         terminalView.setTerminalViewClient(viewClient)
+        // Sin esto el TerminalView no toma foco al tocar → el teclado no sube.
+        terminalView.isFocusable = true
+        terminalView.isFocusableInTouchMode = true
 
         val sizePx = TypedValue.applyDimension(
             TypedValue.COMPLEX_UNIT_SP, 15f, resources.displayMetrics
@@ -44,6 +54,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showKeyboard() {
+        terminalView.requestFocus()
         val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
         imm.showSoftInput(terminalView, InputMethodManager.SHOW_IMPLICIT)
     }
