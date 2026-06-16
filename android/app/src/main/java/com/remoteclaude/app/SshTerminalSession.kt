@@ -59,8 +59,9 @@ class SshTerminalSession(
                 val s = c.openSession()
                 s.requestPTY("xterm-256color", cols, rows, 0, 0, null)
                 // tmux corre en el contenedor (default-command = host-shell, que nsenter
-                // al host). Crea o reengancha la sesión persistente (-D desengancha viejos).
-                s.execCommand("tmux new -A -D -s $tmuxSession")
+                // al host). -u fuerza UTF-8 (sshd no pasa LANG, si no tmux manda los
+                // acentos como '_'). Crea o reengancha la sesión persistente (-D desengancha).
+                s.execCommand("tmux -u new -A -D -s $tmuxSession")
                 sshSession = s
                 stdin = s.stdin
                 attempt = 0
