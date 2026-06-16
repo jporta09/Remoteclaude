@@ -5,6 +5,7 @@ import com.termux.terminal.TerminalSessionClient
 import com.trilead.ssh2.Connection
 import com.trilead.ssh2.Session
 import java.io.OutputStream
+import java.util.concurrent.Executors
 import kotlin.concurrent.thread
 
 /**
@@ -34,6 +35,9 @@ class SshTerminalSession(
 
     private val reconnectLock = Object()
     @Volatile private var waitingToReconnect = false
+
+    // Toda I/O de red va fuera del hilo principal (si no, un socket muerto cuelga la UI = ANR).
+    private val ioExecutor = Executors.newSingleThreadExecutor()
 
     override fun onEmulatorInitialized(
         columns: Int, rows: Int, cellWidthPixels: Int, cellHeightPixels: Int
@@ -115,17 +119,28 @@ class SshTerminalSession(
     }
 
     override fun writeToTransport(data: ByteArray, offset: Int, count: Int) {
+        // Corre en el hilo escritor del base. Si la conexión está caída, NO propagamos
+        // la excepción: así el hilo escritor sigue vivo y drena la cola (evita que el
+        // write() del main thread se bloquee), y al reconectar usa el stdin nuevo.
         val s = stdin ?: return
-        s.write(data, offset, count)
-        s.flush()
+        try {
+            s.write(data, offset, count)
+            s.flush()
+        } catch (_: Exception) {
+            // descartado; tmux redibuja al reconectar
+        }
     }
 
     override fun onSizeChanged(columns: Int, rows: Int, cellWidthPixels: Int, cellHeightPixels: Int) {
         cols = columns
         this.rows = rows
-        try {
-            sshSession?.resizePTY(columns, rows, 0, 0)
-        } catch (_: Exception) {
+        // resizePTY hace I/O de red -> NUNCA en el hilo principal (lo llama el layout).
+        val s = sshSession ?: return
+        ioExecutor.execute {
+            try {
+                s.resizePTY(columns, rows, 0, 0)
+            } catch (_: Exception) {
+            }
         }
     }
 
@@ -133,6 +148,7 @@ class SshTerminalSession(
         userClosed = true
         onNetworkAvailable() // romper el backoff si está esperando
         closeCurrent()
+        ioExecutor.shutdownNow()
     }
 
     private fun status(message: String) {
