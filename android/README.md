@@ -3,10 +3,12 @@
 Cliente Android del setup Remoteclaude: terminales nativas (SSH+tmux) + visualizador
 noVNC. Ver el diseño completo en [DESIGN.md](DESIGN.md).
 
-Estado: **M4** — terminal SSH **completamente usable**: fila de teclas extra
-(Esc/Tab/Ctrl/Alt/flechas/símbolos/Home/End/PgUp/PgDn), Ctrl/Alt como modificadores
-de una pulsación, zoom de fuente (pinch) y resize del PTY (vim/claude se reflowean y
-reacomodan con el teclado). Verificado en dispositivo: Ctrl-C y Tab-completion andando.
+Estado: **M4** — terminal SSH **completamente usable**: teclado de teclas extra fijo
+(sin scroll) — una fila `Esc Tab Ctrl Alt ›` (chevron angosto que conmuta a
+`Home End PgUp PgDn`) y otra fila de flechas `← ↓ ↑ →`. Ctrl/Alt como modificadores de
+una pulsación, zoom de fuente (pinch) y resize del PTY (vim/claude se reflowean y
+reacomodan con el teclado). Verificado en dispositivo: Ctrl-C, Tab-completion y el
+chevron andando.
 Falta multi-tab (M3), auto-reconexión + tmux (M5), visualizador (M6), gestión de
 claves/conexión (M7) y pulido (M8). El motor Termux vendorizado y sus modificaciones
 están en `terminal-emulator/VENDORED.md`.
