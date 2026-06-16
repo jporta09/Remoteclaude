@@ -45,13 +45,12 @@ class RemoteControl(
         exec("tmux rename-session -t '$old' '$new' 2>/dev/null")
     }
 
-    /** Sesiones vivas con la última línea EJECUTADA (último comando/salida), o vacío. */
+    /** Sesiones vivas con el ÚLTIMO COMANDO tipeado (texto tras el último prompt), o vacío. */
     fun sessionsWithLastLine(): List<Pair<String, String>> {
-        // Por cada sesión: captura el pane, descarta líneas en blanco y las que son solo
-        // prompt (terminan en `$ ` o `# ` sin comando), y toma la última que queda. Si no
-        // corrió nada, queda vacío.
+        // Por cada sesión: captura el pane y, con sed, toma el texto que sigue al último
+        // prompt (`…$ ` / `…# `) — o sea el último comando ejecutado. Vacío si no corrió nada.
         val script = "tmux ls -F '#{session_name}' 2>/dev/null | while IFS= read -r s; do " +
-            "line=\$(tmux capture-pane -p -t \"\$s\" 2>/dev/null | grep -vE '^[[:space:]]*\$' | grep -vE '[#\$][[:space:]]*\$' | tail -1); " +
+            "line=\$(tmux capture-pane -p -J -t \"\$s\" 2>/dev/null | sed -nE 's/.*[#\$] +([^[:space:]].*)\$/\\1/p' | tail -1); " +
             "printf '%s\\t%s\\n' \"\$s\" \"\$line\"; done"
         return exec(script).lineSequence()
             .mapNotNull {
