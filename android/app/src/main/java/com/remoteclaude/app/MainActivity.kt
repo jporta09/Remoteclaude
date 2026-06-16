@@ -44,6 +44,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var keyChars: CharArray
     private lateinit var control: RemoteControl
     private lateinit var tabBar: LinearLayout
+    private val prefs by lazy { getSharedPreferences("remoteclaude", Context.MODE_PRIVATE) }
 
     /** Sesión del tab activo (la usan el teclado y los modificadores). */
     private val session get() = tabs[activeIndex].session
@@ -96,7 +97,7 @@ class MainActivity : AppCompatActivity() {
 
         connectivity.registerDefaultNetworkCallback(networkCallback)
 
-        newTab() // primer tab
+        restoreTabsOrNew()
 
         terminalView.requestFocus()
         terminalView.post { showKeyboard() }
@@ -143,6 +144,25 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun reattach(name: String) = openTab(name)
+
+    /** Al abrir la app: reengancha las pestañas que estaban abiertas, o crea una nueva. */
+    private fun restoreTabsOrNew() {
+        val saved = prefs.getString("tabs", "").orEmpty().split("\n").filter { it.isNotBlank() }
+        if (saved.isEmpty()) {
+            newTab()
+        } else {
+            saved.forEach { openTab(it) }   // tmux -A reengancha (o recrea si fue matada)
+            switchTo(prefs.getInt("active", 0).coerceIn(0, tabs.size - 1))
+        }
+    }
+
+    /** Persiste los nombres de las pestañas abiertas y cuál está activa. */
+    private fun saveTabs() {
+        prefs.edit()
+            .putString("tabs", tabs.joinToString("\n") { it.session.tmuxSession })
+            .putInt("active", activeIndex)
+            .apply()
+    }
 
     private fun switchTo(index: Int) {
         if (index !in tabs.indices) return
@@ -280,6 +300,7 @@ class MainActivity : AppCompatActivity() {
             gravity = Gravity.CENTER_VERTICAL
             setOnClickListener { showReattachMenu() }  // sesiones detacheadas
         })
+        saveTabs()  // persistir el estado de las pestañas
     }
 
     // --- Teclado de teclas extra ---------------------------------------------
