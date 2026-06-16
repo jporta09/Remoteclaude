@@ -186,9 +186,15 @@ Nada nuevo del lado server: usa el gateway y el display que ya existen.
 - Gradle por **wrapper** (`./gradlew assembleDebug`) → APK debug.
 - Instalar al celular: por Tailscale/adb o copiando el APK. Firma release en M8.
 
-## 10. Decisiones abiertas
+## 10. Decisiones
 
-- Motor Termux: ¿vía JitPack (más simple) o vendorizando el source (más control)?
+- **Motor terminal: Termux (`terminal-view`/`terminal-emulator`, GPLv3).** Elegido por
+  fidelidad (truecolor, Unicode) para TUIs ricas como `claude`/vim. Implica que la app
+  entera es **GPLv3**. Para Play: zona gris GPL aceptada (bajo riesgo real para una app
+  FOSS no comercial; se publica el código y se cumple la licencia). Alternativas
+  descartadas: ConnectBot (Apache pero emulación vieja, sin truecolor) y xterm.js en
+  WebView (MIT y moderno, pero puente nativo↔JS).
+- Integración del motor: ¿JitPack vs vendorizar el source? (decidir en M1).
 - SSH: arrancamos con **sshj**; si da fricción en Android, caemos a connectbot `sshlib`.
 - Visualizador: WebView (MVP) vs VNC nativo (v2).
 - UI: Compose para el chrome + `AndroidView` para el `TerminalView` (híbrido).
