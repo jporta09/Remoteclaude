@@ -3,6 +3,8 @@ package com.remoteclaude.app
 import android.content.Context
 import android.graphics.Color
 import android.graphics.Typeface
+import android.net.ConnectivityManager
+import android.net.Network
 import android.os.Bundle
 import android.util.TypedValue
 import android.view.KeyEvent
@@ -29,7 +31,13 @@ import com.termux.view.TerminalViewClient
 class MainActivity : AppCompatActivity() {
 
     private lateinit var terminalView: TerminalView
-    private lateinit var session: TerminalSession
+    private lateinit var session: SshTerminalSession
+
+    private val connectivity by lazy { getSystemService(ConnectivityManager::class.java) }
+    private val networkCallback = object : ConnectivityManager.NetworkCallback() {
+        override fun onAvailable(network: Network) { session.onNetworkAvailable() }
+        override fun onLost(network: Network) { session.onNetworkLost() }
+    }
 
     private var fontSizePx = 0
     private var minFontPx = 0
@@ -65,7 +73,7 @@ class MainActivity : AppCompatActivity() {
         terminalView.setTypeface(Typeface.MONOSPACE)
 
         val keyChars = assets.open("m2_test_key").bufferedReader().use { it.readText() }.toCharArray()
-        session = SshTerminalSession("remoteclaude", 22, "root", keyChars, sessionClient)
+        session = SshTerminalSession("remoteclaude", 22, "root", keyChars, "remoteclaude", sessionClient)
         terminalView.attachSession(session)
 
         val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
@@ -73,8 +81,17 @@ class MainActivity : AppCompatActivity() {
         root.addView(buildKeypad(), LinearLayout.LayoutParams(MATCH, WRAP))
         setContentView(root)
 
+        // Reaccionar rápido a caída/vuelta de red para reconectar.
+        connectivity.registerDefaultNetworkCallback(networkCallback)
+
         terminalView.requestFocus()
         terminalView.post { showKeyboard() }
+    }
+
+    override fun onDestroy() {
+        try { connectivity.unregisterNetworkCallback(networkCallback) } catch (_: Exception) {}
+        if (::session.isInitialized) session.finishIfRunning()
+        super.onDestroy()
     }
 
     private fun showKeyboard() {

@@ -8,6 +8,15 @@ SSH_PORT="${SSH_PORT:-22}"
 # host-shell lee el usuario del host de acá (sshd puede limpiar el environment).
 echo "${HOST_USER}" > /etc/remoteclaude/host_user
 
+# tmux corre EN EL CONTENEDOR (que sí lo tiene) y cada panel hace nsenter al host
+# via host-shell. Así la sesión persiste en el contenedor y sobrevive a cortes de
+# SSH / bloqueo del celular, sin instalar tmux en el host.
+cat > /root/.tmux.conf <<'EOF'
+set -g default-command "/usr/local/bin/host-shell"
+set -g default-terminal "xterm-256color"
+set -g destroy-unattached off
+EOF
+
 # Clave pública del cliente (montada read-only) -> login del contenedor (root).
 AUTH_SRC="/etc/remoteclaude/authorized_keys"
 install -d -m 700 /root/.ssh
