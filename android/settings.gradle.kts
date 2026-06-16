@@ -16,3 +16,5 @@ dependencyResolutionManagement {
 
 rootProject.name = "Remoteclaude"
 include(":app")
+include(":terminal-emulator")   // motor Termux vendorizado (GPLv3)
+include(":terminal-view")       // view Termux vendorizado (GPLv3)

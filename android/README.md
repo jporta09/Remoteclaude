@@ -3,8 +3,9 @@
 Cliente Android del setup Remoteclaude: terminales nativas (SSH+tmux) + visualizador
 noVNC. Ver el diseño completo en [DESIGN.md](DESIGN.md).
 
-Estado: **M0** — esqueleto que compila a APK (valida el pipeline de build). El
-`TerminalView` de Termux y el transporte SSH entran en M1/M2.
+Estado: **M1** — `TerminalView` de Termux (motor vendorizado, GPLv3) renderizando
+una sesión de **eco local**. El transporte SSH entra en M2. Ver el motor vendorizado
+y sus modificaciones en `terminal-emulator/VENDORED.md`.
 
 ## Compilar (línea de comandos, sin Android Studio)
 
