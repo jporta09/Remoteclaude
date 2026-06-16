@@ -1,0 +1,22 @@
+[
+  {"query": "che el scraper de pasajes me lo bloqueó datadome otra vez, necesito correr deal_verifier.py en headed con un display real para ver qué challenge me tira y si puedo pasarlo", "should_trigger": true},
+  {"query": "quiero mirar en vivo desde el celu cómo el bot de playwright completa el checkout de la aerolínea, lanzámelo headed que lo sigo paso a paso", "should_trigger": true},
+  {"query": "corré scripts/scrape_bus_alternatives.py pero que pueda VER el navegador, la última corrida se trabó en algún punto y a ciegas no entiendo dónde", "should_trigger": true},
+  {"query": "tengo un test e2e de playwright que pasa local pero en mi máquina hace algo raro con el modal, abrímelo con --headed así miro qué hace el navegador en tiempo real", "should_trigger": true},
+  {"query": "estoy en el teléfono y quiero seguir con mis ojos el login con 2FA que automatiza el script, necesito que el chromium se vea, no headless", "should_trigger": true},
+  {"query": "mi scraper con nodriver necesita pantalla de verdad porque perimeterx caza el headless al toque, hacelo correr con display", "should_trigger": true},
+  {"query": "abrí la web de la aerolínea en un navegador que yo pueda mirar desde el celular, quiero chequear a ojo si el precio que scrapeó coincide con el que muestra la página", "should_trigger": true},
+  {"query": "estoy debuggeando por qué selenium no clickea el botón de pago; quiero ver el navegador mientras corre, no adivinar por los logs", "should_trigger": true},
+  {"query": "el cron de scraping corre en un server sin monitor y tira 'DataDome bloqueó (headless detectado)'; cómo lo corro con un display real y lo miro", "should_trigger": true},
+  {"query": "dejame el flujo de reserva corriendo headed y abierto un rato, lo reviso desde la pantalla de noVNC en el teléfono", "should_trigger": true},
+  {"query": "testeá que el dashboard de métricas carga bien y mandame un screenshot, quiero confirmar que los gráficos renderizan", "should_trigger": false},
+  {"query": "corré toda la suite de tests de playwright y decime cuántos pasan y cuántos fallan", "should_trigger": false},
+  {"query": "scrapeá los precios desde el endpoint JSON de la api y volcalos a un csv en data/", "should_trigger": false},
+  {"query": "extraé la tabla de tarifas de este html estático que bajé a ~/Downloads/tarifas_2026.html y pasala a excel", "should_trigger": false},
+  {"query": "mi script con requests me devuelve 403 al pegarle al sitio, probá agregando user-agent y cookies a ver si pasa", "should_trigger": false},
+  {"query": "configurá el workflow de github actions para que levante un xvfb antes de correr los tests", "should_trigger": false},
+  {"query": "la pestaña de noVNC en el celular me quedó toda negra, no veo nada, qué reviso", "should_trigger": false},
+  {"query": "escribime un test de playwright para el flujo de alta de usuario y dejalo en tests/auth.spec.ts", "should_trigger": false},
+  {"query": "sacá un screenshot de cómo se ve mi-sitio.com en viewport mobile, quiero ver el responsive", "should_trigger": false},
+  {"query": "el navegador chromium me está comiendo toda la RAM cuando corre el scraping, cómo lo optimizo", "should_trigger": false}
+]
