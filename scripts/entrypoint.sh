@@ -17,6 +17,17 @@ set -g default-terminal "xterm-256color"
 set -g destroy-unattached off
 # mouse on: el deslizamiento del dedo entra al historial de tmux (scroll).
 set -g mouse on
+# Las flechas SIEMPRE controlan la app (no el scroll): si estás en copy-mode,
+# salen del scroll y mandan la flecha al panel (p.ej. menús de claude). El scroll
+# queda solo para el dedo. (Se bindea en ambas tablas: emacs y vi.)
+bind -T copy-mode    Up    send -X cancel \; send-keys Up
+bind -T copy-mode    Down  send -X cancel \; send-keys Down
+bind -T copy-mode    Left  send -X cancel \; send-keys Left
+bind -T copy-mode    Right send -X cancel \; send-keys Right
+bind -T copy-mode-vi Up    send -X cancel \; send-keys Up
+bind -T copy-mode-vi Down  send -X cancel \; send-keys Down
+bind -T copy-mode-vi Left  send -X cancel \; send-keys Left
+bind -T copy-mode-vi Right send -X cancel \; send-keys Right
 EOF
 
 # Clave pública del cliente (montada read-only) -> login del contenedor (root).
