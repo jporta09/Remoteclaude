@@ -3,18 +3,21 @@ package com.remoteclaude.app
 import android.content.Context
 import android.graphics.Color
 import android.graphics.Typeface
-import android.net.ConnectivityManager
-import android.net.Network
 import android.os.Bundle
 import android.util.TypedValue
+import android.view.Gravity
 import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
 import android.view.inputmethod.InputMethodManager
+import android.net.ConnectivityManager
+import android.net.Network
 import android.widget.Button
+import android.widget.HorizontalScrollView
 import android.widget.LinearLayout
+import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import com.termux.terminal.TerminalSession
 import com.termux.terminal.TerminalSessionClient
@@ -22,37 +25,42 @@ import com.termux.view.TerminalView
 import com.termux.view.TerminalViewClient
 
 /**
- * M4: terminal completamente usable — teclado de teclas extra fijo (sin scroll):
- *   Esc  Tab  ›        (› revela Home/End/PgUp/PgDn)
- *   Ctrl Alt
- *   ←  ↓  ↑  →         (flechas siempre visibles)
- * Ctrl/Alt como modificadores de una sola pulsación; zoom de fuente (pinch).
+ * M3: multi-tab. Una sola TerminalView que va intercambiando la sesión activa.
+ * Cada tab = una SshTerminalSession con su propia sesión tmux persistente
+ * (remoteclaude-N), así corren en paralelo y sobreviven independientes.
  */
 class MainActivity : AppCompatActivity() {
 
     private lateinit var terminalView: TerminalView
-    private lateinit var session: SshTerminalSession
 
-    private val connectivity by lazy { getSystemService(ConnectivityManager::class.java) }
-    private val networkCallback = object : ConnectivityManager.NetworkCallback() {
-        override fun onAvailable(network: Network) { session.onNetworkAvailable() }
-        override fun onLost(network: Network) { session.onNetworkLost() }
-    }
+    private class Tab(val session: SshTerminalSession, val n: Int)
+    private val tabs = mutableListOf<Tab>()
+    private var activeIndex = 0
+    private var nextNum = 1
+    private lateinit var keyChars: CharArray
+    private lateinit var tabBar: LinearLayout
+
+    /** Sesión del tab activo (la usan el teclado y los modificadores). */
+    private val session get() = tabs[activeIndex].session
 
     private var fontSizePx = 0
     private var minFontPx = 0
     private var maxFontPx = 0
 
-    // Modificadores de una sola pulsación.
     private var ctrlActive = false
     private var altActive = false
     private lateinit var ctrlButton: Button
     private lateinit var altButton: Button
 
-    // Teclado: bloque superior conmutable (principal <-> overflow Home/End/PgUp/PgDn).
     private var overflowShown = false
     private lateinit var rowTop: LinearLayout
     private lateinit var chevron: Button
+
+    private val connectivity by lazy { getSystemService(ConnectivityManager::class.java) }
+    private val networkCallback = object : ConnectivityManager.NetworkCallback() {
+        override fun onAvailable(network: Network) { tabs.forEach { it.session.onNetworkAvailable() } }
+        override fun onLost(network: Network) { tabs.forEach { it.session.onNetworkLost() } }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -72,17 +80,17 @@ class MainActivity : AppCompatActivity() {
         terminalView.setTextSize(fontSizePx)
         terminalView.setTypeface(Typeface.MONOSPACE)
 
-        val keyChars = assets.open("m2_test_key").bufferedReader().use { it.readText() }.toCharArray()
-        session = SshTerminalSession("remoteclaude", 22, "root", keyChars, "remoteclaude", sessionClient)
-        terminalView.attachSession(session)
+        keyChars = assets.open("m2_test_key").bufferedReader().use { it.readText() }.toCharArray()
 
         val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        root.addView(buildTabBar(), LinearLayout.LayoutParams(MATCH, WRAP))
         root.addView(terminalView, LinearLayout.LayoutParams(MATCH, 0, 1f))
         root.addView(buildKeypad(), LinearLayout.LayoutParams(MATCH, WRAP))
         setContentView(root)
 
-        // Reaccionar rápido a caída/vuelta de red para reconectar.
         connectivity.registerDefaultNetworkCallback(networkCallback)
+
+        newTab() // primer tab
 
         terminalView.requestFocus()
         terminalView.post { showKeyboard() }
@@ -90,7 +98,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         try { connectivity.unregisterNetworkCallback(networkCallback) } catch (_: Exception) {}
-        if (::session.isInitialized) session.finishIfRunning()
+        tabs.forEach { it.session.finishIfRunning() }
         super.onDestroy()
     }
 
@@ -98,6 +106,75 @@ class MainActivity : AppCompatActivity() {
         terminalView.requestFocus()
         val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
         imm.showSoftInput(terminalView, InputMethodManager.SHOW_IMPLICIT)
+    }
+
+    // --- Tabs -----------------------------------------------------------------
+
+    private fun buildTabBar(): View {
+        tabBar = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        return HorizontalScrollView(this).apply {
+            isHorizontalScrollBarEnabled = false
+            setBackgroundColor(KEYPAD_BG)
+            addView(tabBar)
+        }
+    }
+
+    private fun newTab() {
+        val n = nextNum++
+        val s = SshTerminalSession("remoteclaude", 22, "root", keyChars, "remoteclaude-$n", sessionClient)
+        tabs.add(Tab(s, n))
+        switchTo(tabs.size - 1)
+    }
+
+    private fun switchTo(index: Int) {
+        if (index !in tabs.indices) return
+        activeIndex = index
+        terminalView.attachSession(tabs[index].session)
+        terminalView.onScreenUpdated()
+        refreshTabBar()
+        terminalView.requestFocus()
+    }
+
+    private fun closeTab(index: Int) {
+        if (index !in tabs.indices) return
+        tabs.removeAt(index).session.finishIfRunning()
+        if (tabs.isEmpty()) { newTab(); return }
+        switchTo(index.coerceAtMost(tabs.size - 1))
+    }
+
+    private fun refreshTabBar() {
+        tabBar.removeAllViews()
+        tabs.forEachIndexed { i, tab ->
+            val active = i == activeIndex
+            val chip = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                setBackgroundColor(if (active) TAB_ACTIVE_BG else Color.TRANSPARENT)
+                setPadding(dp(12), dp(7), dp(8), dp(7))
+            }
+            chip.addView(TextView(this).apply {
+                text = "term ${tab.n}"
+                setTextColor(if (active) KEY_FG else CHEV_FG)
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+                setOnClickListener { switchTo(i) }
+            })
+            chip.addView(TextView(this).apply {
+                text = "  ✕"
+                setTextColor(CHEV_FG)
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+                setPadding(dp(4), 0, dp(4), 0)
+                setOnClickListener { closeTab(i) }
+            })
+            tabBar.addView(chip)
+        }
+        tabBar.addView(TextView(this).apply {
+            text = "  +  "
+            setTextColor(KEY_FG)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 17f)
+            setPadding(dp(10), dp(4), dp(10), dp(4))
+            gravity = Gravity.CENTER_VERTICAL
+            setOnClickListener { newTab() }
+        })
     }
 
     // --- Teclado de teclas extra ---------------------------------------------
@@ -131,7 +208,6 @@ class MainActivity : AppCompatActivity() {
         terminalView.requestFocus()
     }
 
-    /** Una sola fila: Esc Tab Ctrl Alt (o Home End PgUp PgDn) + chevron angosto. */
     private fun populateTopBlock() {
         rowTop.removeAllViews()
         if (!overflowShown) {
@@ -152,7 +228,6 @@ class MainActivity : AppCompatActivity() {
         rowTop.addView(chevron)
     }
 
-    /** Chevron angosto y de color más oscuro (afordance secundaria). */
     private fun chevronButton(): Button {
         return Button(this).apply {
             text = "›"
@@ -188,7 +263,6 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    /** Botón que reparte el ancho por igual en su fila (sin scroll). */
     private fun weightKey(label: String, onTap: () -> Unit): Button {
         return keyButton(label, onTap).apply {
             layoutParams = LinearLayout.LayoutParams(0, WRAP, 1f)
@@ -215,7 +289,9 @@ class MainActivity : AppCompatActivity() {
     // --- Clientes -------------------------------------------------------------
 
     private val sessionClient = object : TerminalSessionClient {
-        override fun onTextChanged(changedSession: TerminalSession) { terminalView.onScreenUpdated() }
+        override fun onTextChanged(changedSession: TerminalSession) {
+            if (tabs.getOrNull(activeIndex)?.session === changedSession) terminalView.onScreenUpdated()
+        }
         override fun onTitleChanged(changedSession: TerminalSession) {}
         override fun onSessionFinished(finishedSession: TerminalSession) {}
         override fun onCopyTextToClipboard(session: TerminalSession, text: String?) {}
@@ -306,5 +382,6 @@ class MainActivity : AppCompatActivity() {
         private val KEYPAD_BG = Color.parseColor("#11151c")
         private val CHEV_FG = Color.parseColor("#6b7280")
         private val CHEV_BG = Color.parseColor("#0a0d12")
+        private val TAB_ACTIVE_BG = Color.parseColor("#1c2430")
     }
 }

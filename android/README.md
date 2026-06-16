@@ -3,17 +3,20 @@
 Cliente Android del setup Remoteclaude: terminales nativas (SSH+tmux) + visualizador
 noVNC. Ver el diseño completo en [DESIGN.md](DESIGN.md).
 
-Estado: **M5** — terminal SSH usable **+ resiliente al bloqueo/cortes de red**: corre
-sobre `tmux` (en el contenedor gateway, con paneles que hacen nsenter al host → el host
-no necesita tmux) y la app **reconecta sola** y reengancha la sesión (scrollback y línea
-en progreso intactos). Detección rápida de caída vía ConnectivityManager. Teclado de
-teclas extra (`Esc Tab Ctrl Alt ›` + flechas, chevron a `Home End PgUp PgDn`), Ctrl/Alt
-de una pulsación, zoom (pinch) y resize del PTY. Verificado en dispositivo: matar la
-conexión SSH → reconexión + reattach con estado preservado. Falta multi-tab (M3),
-visualizador (M6), conexión+claves (M7) y pulido (M8).
-Falta multi-tab (M3), auto-reconexión + tmux (M5), visualizador (M6), gestión de
-claves/conexión (M7) y pulido (M8). El motor Termux vendorizado y sus modificaciones
-están en `terminal-emulator/VENDORED.md`.
+Estado: **M3** — terminal SSH usable, resiliente y **multi-tab**:
+- **Multi-tab** estilo navegador (`term N`, `✕`, `+`): cada tab es una sesión SSH +
+  tmux independiente (`remoteclaude-N`), corren en paralelo y persisten por separado.
+- **Resiliente** (M5): corre sobre `tmux` en el contenedor gateway (paneles con nsenter
+  al host → el host no necesita tmux); la app reconecta sola y reengancha (scrollback y
+  línea en progreso intactos), con detección rápida vía ConnectivityManager. Toda la I/O
+  de red va fuera del hilo principal (sin ANR).
+- **Usable** (M4): teclado de teclas extra (`Esc Tab Ctrl Alt ›` + flechas, chevron a
+  `Home End PgUp PgDn`), Ctrl/Alt de una pulsación, zoom (pinch), scroll con el dedo
+  (tmux mouse), acentos/UTF-8, y las flechas controlan la app aunque estés scrolleando.
+
+Verificado en dispositivo. Falta: visualizador noVNC (M6), generación/guardado de clave
+en la app (M7) y pulido + APK firmado (M8). El motor Termux vendorizado y sus
+modificaciones están en `terminal-emulator/VENDORED.md`.
 
 > Nota dev: la clave SSH de prueba (`app/src/main/assets/m2_test_key`) está fuera de
 > git; en M7 la app genera su propio par y guarda la privada en el Android Keystore.
