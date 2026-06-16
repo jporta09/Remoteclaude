@@ -72,6 +72,14 @@ class SshTerminalSession(
         s.flush()
     }
 
+    override fun onSizeChanged(columns: Int, rows: Int, cellWidthPixels: Int, cellHeightPixels: Int) {
+        // Avisar al host el nuevo tamaño (vim/claude se reflowean; reacomoda con el teclado).
+        try {
+            sshSession?.resizePTY(columns, rows, 0, 0)
+        } catch (_: Exception) {
+        }
+    }
+
     override fun closeTransport() {
         try { sshSession?.close() } catch (_: Exception) {}
         try { conn?.close() } catch (_: Exception) {}

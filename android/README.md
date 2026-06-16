@@ -3,11 +3,13 @@
 Cliente Android del setup Remoteclaude: terminales nativas (SSH+tmux) + visualizador
 noVNC. Ver el diseño completo en [DESIGN.md](DESIGN.md).
 
-Estado: **M2** — terminal SSH nativa (connectbot `sshlib`) que cae en la **shell del
-host** vía el gateway. Verificado en dispositivo: `jporta@haviland:~$` interactivo
-con truecolor. Falta multi-tab (M3), teclas/scroll/zoom (M4), auto-reconexión + tmux
-(M5), visualizador (M6) y gestión de claves/conexión (M7). El motor Termux vendorizado
-y sus modificaciones están en `terminal-emulator/VENDORED.md`.
+Estado: **M4** — terminal SSH **completamente usable**: fila de teclas extra
+(Esc/Tab/Ctrl/Alt/flechas/símbolos/Home/End/PgUp/PgDn), Ctrl/Alt como modificadores
+de una pulsación, zoom de fuente (pinch) y resize del PTY (vim/claude se reflowean y
+reacomodan con el teclado). Verificado en dispositivo: Ctrl-C y Tab-completion andando.
+Falta multi-tab (M3), auto-reconexión + tmux (M5), visualizador (M6), gestión de
+claves/conexión (M7) y pulido (M8). El motor Termux vendorizado y sus modificaciones
+están en `terminal-emulator/VENDORED.md`.
 
 > Nota dev: la clave SSH de prueba (`app/src/main/assets/m2_test_key`) está fuera de
 > git; en M7 la app genera su propio par y guarda la privada en el Android Keystore.
