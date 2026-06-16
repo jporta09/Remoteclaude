@@ -21,7 +21,7 @@ class SshTerminalSession(
     private val port: Int,
     private val user: String,
     private val privateKeyPem: CharArray,
-    private val tmuxSession: String,
+    @Volatile var tmuxSession: String,   // mutable: renombrar lo actualiza (lo lee el reconnect)
     client: TerminalSessionClient,
 ) : TerminalSession(5000, client) {
 
@@ -65,7 +65,7 @@ class SshTerminalSession(
                 // tmux corre en el contenedor (default-command = host-shell, que nsenter
                 // al host). -u fuerza UTF-8 (sshd no pasa LANG, si no tmux manda los
                 // acentos como '_'). Crea o reengancha la sesión persistente (-D desengancha).
-                s.execCommand("tmux -u new -A -D -s $tmuxSession")
+                s.execCommand("tmux -u new -A -D -s '$tmuxSession'")
                 sshSession = s
                 stdin = s.stdin
                 attempt = 0

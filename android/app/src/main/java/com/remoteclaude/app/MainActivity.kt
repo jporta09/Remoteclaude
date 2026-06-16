@@ -14,7 +14,9 @@ import android.view.WindowManager
 import android.view.inputmethod.InputMethodManager
 import android.net.ConnectivityManager
 import android.net.Network
+import android.widget.ArrayAdapter
 import android.widget.Button
+import android.widget.EditText
 import android.widget.HorizontalScrollView
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -36,10 +38,9 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var terminalView: TerminalView
 
-    private class Tab(val session: SshTerminalSession, val n: Int, val tmuxName: String)
+    private class Tab(val session: SshTerminalSession)
     private val tabs = mutableListOf<Tab>()
     private var activeIndex = 0
-    private var nextNum = 1
     private lateinit var keyChars: CharArray
     private lateinit var control: RemoteControl
     private lateinit var tabBar: LinearLayout
@@ -124,22 +125,24 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun openTab(tmuxName: String, n: Int) {
-        val s = SshTerminalSession(HOST, PORT, USER, keyChars, tmuxName, sessionClient)
-        tabs.add(Tab(s, n, tmuxName))
-        nextNum = maxOf(nextNum, n + 1)
+    private fun openTab(name: String) {
+        val s = SshTerminalSession(HOST, PORT, USER, keyChars, name, sessionClient)
+        tabs.add(Tab(s))
         switchTo(tabs.size - 1)
     }
 
+    /** Nuevo tab con el "term N" libre más bajo (mira abiertas + detacheadas). */
     private fun newTab() {
-        val n = nextNum++
-        openTab("remoteclaude-$n", n)
+        thread {
+            val used = tabs.map { it.session.tmuxSession }.toMutableSet()
+            used.addAll(control.listSessions())
+            var k = 1
+            while ("term $k" in used) k++
+            runOnUiThread { openTab("term $k") }
+        }
     }
 
-    private fun reattach(tmuxName: String) {
-        val n = tmuxName.substringAfterLast('-').toIntOrNull() ?: nextNum++
-        openTab(tmuxName, n)
-    }
+    private fun reattach(name: String) = openTab(name)
 
     private fun switchTo(index: Int) {
         if (index !in tabs.indices) return
@@ -154,10 +157,10 @@ class MainActivity : AppCompatActivity() {
     private fun onCloseTabClicked(index: Int) {
         val tab = tabs.getOrNull(index) ?: return
         AlertDialog.Builder(this)
-            .setTitle("Cerrar term ${tab.n}")
+            .setTitle("Cerrar ${tab.session.tmuxSession}")
             .setItems(arrayOf("Matar la sesión", "Dejar viva (solo cerrar)", "Cancelar")) { _, which ->
                 when (which) {
-                    0 -> { val name = tab.tmuxName; thread { control.killSession(name) }; closeTabKeep(index) }
+                    0 -> { val name = tab.session.tmuxSession; thread { control.killSession(name) }; closeTabKeep(index) }
                     1 -> closeTabKeep(index)
                 }
             }
@@ -171,18 +174,64 @@ class MainActivity : AppCompatActivity() {
         switchTo(index.coerceAtMost(tabs.size - 1))
     }
 
-    // ⟳: reenganchar una sesión tmux viva que no esté abierta en ninguna pestaña.
+    /** Long-press en una pestaña: renombrarla (renombra también la sesión tmux). */
+    private fun showRenameDialog(index: Int) {
+        val tab = tabs.getOrNull(index) ?: return
+        val input = EditText(this).apply {
+            setText(tab.session.tmuxSession)
+            setSelection(text.length)
+            setSingleLine()
+            setPadding(dp(20), dp(8), dp(20), dp(8))
+        }
+        AlertDialog.Builder(this)
+            .setTitle("Renombrar pestaña")
+            .setView(input)
+            .setPositiveButton("OK") { _, _ ->
+                val newName = input.text.toString().trim().replace("'", "").replace("\"", "").take(40)
+                val old = tab.session.tmuxSession
+                if (newName.isNotEmpty() && newName != old) {
+                    tab.session.tmuxSession = newName
+                    thread { control.renameSession(old, newName) }
+                    refreshTabBar()
+                }
+            }
+            .setNegativeButton("Cancelar", null)
+            .show()
+    }
+
+    // ⟳: reenganchar una sesión tmux viva (no abierta), con preview de la última línea.
     private fun showReattachMenu() {
         thread {
-            val open = tabs.map { it.tmuxName }.toSet()
-            val detached = control.listSessions().filter { it !in open }
+            val open = tabs.map { it.session.tmuxSession }.toSet()
+            val items = control.sessionsWithLastLine().filter { it.first !in open }
             runOnUiThread {
-                if (detached.isEmpty()) {
+                if (items.isEmpty()) {
                     Toast.makeText(this, "No hay sesiones detacheadas", Toast.LENGTH_SHORT).show()
                 } else {
+                    val adapter = object : ArrayAdapter<Pair<String, String>>(this, 0, items) {
+                        override fun getView(position: Int, convertView: View?, parent: ViewGroup): View {
+                            val (name, last) = getItem(position)!!
+                            return LinearLayout(this@MainActivity).apply {
+                                orientation = LinearLayout.VERTICAL
+                                setPadding(dp(20), dp(12), dp(20), dp(12))
+                                addView(TextView(this@MainActivity).apply {
+                                    text = name
+                                    setTextColor(KEY_FG)
+                                    setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
+                                })
+                                if (last.isNotEmpty()) addView(TextView(this@MainActivity).apply {
+                                    text = last
+                                    setTextColor(CHEV_FG)
+                                    setTextSize(TypedValue.COMPLEX_UNIT_SP, 11f)
+                                    maxLines = 1
+                                    ellipsize = android.text.TextUtils.TruncateAt.END
+                                })
+                            }
+                        }
+                    }
                     AlertDialog.Builder(this)
                         .setTitle("Reenganchar sesión")
-                        .setItems(detached.toTypedArray()) { _, i -> reattach(detached[i]) }
+                        .setAdapter(adapter) { _, i -> reattach(items[i].first) }
                         .show()
                 }
             }
@@ -200,10 +249,11 @@ class MainActivity : AppCompatActivity() {
                 setPadding(dp(12), dp(7), dp(8), dp(7))
             }
             chip.addView(TextView(this).apply {
-                text = "term ${tab.n}"
+                text = tab.session.tmuxSession
                 setTextColor(if (active) KEY_FG else CHEV_FG)
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
                 setOnClickListener { switchTo(i) }
+                setOnLongClickListener { showRenameDialog(i); true }  // renombrar
             })
             chip.addView(TextView(this).apply {
                 text = "  ✕"

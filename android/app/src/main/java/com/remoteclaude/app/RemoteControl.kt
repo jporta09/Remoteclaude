@@ -39,4 +39,26 @@ class RemoteControl(
     fun killSession(name: String) {
         exec("tmux kill-session -t '$name' 2>/dev/null")
     }
+
+    /** Renombra una sesión tmux (para mantenerla linkeada al nombre de la pestaña). */
+    fun renameSession(old: String, new: String) {
+        exec("tmux rename-session -t '$old' '$new' 2>/dev/null")
+    }
+
+    /** Sesiones vivas con la última línea no vacía de su pane (para previsualizar). */
+    fun sessionsWithLastLine(): List<Pair<String, String>> {
+        // Por cada sesión, captura su pane y toma la última línea con contenido.
+        val script = "tmux ls -F '#{session_name}' 2>/dev/null | while IFS= read -r s; do " +
+            "line=\$(tmux capture-pane -p -t \"\$s\" 2>/dev/null | grep -v '^[[:space:]]*\$' | tail -1); " +
+            "printf '%s\\t%s\\n' \"\$s\" \"\$line\"; done"
+        return exec(script).lineSequence()
+            .mapNotNull {
+                val p = it.split('\t', limit = 2)
+                when {
+                    p.size == 2 && p[0].isNotBlank() -> p[0].trim() to p[1].trim()
+                    p.size == 1 && p[0].isNotBlank() -> p[0].trim() to ""
+                    else -> null
+                }
+            }.toList()
+    }
 }
