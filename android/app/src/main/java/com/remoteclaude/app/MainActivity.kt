@@ -18,7 +18,10 @@ import android.widget.Button
 import android.widget.HorizontalScrollView
 import android.widget.LinearLayout
 import android.widget.TextView
+import android.widget.Toast
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import kotlin.concurrent.thread
 import com.termux.terminal.TerminalSession
 import com.termux.terminal.TerminalSessionClient
 import com.termux.view.TerminalView
@@ -33,11 +36,12 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var terminalView: TerminalView
 
-    private class Tab(val session: SshTerminalSession, val n: Int)
+    private class Tab(val session: SshTerminalSession, val n: Int, val tmuxName: String)
     private val tabs = mutableListOf<Tab>()
     private var activeIndex = 0
     private var nextNum = 1
     private lateinit var keyChars: CharArray
+    private lateinit var control: RemoteControl
     private lateinit var tabBar: LinearLayout
 
     /** Sesión del tab activo (la usan el teclado y los modificadores). */
@@ -81,6 +85,7 @@ class MainActivity : AppCompatActivity() {
         terminalView.setTypeface(Typeface.MONOSPACE)
 
         keyChars = assets.open("m2_test_key").bufferedReader().use { it.readText() }.toCharArray()
+        control = RemoteControl(HOST, PORT, USER, keyChars)
 
         val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         root.addView(buildTabBar(), LinearLayout.LayoutParams(MATCH, WRAP))
@@ -119,11 +124,21 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun openTab(tmuxName: String, n: Int) {
+        val s = SshTerminalSession(HOST, PORT, USER, keyChars, tmuxName, sessionClient)
+        tabs.add(Tab(s, n, tmuxName))
+        nextNum = maxOf(nextNum, n + 1)
+        switchTo(tabs.size - 1)
+    }
+
     private fun newTab() {
         val n = nextNum++
-        val s = SshTerminalSession("remoteclaude", 22, "root", keyChars, "remoteclaude-$n", sessionClient)
-        tabs.add(Tab(s, n))
-        switchTo(tabs.size - 1)
+        openTab("remoteclaude-$n", n)
+    }
+
+    private fun reattach(tmuxName: String) {
+        val n = tmuxName.substringAfterLast('-').toIntOrNull() ?: nextNum++
+        openTab(tmuxName, n)
     }
 
     private fun switchTo(index: Int) {
@@ -135,11 +150,43 @@ class MainActivity : AppCompatActivity() {
         terminalView.requestFocus()
     }
 
-    private fun closeTab(index: Int) {
+    // ✕: preguntar si matar la sesión tmux o solo cerrar la pestaña (dejarla viva).
+    private fun onCloseTabClicked(index: Int) {
+        val tab = tabs.getOrNull(index) ?: return
+        AlertDialog.Builder(this)
+            .setTitle("Cerrar term ${tab.n}")
+            .setItems(arrayOf("Matar la sesión", "Dejar viva (solo cerrar)", "Cancelar")) { _, which ->
+                when (which) {
+                    0 -> { val name = tab.tmuxName; thread { control.killSession(name) }; closeTabKeep(index) }
+                    1 -> closeTabKeep(index)
+                }
+            }
+            .show()
+    }
+
+    private fun closeTabKeep(index: Int) {
         if (index !in tabs.indices) return
         tabs.removeAt(index).session.finishIfRunning()
         if (tabs.isEmpty()) { newTab(); return }
         switchTo(index.coerceAtMost(tabs.size - 1))
+    }
+
+    // ⟳: reenganchar una sesión tmux viva que no esté abierta en ninguna pestaña.
+    private fun showReattachMenu() {
+        thread {
+            val open = tabs.map { it.tmuxName }.toSet()
+            val detached = control.listSessions().filter { it !in open }
+            runOnUiThread {
+                if (detached.isEmpty()) {
+                    Toast.makeText(this, "No hay sesiones detacheadas", Toast.LENGTH_SHORT).show()
+                } else {
+                    AlertDialog.Builder(this)
+                        .setTitle("Reenganchar sesión")
+                        .setItems(detached.toTypedArray()) { _, i -> reattach(detached[i]) }
+                        .show()
+                }
+            }
+        }
     }
 
     private fun refreshTabBar() {
@@ -163,7 +210,7 @@ class MainActivity : AppCompatActivity() {
                 setTextColor(CHEV_FG)
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
                 setPadding(dp(4), 0, dp(4), 0)
-                setOnClickListener { closeTab(i) }
+                setOnClickListener { onCloseTabClicked(i) }
             })
             tabBar.addView(chip)
         }
@@ -174,6 +221,14 @@ class MainActivity : AppCompatActivity() {
             setPadding(dp(10), dp(4), dp(10), dp(4))
             gravity = Gravity.CENTER_VERTICAL
             setOnClickListener { newTab() }
+        })
+        tabBar.addView(TextView(this).apply {
+            text = "⟳"
+            setTextColor(CHEV_FG)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
+            setPadding(dp(8), dp(4), dp(12), dp(4))
+            gravity = Gravity.CENTER_VERTICAL
+            setOnClickListener { showReattachMenu() }  // sesiones detacheadas
         })
     }
 
@@ -375,6 +430,9 @@ class MainActivity : AppCompatActivity() {
         TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, v.toFloat(), resources.displayMetrics).toInt()
 
     companion object {
+        private const val HOST = "remoteclaude"
+        private const val PORT = 22
+        private const val USER = "root"
         private const val MATCH = ViewGroup.LayoutParams.MATCH_PARENT
         private const val WRAP = ViewGroup.LayoutParams.WRAP_CONTENT
         private val ACCENT = Color.parseColor("#8fbcbb")
