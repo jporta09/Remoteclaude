@@ -318,7 +318,10 @@ public final class TerminalView extends View {
                 // not set and it logs a warning:
                 // W/InputAttributes: Unexpected input class: inputType=0x00080090 imeOptions=0x02000000
                 // https://cs.android.com/android/platform/superproject/+/android-11.0.0_r40:packages/inputmethods/LatinIME/java/src/com/android/inputmethod/latin/InputAttributes.java;l=79
-                outAttrs.inputType = InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD | InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS;
+                // Remoteclaude: texto normal sin sugerencias en vez de "password visible".
+                // El tipo password rompía la entrada de acentos/caracteres especiales en
+                // varios teclados (Samsung); NO_SUGGESTIONS evita el autocorrector.
+                outAttrs.inputType = InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS;
             } else {
                 // Using InputType.NULL is the most correct input type and avoids issues with other hacks.
                 //

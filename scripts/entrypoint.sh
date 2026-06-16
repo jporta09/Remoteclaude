@@ -15,6 +15,8 @@ cat > /root/.tmux.conf <<'EOF'
 set -g default-command "/usr/local/bin/host-shell"
 set -g default-terminal "xterm-256color"
 set -g destroy-unattached off
+# mouse on: el deslizamiento del dedo entra al historial de tmux (scroll).
+set -g mouse on
 EOF
 
 # Clave pública del cliente (montada read-only) -> login del contenedor (root).
