@@ -50,7 +50,7 @@ DISPLAY=localhost:99 <your command...>
 
 Then tell the user to watch at:
 ```
-http://remoteclaude:6080/vnc.html?autoconnect=1&resize=scale
+http://remoteclaude:6080/vnc.html?autoconnect=1&resize=remote
 ```
 (or `http://<TS_HOSTNAME>:6080/...` if the node name differs). Always surface this
 URL — the user can only see the browser if they open it.

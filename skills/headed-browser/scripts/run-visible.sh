@@ -29,6 +29,6 @@ if ! curl -fsS -o /dev/null "http://localhost:${NOVNC_PORT}/vnc.html" 2>/dev/nul
     exit 1
 fi
 
-echo ">> Navegador visible en: http://${REMOTE_HOST}:${NOVNC_PORT}/vnc.html?autoconnect=1&resize=scale"
+echo ">> Navegador visible en: http://${REMOTE_HOST}:${NOVNC_PORT}/vnc.html?autoconnect=1&resize=remote"
 echo ">> (DISPLAY=localhost:${DISPLAY_NUM})"
 exec env DISPLAY="localhost:${DISPLAY_NUM}" "$@"
