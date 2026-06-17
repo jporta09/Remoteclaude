@@ -24,6 +24,7 @@ import androidx.appcompat.app.AppCompatActivity
 class HostsActivity : AppCompatActivity() {
 
     private lateinit var list: LinearLayout
+    private val titleFont by lazy { resources.getFont(R.font.isocpeur) }     // títulos (marca)
     private val monoFont by lazy { resources.getFont(R.font.mononoki) }      // code / técnico
     private val bodyFont by lazy { resources.getFont(R.font.ubuntu) }        // cuerpo de texto (marca)
 
@@ -36,12 +37,23 @@ class HostsActivity : AppCompatActivity() {
             setBackgroundColor(getColor(R.color.marvin_petrol))
         }
 
-        // Encabezado: isotipo oficial (imagen, no texto) + subtítulo
-        root.addView(ImageView(this).apply {
+        // Encabezado: título "RemoteMarvin" (izq) + isotipo chico (arriba a la derecha)
+        val header = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(20), dp(26), dp(16), dp(2))
+        }
+        header.addView(TextView(this).apply {
+            text = "RemoteMarvin"
+            typeface = titleFont
+            setTextColor(getColor(R.color.marvin_green))
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 27f)
+        }, LinearLayout.LayoutParams(0, WRAP, 1f))
+        header.addView(ImageView(this).apply {
             setImageResource(R.drawable.marvin_iso)
-            scaleType = ImageView.ScaleType.FIT_START
-            setPadding(dp(20), dp(28), dp(20), dp(4))
-        }, LinearLayout.LayoutParams(MATCH, dp(96)))
+            adjustViewBounds = true
+        }, LinearLayout.LayoutParams(WRAP, dp(34)))
+        root.addView(header)
         root.addView(TextView(this).apply {
             text = "_hosts"
             typeface = monoFont
