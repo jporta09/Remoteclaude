@@ -41,7 +41,7 @@ class MainActivity : AppCompatActivity() {
     private class Tab(val session: SshTerminalSession)
     private val tabs = mutableListOf<Tab>()
     private var activeIndex = 0
-    private lateinit var keyChars: CharArray
+    private lateinit var keyPair: java.security.KeyPair
     private lateinit var control: RemoteControl
     private lateinit var tabBar: LinearLayout
     private val prefs by lazy { getSharedPreferences("remoteclaude", Context.MODE_PRIVATE) }
@@ -86,8 +86,8 @@ class MainActivity : AppCompatActivity() {
         terminalView.setTextSize(fontSizePx)
         terminalView.setTypeface(Typeface.MONOSPACE)
 
-        keyChars = assets.open("m2_test_key").bufferedReader().use { it.readText() }.toCharArray()
-        control = RemoteControl(HOST, PORT, USER, keyChars)
+        keyPair = KeyStoreSsh.getOrCreateKeyPair()
+        control = RemoteControl(HOST, PORT, USER, keyPair)
 
         val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         root.addView(buildTabBar(), LinearLayout.LayoutParams(MATCH, WRAP))
@@ -127,7 +127,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun openTab(name: String) {
-        val s = SshTerminalSession(HOST, PORT, USER, keyChars, name, sessionClient)
+        val s = SshTerminalSession(HOST, PORT, USER, keyPair, name, sessionClient)
         tabs.add(Tab(s))
         switchTo(tabs.size - 1)
     }
@@ -300,7 +300,29 @@ class MainActivity : AppCompatActivity() {
             gravity = Gravity.CENTER_VERTICAL
             setOnClickListener { showReattachMenu() }  // sesiones detacheadas
         })
+        tabBar.addView(TextView(this).apply {
+            text = "🔑"
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
+            setPadding(dp(6), dp(4), dp(12), dp(4))
+            gravity = Gravity.CENTER_VERTICAL
+            setOnClickListener { showPublicKeyDialog() }  // clave pública de la app
+        })
         saveTabs()  // persistir el estado de las pestañas
+    }
+
+    /** Muestra la clave pública (Keystore) para agregar a authorized_keys del gateway. */
+    private fun showPublicKeyDialog() {
+        val pub = KeyStoreSsh.openSshPublicKey("remoteclaude-app")
+        AlertDialog.Builder(this)
+            .setTitle("Clave pública (agregar a authorized_keys)")
+            .setMessage(pub)
+            .setPositiveButton("Copiar") { _, _ ->
+                val cb = getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                cb.setPrimaryClip(android.content.ClipData.newPlainText("clave pública", pub))
+                Toast.makeText(this, "Clave copiada", Toast.LENGTH_SHORT).show()
+            }
+            .setNegativeButton("Cerrar", null)
+            .show()
     }
 
     // --- Teclado de teclas extra ---------------------------------------------

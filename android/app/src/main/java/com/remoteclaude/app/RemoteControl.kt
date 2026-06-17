@@ -1,6 +1,7 @@
 package com.remoteclaude.app
 
 import com.trilead.ssh2.Connection
+import java.security.KeyPair
 
 /**
  * Comandos de control de tmux (listar / matar sesiones) por una conexión SSH de un
@@ -11,13 +12,13 @@ class RemoteControl(
     private val host: String,
     private val port: Int,
     private val user: String,
-    private val key: CharArray,
+    private val key: KeyPair,
 ) {
     private fun exec(command: String): String {
         val c = Connection(host, port)
         return try {
             c.connect({ _, _, _, _ -> true }, 10000, 10000)
-            if (!c.authenticateWithPublicKey(user, key, null)) return ""
+            if (!c.authenticateWithPublicKey(user, key)) return ""
             val s = c.openSession()
             s.execCommand(command)
             val out = s.stdout.readBytes()

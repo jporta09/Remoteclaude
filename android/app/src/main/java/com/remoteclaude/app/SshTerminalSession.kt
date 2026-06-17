@@ -5,6 +5,7 @@ import com.termux.terminal.TerminalSessionClient
 import com.trilead.ssh2.Connection
 import com.trilead.ssh2.Session
 import java.io.OutputStream
+import java.security.KeyPair
 import java.util.concurrent.Executors
 import kotlin.concurrent.thread
 
@@ -20,7 +21,7 @@ class SshTerminalSession(
     private val host: String,
     private val port: Int,
     private val user: String,
-    private val privateKeyPem: CharArray,
+    private val keyPair: KeyPair,
     @Volatile var tmuxSession: String,   // mutable: renombrar lo actualiza (lo lee el reconnect)
     client: TerminalSessionClient,
 ) : TerminalSession(5000, client) {
@@ -55,7 +56,7 @@ class SshTerminalSession(
                 val c = Connection(host, port)
                 c.connect({ _, _, _, _ -> true }, 15000, 15000)
                 conn = c
-                if (!c.authenticateWithPublicKey(user, privateKeyPem, null)) {
+                if (!c.authenticateWithPublicKey(user, keyPair)) {
                     status("\r\n[autenticación SSH falló]\r\n")
                     userClosed = true
                     break
