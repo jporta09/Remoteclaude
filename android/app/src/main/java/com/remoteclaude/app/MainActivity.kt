@@ -582,8 +582,19 @@ class MainActivity : AppCompatActivity() {
         }
         override fun onTitleChanged(changedSession: TerminalSession) {}
         override fun onSessionFinished(finishedSession: TerminalSession) {}
-        override fun onCopyTextToClipboard(session: TerminalSession, text: String?) {}
-        override fun onPasteTextFromClipboard(session: TerminalSession?) {}
+        override fun onCopyTextToClipboard(session: TerminalSession, text: String?) {
+            if (text.isNullOrEmpty()) return
+            val cb = getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+            cb.setPrimaryClip(android.content.ClipData.newPlainText("terminal", text))
+            Toast.makeText(this@MainActivity, "Copiado", Toast.LENGTH_SHORT).show()
+        }
+        override fun onPasteTextFromClipboard(session: TerminalSession?) {
+            val cb = getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+            val text = cb.primaryClip?.getItemAt(0)?.coerceToText(this@MainActivity)?.toString()
+            if (text.isNullOrEmpty()) return
+            val bytes = text.toByteArray(Charsets.UTF_8)
+            this@MainActivity.session.write(bytes, 0, bytes.size)
+        }
         override fun onBell(session: TerminalSession) {}
         override fun onColorsChanged(session: TerminalSession) {}
         override fun onTerminalCursorStateChange(state: Boolean) {}
