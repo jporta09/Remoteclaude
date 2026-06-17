@@ -60,6 +60,7 @@ class DisplayActivity : AppCompatActivity() {
             settings.useWideViewPort = true
             settings.loadWithOverviewMode = true
             settings.mediaPlaybackRequiresUserGesture = false
+            settings.cacheMode = android.webkit.WebSettings.LOAD_NO_CACHE   // ui.js fresco (con el parche)
             setBackgroundColor(PETROL)
             webViewClient = WebViewClient()
         }
@@ -86,7 +87,8 @@ class DisplayActivity : AppCompatActivity() {
             if (fitMode) "remote" else "scale"
 
     // --- zoom nítido vía la API interna de noVNC ---
-    private fun js(body: String) = web.evaluateJavascript("(function(){try{var r=window.UI&&UI.rfb;if(r){$body}}catch(e){}})();", null)
+    // El container expone UI en window.__UI (parche en ui.js); usamos su API de zoom.
+    private fun js(body: String) = web.evaluateJavascript("(function(){try{var r=window.__UI&&__UI.rfb;if(r){$body}}catch(e){}})();", null)
 
     /** Pasa noVNC a modo recortado (clip) y fija la escala/región según curScale. */
     private fun setNovncZoom(reapplyDelays: Boolean = false) {
