@@ -15,6 +15,7 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-ins
         locales \
         procps \
         ca-certificates \
+        sudo \
     && printf 'en_US.UTF-8 UTF-8\nes_ES.UTF-8 UTF-8\n' >> /etc/locale.gen && locale-gen \
     && rm -rf /var/lib/apt/lists/* \
     && mkdir -p /run/sshd /etc/ssh/keys /etc/remoteclaude
@@ -25,7 +26,10 @@ ENV LC_ALL=en_US.UTF-8
 
 COPY scripts/entrypoint.sh /usr/local/bin/entrypoint.sh
 COPY scripts/host-shell.sh /usr/local/bin/host-shell
-RUN chmod +x /usr/local/bin/entrypoint.sh /usr/local/bin/host-shell
+COPY scripts/rc-enroll-key.sh /usr/local/bin/rc-enroll-key
+COPY scripts/rc-enroll-forced.sh /usr/local/bin/rc-enroll-forced
+RUN chmod +x /usr/local/bin/entrypoint.sh /usr/local/bin/host-shell \
+        /usr/local/bin/rc-enroll-key /usr/local/bin/rc-enroll-forced
 
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
 CMD ["sleep", "infinity"]

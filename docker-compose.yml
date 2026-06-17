@@ -38,9 +38,11 @@ services:
     environment:
       - HOST_USER=${HOST_USER:-root}   # usuario del host al que saltás
       - SSH_PORT=${SSH_PORT:-22}
+      - ENROLL_PASSWORD=${ENROLL_PASSWORD:-}   # habilita auto-enrolamiento de claves
     volumes:
       - ./ssh/authorized_keys:/etc/remoteclaude/authorized_keys:ro
       - ssh-hostkeys:/etc/ssh/keys
+      - gw-enrolled:/var/lib/remoteclaude   # claves enroladas en runtime (persisten)
     depends_on:
       - tailscale
     restart: unless-stopped
@@ -63,3 +65,4 @@ services:
 volumes:
   ts-state:
   ssh-hostkeys:
+  gw-enrolled:

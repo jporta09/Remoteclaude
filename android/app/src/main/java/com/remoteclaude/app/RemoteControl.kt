@@ -31,6 +31,30 @@ class RemoteControl(
         }
     }
 
+    /**
+     * Auto-enrolamiento (estilo ssh-copy-id): se conecta como 'enroll' con contraseña
+     * y sube la clave pública de esta app al gateway. Del lado server, ese usuario sólo
+     * puede agregar una clave (ForceCommand), nunca abrir shell. Devuelve la respuesta
+     * del server (empieza con "OK:") si funcionó, o null si falló. BLOQUEA.
+     */
+    fun enrollThisDevice(password: String): String? {
+        val pub = KeyStoreSsh.openSshPublicKey("remoteclaude-app")
+        val c = Connection(host, port)
+        return try {
+            c.connect({ _, _, _, _ -> true }, 10000, 10000)
+            if (!c.authenticateWithPassword("enroll", password)) return null
+            val s = c.openSession()
+            s.execCommand(pub)   // el ForceCommand lo recibe como SSH_ORIGINAL_COMMAND
+            val out = String(s.stdout.readBytes(), Charsets.UTF_8).trim()
+            s.close()
+            out
+        } catch (_: Exception) {
+            null
+        } finally {
+            try { c.close() } catch (_: Exception) {}
+        }
+    }
+
     /** Nombres de las sesiones tmux vivas en el gateway. */
     fun listSessions(): List<String> =
         exec("tmux ls -F '#{session_name}' 2>/dev/null")

@@ -146,29 +146,60 @@ class MainActivity : AppCompatActivity() {
         switchTo(idx)
     }
 
-    // La auth SSH falló (clave no autorizada): mostrar la clave para agregarla + reintentar.
+    // La auth SSH falló (clave no autorizada): AUTO-ENROLAMIENTO. Pedir la contraseña de
+    // enrolamiento una vez; la app sube sola su clave y reconecta (estilo ssh-copy-id).
     @Volatile private var authDialogShown = false
     private fun onSessionAuthFailed() {
         if (authDialogShown) return   // varias pestañas fallan a la vez: un solo diálogo
         authDialogShown = true
         val pub = KeyStoreSsh.openSshPublicKey("remoteclaude-app")
+        val input = EditText(this).apply {
+            hint = "Contraseña de enrolamiento"
+            inputType = android.text.InputType.TYPE_CLASS_TEXT or
+                android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
+            setPadding(dp(20), dp(8), dp(20), dp(8))
+        }
         val dialog = AlertDialog.Builder(this)
-            .setTitle("Autorización requerida")
+            .setTitle("Autorizar este dispositivo")
             .setMessage(
-                "Esta app no está autorizada en el gateway.\n\n" +
-                    "Agregá esta clave a authorized_keys y tocá Reintentar:\n\n$pub"
+                "Esta app todavía no está autorizada en el gateway. Ingresá la contraseña " +
+                    "de enrolamiento (una sola vez) y se autoriza sola."
             )
-            .setPositiveButton("Reintentar") { _, _ -> authDialogShown = false; reconnectActiveTab() }
-            .setNeutralButton("Copiar clave", null)   // se sobrescribe abajo para NO cerrar
-            .setNegativeButton("Cerrar") { _, _ -> authDialogShown = false }
+            .setView(input)
+            .setPositiveButton("Autorizar", null)    // sobrescrito abajo: validar sin cerrar
+            .setNeutralButton("Copiar clave", null)  // fallback manual; tampoco cierra
+            .setNegativeButton("Cancelar") { _, _ -> authDialogShown = false }
             .setOnCancelListener { authDialogShown = false }
             .create()
         dialog.show()
-        // Copiar sin cerrar el diálogo, así queda el botón Reintentar a mano.
         dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener {
             val cb = getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
             cb.setPrimaryClip(android.content.ClipData.newPlainText("clave pública", pub))
             Toast.makeText(this, "Clave copiada", Toast.LENGTH_SHORT).show()
+        }
+        dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+            val pass = input.text.toString()
+            if (pass.isEmpty()) {
+                Toast.makeText(this, "Ingresá la contraseña", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+            Toast.makeText(this, "Autorizando…", Toast.LENGTH_SHORT).show()
+            thread {
+                val res = control.enrollThisDevice(pass)
+                runOnUiThread {
+                    if (res != null && res.startsWith("OK")) {
+                        Toast.makeText(this, "Dispositivo autorizado ✓", Toast.LENGTH_SHORT).show()
+                        authDialogShown = false
+                        dialog.dismiss()
+                        reconnectActiveTab()
+                    } else {
+                        Toast.makeText(
+                            this, "No se pudo autorizar (¿contraseña incorrecta?)",
+                            Toast.LENGTH_LONG
+                        ).show()
+                    }
+                }
+            }
         }
     }
 
