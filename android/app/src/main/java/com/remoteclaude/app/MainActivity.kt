@@ -56,12 +56,15 @@ class MainActivity : AppCompatActivity() {
 
     private var ctrlActive = false
     private var altActive = false
+    private var shiftActive = false
     private lateinit var ctrlButton: Button
     private lateinit var altButton: Button
+    private lateinit var shiftButton: Button
 
     private var overflowShown = false
-    private var keyboardUp = false   // teclado QWERTY visible -> ocultar la tecla ⇧Tab
+    private var keyboardUp = false   // teclado QWERTY visible -> ocultar la fila Shift
     private lateinit var rowTop: LinearLayout
+    private lateinit var shiftRow: LinearLayout   // fila extra (debajo de las flechas)
     private lateinit var chevron: Button
 
     private val connectivity by lazy { getSystemService(ConnectivityManager::class.java) }
@@ -127,7 +130,8 @@ class MainActivity : AppCompatActivity() {
             val up = decor.height - r.height() > decor.height * 0.15
             if (up != keyboardUp) {
                 keyboardUp = up
-                if (!overflowShown) populateTopBlock()
+                if (up) shiftActive = false   // se oculta la fila: no dejar Shift colgado
+                populateShiftRow()
             }
         }
     }
@@ -442,11 +446,27 @@ class MainActivity : AppCompatActivity() {
         arrows.addView(weightKey("↑") { sendKey(KeyEvent.KEYCODE_DPAD_UP) })
         arrows.addView(weightKey("→") { sendKey(KeyEvent.KEYCODE_DPAD_RIGHT) })
 
+        shiftRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+
         populateTopBlock()
+        populateShiftRow()
 
         pad.addView(rowTop, LinearLayout.LayoutParams(MATCH, WRAP))
         pad.addView(arrows, LinearLayout.LayoutParams(MATCH, WRAP))
+        pad.addView(shiftRow, LinearLayout.LayoutParams(MATCH, WRAP))
         return pad
+    }
+
+    /** Fila extra debajo de las flechas: la tecla Shift, sólo con el teclado QWERTY oculto.
+     *  Shift es un modificador (como Ctrl/Alt): Shift + Tab manda Shift+Tab (cambia el modo
+     *  de ejecución de Claude). Con el teclado arriba la fila queda vacía (no ocupa lugar). */
+    private fun populateShiftRow() {
+        shiftRow.removeAllViews()
+        if (!keyboardUp) {
+            shiftButton = weightKey("⇧ Shift") { toggleShift() }
+            shiftButton.setTextColor(if (shiftActive) ACCENT else KEY_FG)
+            shiftRow.addView(shiftButton)
+        }
     }
 
     private fun toggleOverflow() {
@@ -460,16 +480,13 @@ class MainActivity : AppCompatActivity() {
         rowTop.removeAllViews()
         if (!overflowShown) {
             rowTop.addView(weightKey("Esc") { sendKey(KeyEvent.KEYCODE_ESCAPE) })
-            rowTop.addView(weightKey("Tab") { sendKey(KeyEvent.KEYCODE_TAB) })
+            rowTop.addView(weightKey("Tab") { onTabKey() })
             ctrlButton = weightKey("Ctrl") { toggleCtrl() }
             altButton = weightKey("Alt") { toggleAlt() }
             rowTop.addView(ctrlButton)
             rowTop.addView(altButton)
             ctrlButton.setTextColor(if (ctrlActive) ACCENT else KEY_FG)
             altButton.setTextColor(if (altActive) ACCENT else KEY_FG)
-            // ⇧Tab (Shift+Tab) sólo cuando el teclado QWERTY está oculto: sirve para
-            // ciclar el modo de ejecución de Claude (normal / auto-accept / plan) sin tipear.
-            if (!keyboardUp) rowTop.addView(weightKey("⇧Tab") { sendShiftTab() })
         } else {
             rowTop.addView(weightKey("Home") { sendKey(KeyEvent.KEYCODE_MOVE_HOME) })
             rowTop.addView(weightKey("End") { sendKey(KeyEvent.KEYCODE_MOVE_END) })
@@ -521,6 +538,22 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun sendKey(keyCode: Int) = terminalView.handleKeyCode(keyCode, 0)
+
+    /** Tab: con Shift activo manda Shift+Tab (back-tab) y suelta el Shift; si no, Tab normal. */
+    private fun onTabKey() {
+        if (shiftActive) {
+            sendShiftTab()
+            shiftActive = false
+            if (::shiftButton.isInitialized) shiftButton.setTextColor(KEY_FG)
+        } else {
+            sendKey(KeyEvent.KEYCODE_TAB)
+        }
+    }
+
+    private fun toggleShift() {
+        shiftActive = !shiftActive
+        shiftButton.setTextColor(if (shiftActive) ACCENT else KEY_FG)
+    }
 
     /** Shift+Tab = back-tab (CSI Z): la secuencia que Claude lee para cambiar de modo. */
     private fun sendShiftTab() =
