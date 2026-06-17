@@ -2,8 +2,6 @@ package com.remoteclaude.app
 
 import android.graphics.Color
 import android.os.Bundle
-import android.os.Handler
-import android.os.Looper
 import android.util.TypedValue
 import android.view.Gravity
 import android.view.View
@@ -23,7 +21,8 @@ import kotlin.concurrent.thread
  * un cajón colapsable abajo-izquierda (flecha, estilo noVNC) con los controles:
  *  - Ajustada (resize=remote): el escritorio LLENA el visor.
  *  - Escritorio (resize=scale + display 1280x720 landscape vía xrandr): se ve apaisado.
- *  - Zoom: habilita el pinch de 2 dedos (sólo útil en Escritorio).
+ *  - Zoom 1:1 (sólo en Escritorio): resize=off + clip -> el escritorio se ve a tamaño
+ *    real (magnificado) y se navega ARRASTRANDO con el dedo. Off = escritorio completo.
  * Orientación libre (no se fuerza).
  */
 class DisplayActivity : AppCompatActivity() {
@@ -48,13 +47,10 @@ class DisplayActivity : AppCompatActivity() {
             settings.domStorageEnabled = true
             settings.useWideViewPort = true
             settings.loadWithOverviewMode = true
-            settings.setSupportZoom(true)
-            settings.builtInZoomControls = true
-            settings.displayZoomControls = false
             settings.mediaPlaybackRequiresUserGesture = false
             setBackgroundColor(PETROL)
             webViewClient = object : WebViewClient() {
-                override fun onPageFinished(view: WebView?, url: String?) = applyViewportZoom()
+                override fun onPageFinished(view: WebView?, url: String?) = applyView()
             }
         }
 
@@ -71,6 +67,20 @@ class DisplayActivity : AppCompatActivity() {
     private fun url() =
         "http://remoteclaude:6080/vnc.html?autoconnect=1&reconnect=1&reconnect_delay=2000&resize=" +
             if (fitMode) "remote" else "scale"
+
+    /** Ajusta el modo de vista de noVNC en vivo (sin recargar) vía su API RFB:
+     *  - Escritorio + 1:1: sin escala, recortado y con view-drag -> arrastrar PANEA.
+     *  - Escritorio normal: a escala (escritorio completo).
+     *  Se reaplica con delays porque UI.rfb existe recién tras autoconnect. */
+    private fun applyView() {
+        if (fitMode) return
+        val js = if (zoomOn)
+            "UI.rfb.scaleViewport=false;UI.rfb.clipViewport=true;UI.rfb.dragViewport=true;"
+        else
+            "UI.rfb.scaleViewport=true;UI.rfb.clipViewport=false;UI.rfb.dragViewport=false;"
+        val full = "(function(){try{if(window.UI&&UI.rfb){$js}}catch(e){}})();"
+        listOf(600L, 1800L, 3200L).forEach { d -> web.postDelayed({ web.evaluateJavascript(full, null) }, d) }
+    }
 
     // --- barra superior ---
     private fun buildTopBar(): View {
@@ -154,25 +164,19 @@ class DisplayActivity : AppCompatActivity() {
         if (fitMode) return
         zoomOn = !zoomOn
         updateButtons()
-        applyViewportZoom()   // cambia user-scalable en vivo (sin recargar)
-        Toast.makeText(this, if (zoomOn) "Zoom: pellizcá con 2 dedos" else "Zoom off", Toast.LENGTH_SHORT).show()
-    }
-
-    /** Permite o no el pinch del WebView reescribiendo el viewport. Se reaplica con delays
-     *  porque noVNC fija user-scalable=no durante su init (después del onPageFinished). */
-    private fun applyViewportZoom() {
-        val yes = zoomOn && !fitMode
-        val js = "var m=document.querySelector('meta[name=viewport]');" +
-            "if(m){m.setAttribute('content','width=device-width, initial-scale=1.0, " +
-            "maximum-scale=${if (yes) "10.0" else "1.0"}, user-scalable=${if (yes) "yes" else "no"}');}"
-        val h = Handler(Looper.getMainLooper())
-        listOf(0L, 1200L, 2500L).forEach { d -> h.postDelayed({ web.evaluateJavascript(js, null) }, d) }
+        applyView()   // cambia escala<->1:1 en vivo (sin recargar)
+        Toast.makeText(
+            this,
+            if (zoomOn) "1:1 — arrastrá para mover" else "Escritorio completo",
+            Toast.LENGTH_SHORT,
+        ).show()
     }
 
     private fun updateButtons() {
         btnFit.text = if (fitMode) "⛶ Ajustada" else "🖥 Escritorio"
         btnFit.setTextColor(if (fitMode) GREEN else FG)
         btnZoom.visibility = if (fitMode) View.GONE else View.VISIBLE
+        btnZoom.text = if (zoomOn) "🔍 1:1" else "🔍 Escala"
         btnZoom.setTextColor(if (zoomOn) GREEN else FG)
     }
 
