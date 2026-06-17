@@ -19,13 +19,13 @@ import androidx.appcompat.app.AppCompatActivity
 import kotlin.concurrent.thread
 
 /**
- * Visor del navegador headed (noVNC). Controles en un cajón colapsable abajo:
+ * Visor del navegador headed (noVNC). Controles en cajón colapsable abajo:
  *  - Ajustada (resize=remote): el escritorio LLENA el visor.
- *  - Escritorio (resize=scale + display 1280x720 vía xrandr): se ve apaisado completo.
- *  - Zoom (sólo en Escritorio): activa una capa de pinch-zoom PROPIA por encima de
- *    noVNC. noVNC captura los toques de su canvas (preventDefault), por eso el pinch del
- *    WebView no funciona; esta capa intercepta el gesto y magnifica/panea transformando
- *    el WebView (scale + translation). Tocar Zoom de nuevo vuelve a 1x e interactúa.
+ *  - Escritorio (resize=scale, display 1920x1080): se ve apaisado completo.
+ *  - Zoom (sólo en Escritorio): mi capa intercepta el pinch (noVNC bloquea el del
+ *    WebView) y maneja la ESCALA INTERNA de noVNC (display.scale + viewportChangeSize +
+ *    viewportChangePos). Así el zoom es NÍTIDO (re-rasteriza del framebuffer) y noVNC
+ *    mapea bien el mouse -> al apagar Zoom la vista queda y clickeás magnificado.
  * Orientación libre.
  */
 class DisplayActivity : AppCompatActivity() {
@@ -40,14 +40,13 @@ class DisplayActivity : AppCompatActivity() {
     private var zoomOn = false
     private var drawerOpen = false
 
-    // estado del pinch-zoom propio
-    private var scale = 1f
-    private var panX = 0f
-    private var panY = 0f
+    private var curScale = 0.2f   // noVNC display.scale (CSS px por px del framebuffer)
+    private var fitScale = 0.2f
     private var lastX = 0f
     private var lastY = 0f
     private lateinit var scaleDetector: ScaleGestureDetector
 
+    private val density get() = resources.displayMetrics.density
     private val monoFont by lazy { resources.getFont(R.font.mononoki) }
     private val control by lazy { RemoteControl("remoteclaude", 22, "root", KeyStoreSsh.getOrCreateKeyPair()) }
 
@@ -73,7 +72,7 @@ class DisplayActivity : AppCompatActivity() {
 
         val root = FrameLayout(this).apply { setBackgroundColor(PETROL) }
         root.addView(web, FrameLayout.LayoutParams(MATCH, MATCH))
-        root.addView(zoomLayer, FrameLayout.LayoutParams(MATCH, MATCH))   // capa de pinch (sobre noVNC)
+        root.addView(zoomLayer, FrameLayout.LayoutParams(MATCH, MATCH))
         root.addView(buildTopBar(), FrameLayout.LayoutParams(MATCH, WRAP, Gravity.TOP))
         root.addView(buildDrawer(), FrameLayout.LayoutParams(WRAP, WRAP, Gravity.BOTTOM or Gravity.START))
         setContentView(root)
@@ -86,16 +85,26 @@ class DisplayActivity : AppCompatActivity() {
         "http://remoteclaude:6080/vnc.html?autoconnect=1&reconnect=1&reconnect_delay=2000&resize=" +
             if (fitMode) "remote" else "scale"
 
-    // --- pinch-zoom propio (sobre noVNC) ---
+    // --- zoom nítido vía la API interna de noVNC ---
+    private fun js(body: String) = web.evaluateJavascript("(function(){try{var r=window.UI&&UI.rfb;if(r){$body}}catch(e){}})();", null)
+
+    /** Pasa noVNC a modo recortado (clip) y fija la escala/región según curScale. */
+    private fun setNovncZoom(reapplyDelays: Boolean = false) {
+        val cssW = web.width / density
+        val cssH = web.height / density
+        val vw = cssW / curScale
+        val vh = cssH / curScale
+        val body = "r.scaleViewport=false;r.clipViewport=true;" +
+            "r._display.scale=$curScale;r._display.viewportChangeSize($vw,$vh);"
+        if (reapplyDelays) listOf(0L, 400L, 1000L).forEach { d -> web.postDelayed({ js(body) }, d) }
+        else js(body)
+    }
+
     private inner class ScaleListener : ScaleGestureDetector.SimpleOnScaleGestureListener() {
         override fun onScale(d: ScaleGestureDetector): Boolean {
-            val old = scale
-            scale = (scale * d.scaleFactor).coerceIn(1f, 6f)
-            val k = scale / old
-            // zoom hacia el punto focal del pinch
-            panX = d.focusX - (d.focusX - panX) * k
-            panY = d.focusY - (d.focusY - panY) * k
-            applyTransform()
+            // límite superior 1.0 = 1 px de framebuffer por px CSS (nítido); abajo, el fit.
+            curScale = (curScale * d.scaleFactor).coerceIn(fitScale, 1.0f)
+            setNovncZoom()
             return true
         }
     }
@@ -107,29 +116,15 @@ class DisplayActivity : AppCompatActivity() {
             MotionEvent.ACTION_POINTER_UP -> { lastX = ev.x; lastY = ev.y }
             MotionEvent.ACTION_MOVE -> {
                 if (!scaleDetector.isInProgress && ev.pointerCount == 1) {
-                    panX += ev.x - lastX
-                    panY += ev.y - lastY
+                    // arrastre -> panear el viewport (en px de framebuffer; signo invertido)
+                    val dx = -((ev.x - lastX) / density) / curScale
+                    val dy = -((ev.y - lastY) / density) / curScale
                     lastX = ev.x; lastY = ev.y
-                    applyTransform()
+                    js("r._display.viewportChangePos(${dx.toInt()},${dy.toInt()});")
                 }
             }
         }
         return true
-    }
-
-    private fun applyTransform() {
-        val w = web.width.toFloat()
-        val h = web.height.toFloat()
-        panX = panX.coerceIn(w - scale * w, 0f)   // no dejar bordes vacíos
-        panY = panY.coerceIn(h - scale * h, 0f)
-        web.pivotX = 0f; web.pivotY = 0f
-        web.scaleX = scale; web.scaleY = scale
-        web.translationX = panX; web.translationY = panY
-    }
-
-    private fun resetZoom() {
-        scale = 1f; panX = 0f; panY = 0f
-        web.scaleX = 1f; web.scaleY = 1f; web.translationX = 0f; web.translationY = 0f
     }
 
     // --- barra superior ---
@@ -196,7 +191,7 @@ class DisplayActivity : AppCompatActivity() {
     // --- modos ---
     private fun toggleFit() {
         fitMode = !fitMode
-        if (fitMode) { zoomOn = false; zoomLayer.visibility = View.GONE; resetZoom() }
+        if (fitMode) { zoomOn = false; zoomLayer.visibility = View.GONE }
         updateButtons()
         if (fitMode) {
             web.loadUrl(url())
@@ -204,7 +199,7 @@ class DisplayActivity : AppCompatActivity() {
         } else {
             Toast.makeText(this, "Escritorio — activá Zoom para pellizcar", Toast.LENGTH_SHORT).show()
             thread {
-                control.setDisplayMode("1280x720")
+                control.setDisplayMode("1920x1080")
                 runOnUiThread { web.loadUrl(url()) }
             }
         }
@@ -213,14 +208,18 @@ class DisplayActivity : AppCompatActivity() {
     private fun toggleZoom() {
         if (fitMode) return
         zoomOn = !zoomOn
-        // ON: la capa intercepta el pinch/pan. OFF: se oculta pero se MANTIENE el zoom/pan
-        // actual; los toques pasan a noVNC y Android los mapea por la transformada inversa
-        // del WebView, así el mouse cae en la posición correcta dentro de la vista magnificada.
-        zoomLayer.visibility = if (zoomOn) View.VISIBLE else View.GONE
+        if (zoomOn) {
+            fitScale = (web.width / density) / FB_W
+            curScale = curScale.coerceIn(fitScale, 1.0f)
+            zoomLayer.visibility = View.VISIBLE
+            setNovncZoom(reapplyDelays = true)   // pasa a clip + escala
+        } else {
+            zoomLayer.visibility = View.GONE      // se MANTIENE la vista (clip+escala) y mapea el mouse
+        }
         updateButtons()
         Toast.makeText(
             this,
-            if (zoomOn) "Zoom: pellizcá para acercar, arrastrá para mover" else "Mouse (la vista queda igual)",
+            if (zoomOn) "Zoom: pellizcá (nítido), arrastrá para mover" else "Mouse (la vista queda igual)",
             Toast.LENGTH_SHORT,
         ).show()
     }
@@ -250,6 +249,7 @@ class DisplayActivity : AppCompatActivity() {
         TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, v.toFloat(), resources.displayMetrics).toInt()
 
     companion object {
+        private const val FB_W = 1920f
         private const val MATCH = ViewGroup.LayoutParams.MATCH_PARENT
         private const val WRAP = ViewGroup.LayoutParams.WRAP_CONTENT
         private val PETROL = Color.parseColor("#0F232D")
