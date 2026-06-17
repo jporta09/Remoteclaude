@@ -24,7 +24,8 @@ import androidx.appcompat.app.AppCompatActivity
 class HostsActivity : AppCompatActivity() {
 
     private lateinit var list: LinearLayout
-    private val monoFont by lazy { resources.getFont(R.font.mononoki) }
+    private val monoFont by lazy { resources.getFont(R.font.mononoki) }      // code / técnico
+    private val bodyFont by lazy { resources.getFont(R.font.ubuntu) }        // cuerpo de texto (marca)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -57,7 +58,7 @@ class HostsActivity : AppCompatActivity() {
         root.addView(Button(this).apply {
             text = "+  Agregar host"
             isAllCaps = false
-            typeface = monoFont
+            typeface = bodyFont
             setTextColor(getColor(R.color.marvin_petrol))
             setBackgroundColor(getColor(R.color.marvin_green))
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
@@ -80,7 +81,7 @@ class HostsActivity : AppCompatActivity() {
         if (hosts.isEmpty()) {
             list.addView(TextView(this).apply {
                 text = "Todavía no hay hosts.\nAgregá tu PC o un server con \"+\"."
-                typeface = monoFont
+                typeface = bodyFont
                 setTextColor(getColor(R.color.marvin_muted))
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
                 setPadding(dp(24), dp(24), dp(24), dp(24))
@@ -102,7 +103,7 @@ class HostsActivity : AppCompatActivity() {
         }
         card.addView(TextView(this).apply {
             text = host.label
-            typeface = monoFont
+            typeface = bodyFont
             setTextColor(getColor(R.color.marvin_fg))
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 18f)
         })
