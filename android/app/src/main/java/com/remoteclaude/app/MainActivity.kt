@@ -52,6 +52,8 @@ class MainActivity : AppCompatActivity() {
     private var port = 22
     private lateinit var user: String
     private lateinit var hostId: String
+    private lateinit var hostLabel: String
+    private val monoFont by lazy { resources.getFont(R.font.mononoki) }
     private val tabsKey get() = "tabs_$hostId"
     private val activeKey get() = "active_$hostId"
 
@@ -89,6 +91,15 @@ class MainActivity : AppCompatActivity() {
         port = intent.getIntExtra("port", 22)
         user = intent.getStringExtra("user") ?: "root"
         hostId = intent.getStringExtra("hostId") ?: "default"
+        hostLabel = intent.getStringExtra("label") ?: host
+
+        // Terminal con colores de marca: fondo petróleo, cursor verde, texto claro.
+        // Se cambia el default del motor (sobrevive resets; no toca los colores ANSI).
+        com.termux.terminal.TerminalColors.COLOR_SCHEME.mDefaultColors.let {
+            it[com.termux.terminal.TextStyle.COLOR_INDEX_BACKGROUND] = 0xFF0F232D.toInt()
+            it[com.termux.terminal.TextStyle.COLOR_INDEX_FOREGROUND] = 0xFFE6ECE6.toInt()
+            it[com.termux.terminal.TextStyle.COLOR_INDEX_CURSOR] = 0xFF71BF44.toInt()
+        }
 
         window.setSoftInputMode(
             WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE or
@@ -105,11 +116,13 @@ class MainActivity : AppCompatActivity() {
         terminalView.isFocusableInTouchMode = true
         terminalView.setTextSize(fontSizePx)
         terminalView.setTypeface(Typeface.MONOSPACE)
+        terminalView.setBackgroundColor(KEYPAD_BG)   // petróleo, evita flash negro
 
         keyPair = KeyStoreSsh.getOrCreateKeyPair()
         control = RemoteControl(host, port, user, keyPair)
 
         val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        root.addView(buildHostBar(), LinearLayout.LayoutParams(MATCH, WRAP))
         root.addView(buildTabBar(), LinearLayout.LayoutParams(MATCH, WRAP))
         root.addView(terminalView, LinearLayout.LayoutParams(MATCH, 0, 1f))
         root.addView(buildKeypad(), LinearLayout.LayoutParams(MATCH, WRAP))
@@ -134,6 +147,28 @@ class MainActivity : AppCompatActivity() {
         terminalView.requestFocus()
         val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
         imm.showSoftInput(terminalView, InputMethodManager.SHOW_IMPLICIT)
+    }
+
+    /** Barra superior: muestra a qué host estás conectado y permite volver al menú. */
+    private fun buildHostBar(): View {
+        val bar = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setBackgroundColor(CHEV_BG)
+            setPadding(dp(12), dp(8), dp(12), dp(8))
+            setOnClickListener { finish() }   // volver al menú de hosts
+        }
+        bar.addView(TextView(this).apply {
+            text = "‹  $hostLabel"
+            typeface = monoFont
+            setTextColor(ACCENT)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+        }, LinearLayout.LayoutParams(0, WRAP, 1f))
+        bar.addView(android.widget.ImageView(this).apply {
+            setImageResource(R.drawable.marvin_iso)
+            adjustViewBounds = true
+        }, LinearLayout.LayoutParams(WRAP, dp(20)))
+        return bar
     }
 
     /** Detecta si el teclado QWERTY está visible (por el alto que tapa) para mostrar/ocultar ⇧Tab. */
@@ -377,7 +412,8 @@ class MainActivity : AppCompatActivity() {
             }
             chip.addView(TextView(this).apply {
                 text = tab.session.tmuxSession
-                setTextColor(if (active) KEY_FG else CHEV_FG)
+                typeface = monoFont
+                setTextColor(if (active) ACCENT else CHEV_FG)
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
                 setOnClickListener { switchTo(i) }
                 setOnLongClickListener { showRenameDialog(i); true }  // renombrar
@@ -533,6 +569,7 @@ class MainActivity : AppCompatActivity() {
         return Button(this).apply {
             text = label
             isAllCaps = false
+            typeface = monoFont
             setTextColor(KEY_FG)
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
             setBackgroundColor(Color.TRANSPARENT)
