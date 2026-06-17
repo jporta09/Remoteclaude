@@ -301,6 +301,13 @@ class MainActivity : AppCompatActivity() {
             setOnClickListener { showReattachMenu() }  // sesiones detacheadas
         })
         tabBar.addView(TextView(this).apply {
+            text = "🖥"
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
+            setPadding(dp(6), dp(4), dp(10), dp(4))
+            gravity = Gravity.CENTER_VERTICAL
+            setOnClickListener { openDisplay() }  // visor noVNC del navegador headed
+        })
+        tabBar.addView(TextView(this).apply {
             text = "🔑"
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
             setPadding(dp(6), dp(4), dp(12), dp(4))
@@ -308,6 +315,11 @@ class MainActivity : AppCompatActivity() {
             setOnClickListener { showPublicKeyDialog() }  // clave pública de la app
         })
         saveTabs()  // persistir el estado de las pestañas
+    }
+
+    /** Abre el visor noVNC del navegador headed (M6). */
+    private fun openDisplay() {
+        startActivity(android.content.Intent(this, DisplayActivity::class.java))
     }
 
     /** Muestra la clave pública (Keystore) para agregar a authorized_keys del gateway. */

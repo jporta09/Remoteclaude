@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  noVNC se sirve por HTTP (no HTTPS) dentro de la tailnet. Android 9+ bloquea
+  cleartext por defecto; lo habilitamos SOLO para el gateway por su nombre de
+  MagicDNS. Todo el resto sigue exigiendo HTTPS.
+-->
+<network-security-config>
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="true">remoteclaude</domain>
+    </domain-config>
+</network-security-config>
