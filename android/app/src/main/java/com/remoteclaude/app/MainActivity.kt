@@ -2,6 +2,7 @@ package com.remoteclaude.app
 
 import android.content.Context
 import android.graphics.Color
+import android.graphics.Rect
 import android.graphics.Typeface
 import android.os.Bundle
 import android.util.TypedValue
@@ -59,6 +60,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var altButton: Button
 
     private var overflowShown = false
+    private var keyboardUp = false   // teclado QWERTY visible -> ocultar la tecla ⇧Tab
     private lateinit var rowTop: LinearLayout
     private lateinit var chevron: Button
 
@@ -96,6 +98,7 @@ class MainActivity : AppCompatActivity() {
         setContentView(root)
 
         connectivity.registerDefaultNetworkCallback(networkCallback)
+        watchKeyboard()
 
         restoreTabsOrNew()
 
@@ -113,6 +116,20 @@ class MainActivity : AppCompatActivity() {
         terminalView.requestFocus()
         val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
         imm.showSoftInput(terminalView, InputMethodManager.SHOW_IMPLICIT)
+    }
+
+    /** Detecta si el teclado QWERTY está visible (por el alto que tapa) para mostrar/ocultar ⇧Tab. */
+    private fun watchKeyboard() {
+        val decor = window.decorView
+        decor.viewTreeObserver.addOnGlobalLayoutListener {
+            val r = Rect()
+            decor.getWindowVisibleDisplayFrame(r)
+            val up = decor.height - r.height() > decor.height * 0.15
+            if (up != keyboardUp) {
+                keyboardUp = up
+                if (!overflowShown) populateTopBlock()
+            }
+        }
     }
 
     // --- Tabs -----------------------------------------------------------------
@@ -450,6 +467,9 @@ class MainActivity : AppCompatActivity() {
             rowTop.addView(altButton)
             ctrlButton.setTextColor(if (ctrlActive) ACCENT else KEY_FG)
             altButton.setTextColor(if (altActive) ACCENT else KEY_FG)
+            // ⇧Tab (Shift+Tab) sólo cuando el teclado QWERTY está oculto: sirve para
+            // ciclar el modo de ejecución de Claude (normal / auto-accept / plan) sin tipear.
+            if (!keyboardUp) rowTop.addView(weightKey("⇧Tab") { sendShiftTab() })
         } else {
             rowTop.addView(weightKey("Home") { sendKey(KeyEvent.KEYCODE_MOVE_HOME) })
             rowTop.addView(weightKey("End") { sendKey(KeyEvent.KEYCODE_MOVE_END) })
@@ -501,6 +521,10 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun sendKey(keyCode: Int) = terminalView.handleKeyCode(keyCode, 0)
+
+    /** Shift+Tab = back-tab (CSI Z): la secuencia que Claude lee para cambiar de modo. */
+    private fun sendShiftTab() =
+        session.write(byteArrayOf(0x1b, '['.code.toByte(), 'Z'.code.toByte()), 0, 3)
 
     private fun toggleCtrl() {
         ctrlActive = !ctrlActive
