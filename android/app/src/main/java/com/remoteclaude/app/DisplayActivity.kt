@@ -168,8 +168,9 @@ class DisplayActivity : AppCompatActivity() {
         btnZoom = tabButton("🔍 Zoom") { toggleZoom() }
         panel.addView(btnFit)
         panel.addView(btnDesk)
-        panel.addView(btnZoom)
-        panel.addView(tabButton("↻ Recargar") { web.reload() })
+        panel.addView(btnZoom)                                  // reserva su lugar (INVISIBLE en Pantalla)
+        panel.addView(View(this), LinearLayout.LayoutParams(0, 1, 1f))   // empuja ↻ a la derecha
+        panel.addView(tabButton("↻") { web.reload() })
 
         handle = TextView(this).apply {
             text = "▴  Controles"
@@ -186,15 +187,14 @@ class DisplayActivity : AppCompatActivity() {
         return box
     }
 
-    /** Botón del panel: ancho repartido (todos iguales), texto centrado. */
+    /** Botón del panel: ancho fijo (wrap), posición estable (no se reacomoda). */
     private fun tabButton(label: String, onTap: () -> Unit) = TextView(this).apply {
         text = label
         typeface = monoFont
         gravity = Gravity.CENTER
         setTextColor(FG)
         setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
-        setPadding(dp(6), dp(16), dp(6), dp(16))
-        layoutParams = LinearLayout.LayoutParams(0, WRAP, 1f)
+        setPadding(dp(16), dp(16), dp(16), dp(16))
         setOnClickListener { onTap() }
     }
 
@@ -243,7 +243,7 @@ class DisplayActivity : AppCompatActivity() {
     private fun updateButtons() {
         btnFit.setTextColor(if (fitMode) GREEN else MUTED)     // Pantalla
         btnDesk.setTextColor(if (!fitMode) GREEN else MUTED)   // Escritorio
-        btnZoom.visibility = if (fitMode) View.GONE else View.VISIBLE
+        btnZoom.visibility = if (fitMode) View.INVISIBLE else View.VISIBLE   // reserva lugar, no se mueven los otros
         btnZoom.setTextColor(if (zoomOn) GREEN else FG)
     }
 
