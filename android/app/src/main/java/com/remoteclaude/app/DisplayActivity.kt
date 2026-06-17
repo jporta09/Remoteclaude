@@ -213,16 +213,14 @@ class DisplayActivity : AppCompatActivity() {
     private fun toggleZoom() {
         if (fitMode) return
         zoomOn = !zoomOn
-        if (zoomOn) {
-            zoomLayer.visibility = View.VISIBLE   // intercepta el pinch sobre noVNC
-        } else {
-            zoomLayer.visibility = View.GONE
-            resetZoom()
-        }
+        // ON: la capa intercepta el pinch/pan. OFF: se oculta pero se MANTIENE el zoom/pan
+        // actual; los toques pasan a noVNC y Android los mapea por la transformada inversa
+        // del WebView, así el mouse cae en la posición correcta dentro de la vista magnificada.
+        zoomLayer.visibility = if (zoomOn) View.VISIBLE else View.GONE
         updateButtons()
         Toast.makeText(
             this,
-            if (zoomOn) "Zoom: pellizcá para acercar, arrastrá para mover" else "Zoom off",
+            if (zoomOn) "Zoom: pellizcá para acercar, arrastrá para mover" else "Mouse (la vista queda igual)",
             Toast.LENGTH_SHORT,
         ).show()
     }
