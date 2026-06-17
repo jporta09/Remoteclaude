@@ -22,13 +22,10 @@ Xvnc ":${XNUM}" -geometry "${INIT_SIZE}" -depth 24 -rfbport "${VNC_PORT}" \
 for _ in $(seq 1 50); do [ -S "/tmp/.X11-unix/X${XNUM}" ] && break; sleep 0.2; done
 
 echo "[display] window manager (fluxbox) + fondo petróleo"
+# Fondo inicial petróleo. fluxbox llama a fbsetbg (wrapper -> xsetroot petróleo)
+# al arrancar y en cada resize, así el fondo se mantiene y NO aparece ningún warning.
+DISPLAY=":${XNUM}" xsetroot -solid "#0F232D" 2>/dev/null || true
 DISPLAY=":${XNUM}" fluxbox >/dev/null 2>&1 &
-# Mantenimiento del escritorio: fija el fondo petróleo (se repinta de negro en cada
-# resize) y cierra el xmessage de wallpaper que fluxbox reabre tras cada resize remoto.
-( while sleep 2; do
-    DISPLAY=":${XNUM}" xsetroot -solid "#0F232D" 2>/dev/null || true
-    pkill -x xmessage 2>/dev/null || true
-  done ) &
 
 echo "[display] noVNC en :${NOVNC_PORT}"
 websockify --web=/usr/share/novnc "${NOVNC_PORT}" "localhost:${VNC_PORT}" &

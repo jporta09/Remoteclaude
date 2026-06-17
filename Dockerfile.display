@@ -14,6 +14,12 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-ins
     && rm -rf /var/lib/apt/lists/* \
     && ln -sf /usr/share/novnc/vnc.html /usr/share/novnc/index.html
 
+# Reemplazar fbsetbg por un wrapper que setea el fondo petróleo con xsetroot.
+# fluxbox llama a fbsetbg al arrancar y en cada resize; el original abre un xmessage
+# molesto si no encuentra app de wallpaper. Este wrapper lo evita de raíz.
+RUN printf '#!/bin/sh\nexec xsetroot -solid "#0F232D"\n' > /usr/bin/fbsetbg \
+    && chmod +x /usr/bin/fbsetbg
+
 ENV SCREEN_GEOMETRY=1360x768x24
 ENV NOVNC_PORT=6080
 
