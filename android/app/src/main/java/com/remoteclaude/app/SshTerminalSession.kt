@@ -73,6 +73,22 @@ class SshTerminalSession(
                 stdin = s.stdin
                 attempt = 0
 
+                // Keepalive: tráfico periódico para que el NAT/firewall (sobre todo en redes
+                // corporativas) no descarte el mapeo y la conexión no quede "half-open". Si el
+                // ping falla, la conexión está muerta -> cerrarla desbloquea el read y reconecta.
+                // Atado a 'c': cuando reconectamos (conn cambia) o cerramos, este hilo termina.
+                val thisConn = c
+                thread(name = "ssh-keepalive", isDaemon = true) {
+                    try {
+                        while (!userClosed && conn === thisConn) {
+                            Thread.sleep(10000)
+                            if (conn === thisConn) thisConn.sendIgnorePacket()
+                        }
+                    } catch (_: Exception) {
+                        if (conn === thisConn) closeCurrent()
+                    }
+                }
+
                 val out = s.stdout
                 val buf = ByteArray(8192)
                 while (true) {
