@@ -32,10 +32,11 @@ class DisplayActivity : AppCompatActivity() {
 
     private lateinit var web: WebView
     private lateinit var zoomLayer: View
-    private lateinit var btnFit: TextView
+    private lateinit var btnFit: TextView     // Pantalla (ajustada)
+    private lateinit var btnDesk: TextView    // Escritorio
     private lateinit var btnZoom: TextView
     private lateinit var panel: LinearLayout
-    private lateinit var arrow: TextView
+    private lateinit var handle: TextView
     private var fitMode = true
     private var zoomOn = false
     private var drawerOpen = false
@@ -75,7 +76,7 @@ class DisplayActivity : AppCompatActivity() {
         root.addView(web, FrameLayout.LayoutParams(MATCH, MATCH))
         root.addView(zoomLayer, FrameLayout.LayoutParams(MATCH, MATCH))
         root.addView(buildTopBar(), FrameLayout.LayoutParams(MATCH, WRAP, Gravity.TOP))
-        root.addView(buildDrawer(), FrameLayout.LayoutParams(WRAP, WRAP, Gravity.BOTTOM or Gravity.START))
+        root.addView(buildBottomSheet(), FrameLayout.LayoutParams(MATCH, WRAP, Gravity.BOTTOM))
         setContentView(root)
 
         updateButtons()
@@ -153,51 +154,64 @@ class DisplayActivity : AppCompatActivity() {
         return bar
     }
 
-    // --- cajón colapsable (abajo-izquierda) ---
-    private fun buildDrawer(): View {
-        val row = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-        }
-        arrow = TextView(this).apply {
-            text = "▸"
-            typeface = monoFont
-            setTextColor(GREEN)
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 18f)
-            setBackgroundColor(BAR_BG)
-            setPadding(dp(12), dp(12), dp(12), dp(12))
-            setOnClickListener { toggleDrawer() }
-        }
+    // --- panel inferior que se despliega de abajo hacia arriba (full width) ---
+    private fun buildBottomSheet(): View {
+        val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+
         panel = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
             setBackgroundColor(BAR_BG)
             visibility = View.GONE
         }
-        btnFit = barButton("⛶ Ajustada", GREEN) { toggleFit() }
-        btnZoom = barButton("🔍 Zoom", FG) { toggleZoom() }
+        btnFit = tabButton("⛶ Pantalla") { setMode(true) }
+        btnDesk = tabButton("🖥 Escritorio") { setMode(false) }
+        btnZoom = tabButton("🔍 Zoom") { toggleZoom() }
         panel.addView(btnFit)
+        panel.addView(btnDesk)
         panel.addView(btnZoom)
-        panel.addView(barButton("↻", GREEN) { web.reload() })
-        row.addView(arrow)
-        row.addView(panel)
-        return row
+        panel.addView(tabButton("↻ Recargar") { web.reload() })
+
+        handle = TextView(this).apply {
+            text = "▴  Controles"
+            typeface = monoFont
+            gravity = Gravity.CENTER
+            setTextColor(GREEN)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+            setBackgroundColor(PETROL)
+            setPadding(dp(12), dp(11), dp(12), dp(11))
+            setOnClickListener { toggleSheet() }
+        }
+        box.addView(panel, LinearLayout.LayoutParams(MATCH, WRAP))
+        box.addView(handle, LinearLayout.LayoutParams(MATCH, WRAP))
+        return box
     }
 
-    private fun toggleDrawer() {
+    /** Botón del panel: ancho repartido (todos iguales), texto centrado. */
+    private fun tabButton(label: String, onTap: () -> Unit) = TextView(this).apply {
+        text = label
+        typeface = monoFont
+        gravity = Gravity.CENTER
+        setTextColor(FG)
+        setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+        setPadding(dp(6), dp(16), dp(6), dp(16))
+        layoutParams = LinearLayout.LayoutParams(0, WRAP, 1f)
+        setOnClickListener { onTap() }
+    }
+
+    private fun toggleSheet() {
         drawerOpen = !drawerOpen
         panel.visibility = if (drawerOpen) View.VISIBLE else View.GONE
-        arrow.text = if (drawerOpen) "◂" else "▸"
+        handle.text = if (drawerOpen) "▾  Controles" else "▴  Controles"
     }
 
     // --- modos ---
-    private fun toggleFit() {
-        fitMode = !fitMode
+    private fun setMode(fit: Boolean) {
+        if (fitMode == fit) return
+        fitMode = fit
         if (fitMode) { zoomOn = false; zoomLayer.visibility = View.GONE }
         updateButtons()
         if (fitMode) {
             web.loadUrl(url())
-            Toast.makeText(this, "Ajustado a pantalla", Toast.LENGTH_SHORT).show()
         } else {
             Toast.makeText(this, "Escritorio — activá Zoom para pellizcar", Toast.LENGTH_SHORT).show()
             thread {
@@ -227,8 +241,8 @@ class DisplayActivity : AppCompatActivity() {
     }
 
     private fun updateButtons() {
-        btnFit.text = if (fitMode) "⛶ Ajustada" else "🖥 Escritorio"
-        btnFit.setTextColor(if (fitMode) GREEN else FG)
+        btnFit.setTextColor(if (fitMode) GREEN else MUTED)     // Pantalla
+        btnDesk.setTextColor(if (!fitMode) GREEN else MUTED)   // Escritorio
         btnZoom.visibility = if (fitMode) View.GONE else View.VISIBLE
         btnZoom.setTextColor(if (zoomOn) GREEN else FG)
     }
@@ -257,6 +271,7 @@ class DisplayActivity : AppCompatActivity() {
         private val PETROL = Color.parseColor("#0F232D")
         private val BAR_BG = Color.parseColor("#0A1A20")
         private val FG = Color.parseColor("#F2F2F2")
+        private val MUTED = Color.parseColor("#5E8B7E")    // opción inactiva
         private val GREEN = Color.parseColor("#71BF44")
     }
 }
