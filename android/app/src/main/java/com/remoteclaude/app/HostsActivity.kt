@@ -12,6 +12,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.Button
 import android.widget.EditText
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
@@ -23,7 +24,6 @@ import androidx.appcompat.app.AppCompatActivity
 class HostsActivity : AppCompatActivity() {
 
     private lateinit var list: LinearLayout
-    private val titleFont by lazy { resources.getFont(R.font.isocpeur) }
     private val monoFont by lazy { resources.getFont(R.font.mononoki) }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -35,14 +35,12 @@ class HostsActivity : AppCompatActivity() {
             setBackgroundColor(getColor(R.color.marvin_petrol))
         }
 
-        // Encabezado
-        root.addView(TextView(this).apply {
-            text = "[ MARVIN ]"
-            typeface = titleFont
-            setTextColor(getColor(R.color.marvin_green))
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 30f)
-            setPadding(dp(20), dp(28), dp(20), dp(2))
-        })
+        // Encabezado: isotipo oficial (imagen, no texto) + subtítulo
+        root.addView(ImageView(this).apply {
+            setImageResource(R.drawable.marvin_iso)
+            scaleType = ImageView.ScaleType.FIT_START
+            setPadding(dp(20), dp(28), dp(20), dp(4))
+        }, LinearLayout.LayoutParams(MATCH, dp(96)))
         root.addView(TextView(this).apply {
             text = "_hosts"
             typeface = monoFont
