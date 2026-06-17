@@ -1,9 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Paleta de la app (misma que el teclado/terminal en MainActivity). -->
-    <color name="rc_bg">#11151C</color>
-    <color name="rc_surface">#1C2430</color>
-    <color name="rc_accent">#8FBCBB</color>
-    <color name="rc_fg">#D8DEE9</color>
-    <color name="ic_launcher_bg">#11151C</color>
+    <!-- Paleta CTR de Marvin (manual de identidad). Inspirada en monitores CRT viejos. -->
+    <color name="marvin_green">#71BF44</color>      <!-- Verde CTR: principal / acentos -->
+    <color name="marvin_petrol">#0F232D</color>     <!-- Verde petróleo: fondo / secundario -->
+    <color name="marvin_amber">#FDB940</color>      <!-- Ámbar CTR: acento secundario -->
+    <color name="marvin_fg">#F2F2F2</color>         <!-- Gris claro: texto sobre fondo oscuro -->
+    <color name="marvin_muted">#5E8B7E</color>      <!-- Verde alt apagado: negativo / mono -->
+    <color name="marvin_surface">#16323D</color>    <!-- Panel sobre el petróleo -->
+
+    <!-- Aliases usados por el tema y las vistas -->
+    <color name="rc_bg">#0F232D</color>
+    <color name="rc_surface">#16323D</color>
+    <color name="rc_accent">#71BF44</color>
+    <color name="rc_fg">#F2F2F2</color>
+    <color name="ic_launcher_bg">#0F232D</color>
 </resources>

@@ -45,7 +45,15 @@ class MainActivity : AppCompatActivity() {
     private lateinit var keyPair: java.security.KeyPair
     private lateinit var control: RemoteControl
     private lateinit var tabBar: LinearLayout
-    private val prefs by lazy { getSharedPreferences("remoteclaude", Context.MODE_PRIVATE) }
+    private val prefs by lazy { getSharedPreferences("remotemarvin", Context.MODE_PRIVATE) }
+
+    // Host al que conectarse (viene de HostsActivity por Intent).
+    private lateinit var host: String
+    private var port = 22
+    private lateinit var user: String
+    private lateinit var hostId: String
+    private val tabsKey get() = "tabs_$hostId"
+    private val activeKey get() = "active_$hostId"
 
     /** Sesión del tab activo (la usan el teclado y los modificadores). */
     private val session get() = tabs[activeIndex].session
@@ -75,6 +83,13 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // Host elegido en HostsActivity (con defaults por compatibilidad).
+        host = intent.getStringExtra("hostname") ?: "remoteclaude"
+        port = intent.getIntExtra("port", 22)
+        user = intent.getStringExtra("user") ?: "root"
+        hostId = intent.getStringExtra("hostId") ?: "default"
+
         window.setSoftInputMode(
             WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE or
                 WindowManager.LayoutParams.SOFT_INPUT_STATE_VISIBLE
@@ -92,7 +107,7 @@ class MainActivity : AppCompatActivity() {
         terminalView.setTypeface(Typeface.MONOSPACE)
 
         keyPair = KeyStoreSsh.getOrCreateKeyPair()
-        control = RemoteControl(HOST, PORT, USER, keyPair)
+        control = RemoteControl(host, port, user, keyPair)
 
         val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         root.addView(buildTabBar(), LinearLayout.LayoutParams(MATCH, WRAP))
@@ -149,7 +164,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun buildSession(name: String) =
         SshTerminalSession(
-            HOST, PORT, USER, keyPair, name, sessionClient,
+            host, port, user, keyPair, name, sessionClient,
             onAuthFailed = { runOnUiThread { onSessionAuthFailed() } },
         )
 
@@ -239,20 +254,20 @@ class MainActivity : AppCompatActivity() {
 
     /** Al abrir la app: reengancha las pestañas que estaban abiertas, o crea una nueva. */
     private fun restoreTabsOrNew() {
-        val saved = prefs.getString("tabs", "").orEmpty().split("\n").filter { it.isNotBlank() }
+        val saved = prefs.getString(tabsKey, "").orEmpty().split("\n").filter { it.isNotBlank() }
         if (saved.isEmpty()) {
             newTab()
         } else {
             saved.forEach { openTab(it) }   // tmux -A reengancha (o recrea si fue matada)
-            switchTo(prefs.getInt("active", 0).coerceIn(0, tabs.size - 1))
+            switchTo(prefs.getInt(activeKey, 0).coerceIn(0, tabs.size - 1))
         }
     }
 
     /** Persiste los nombres de las pestañas abiertas y cuál está activa. */
     private fun saveTabs() {
         prefs.edit()
-            .putString("tabs", tabs.joinToString("\n") { it.session.tmuxSession })
-            .putInt("active", activeIndex)
+            .putString(tabsKey, tabs.joinToString("\n") { it.session.tmuxSession })
+            .putInt(activeKey, activeIndex)
             .apply()
     }
 
@@ -674,16 +689,14 @@ class MainActivity : AppCompatActivity() {
         TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, v.toFloat(), resources.displayMetrics).toInt()
 
     companion object {
-        private const val HOST = "remoteclaude"
-        private const val PORT = 22
-        private const val USER = "root"
         private const val MATCH = ViewGroup.LayoutParams.MATCH_PARENT
         private const val WRAP = ViewGroup.LayoutParams.WRAP_CONTENT
-        private val ACCENT = Color.parseColor("#8fbcbb")
-        private val KEY_FG = Color.parseColor("#d8dee9")
-        private val KEYPAD_BG = Color.parseColor("#11151c")
-        private val CHEV_FG = Color.parseColor("#6b7280")
-        private val CHEV_BG = Color.parseColor("#0a0d12")
-        private val TAB_ACTIVE_BG = Color.parseColor("#1c2430")
+        // Paleta CTR de Marvin
+        private val ACCENT = Color.parseColor("#71BF44")        // verde CTR
+        private val KEY_FG = Color.parseColor("#F2F2F2")        // gris claro
+        private val KEYPAD_BG = Color.parseColor("#0F232D")     // verde petróleo
+        private val CHEV_FG = Color.parseColor("#5E8B7E")       // verde alt apagado
+        private val CHEV_BG = Color.parseColor("#0A1A20")       // petróleo más oscuro
+        private val TAB_ACTIVE_BG = Color.parseColor("#16323D") // panel
     }
 }
