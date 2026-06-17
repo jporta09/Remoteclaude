@@ -1,27 +1,34 @@
 #!/usr/bin/env bash
-# Levanta la pantalla virtual aislada:
-#   Xvfb (con TCP, para que el host dibuje) -> x11vnc -> noVNC (visor web).
+# Levanta la pantalla virtual aislada con Xvnc (TigerVNC): servidor X + VNC en un
+# solo proceso, con soporte NATIVO de redimensionado remoto (SetDesktopSize). Así el
+# visor del celu pide resize=remote y la pantalla se adapta a vertical/horizontal.
+#   Xvnc :99 (X11 TCP en 6099 + VNC en 5900)  ->  noVNC (websockify :6080)
 set -euo pipefail
 
 GEOM="${SCREEN_GEOMETRY:-1360x768x24}"
 NOVNC_PORT="${NOVNC_PORT:-6080}"
 VNC_PORT=5900
 XNUM=99
+INIT_SIZE="${GEOM%x*}"   # WxH inicial (el visor lo ajusta por resize remoto)
 
 # locks viejos (importante si el contenedor se reinicia)
 rm -f "/tmp/.X${XNUM}-lock" "/tmp/.X11-unix/X${XNUM}" 2>/dev/null || true
 
-echo "[display] Xvfb :${XNUM} (${GEOM}) con TCP habilitado"
-Xvfb ":${XNUM}" -screen 0 "${GEOM}" -listen tcp -ac +extension RANDR +extension GLX &
+echo "[display] Xvnc :${XNUM} (${INIT_SIZE}, resize dinámico) — X11 TCP :60${XNUM} + VNC :${VNC_PORT}"
+# -SecurityTypes None: sin password (el acceso lo limita la tailnet / localhost).
+# -listen tcp + -ac: el navegador del HOST dibuja vía DISPLAY=localhost:99 (TCP 6099).
+Xvnc ":${XNUM}" -geometry "${INIT_SIZE}" -depth 24 -rfbport "${VNC_PORT}" \
+    -SecurityTypes None -AlwaysShared -listen tcp -ac -desktop marvin >/dev/null 2>&1 &
 for _ in $(seq 1 50); do [ -S "/tmp/.X11-unix/X${XNUM}" ] && break; sleep 0.2; done
 
-echo "[display] window manager (fluxbox)"
+echo "[display] window manager (fluxbox) + fondo petróleo"
 DISPLAY=":${XNUM}" fluxbox >/dev/null 2>&1 &
-# fluxbox abre un xmessage quejándose de que no hay app de wallpaper; lo cerramos.
-( sleep 3; pkill -x xmessage 2>/dev/null || true ) &
-
-echo "[display] x11vnc sobre :${XNUM}"
-x11vnc -display ":${XNUM}" -forever -shared -nopw -rfbport "${VNC_PORT}" -quiet -bg
+# Mantenimiento del escritorio: fija el fondo petróleo (se repinta de negro en cada
+# resize) y cierra el xmessage de wallpaper que fluxbox reabre tras cada resize remoto.
+( while sleep 2; do
+    DISPLAY=":${XNUM}" xsetroot -solid "#0F232D" 2>/dev/null || true
+    pkill -x xmessage 2>/dev/null || true
+  done ) &
 
 echo "[display] noVNC en :${NOVNC_PORT}"
 websockify --web=/usr/share/novnc "${NOVNC_PORT}" "localhost:${VNC_PORT}" &
@@ -29,11 +36,11 @@ websockify --web=/usr/share/novnc "${NOVNC_PORT}" "localhost:${VNC_PORT}" &
 cat <<EOF
 
   ============================================================
-   Pantalla virtual lista.
+   Pantalla virtual lista (Xvnc, resize remoto).
    En el HOST, para que el navegador dibuje aca:
      DISPLAY=localhost:${XNUM} npx playwright test --headed
    Miralo en el celu:
-     http://remoteclaude:${NOVNC_PORT}/vnc.html?autoconnect=1&resize=scale
+     http://remoteclaude:${NOVNC_PORT}/vnc.html?autoconnect=1&resize=remote
   ============================================================
 
 EOF

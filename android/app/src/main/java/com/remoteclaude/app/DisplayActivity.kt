@@ -96,7 +96,7 @@ class DisplayActivity : AppCompatActivity() {
     companion object {
         // Mismo host de MagicDNS que usa el SSH; noVNC en :6080 del contenedor display.
         private const val URL =
-            "http://remoteclaude:6080/vnc.html?autoconnect=1&resize=scale&reconnect=1&reconnect_delay=2000"
+            "http://remoteclaude:6080/vnc.html?autoconnect=1&resize=remote&reconnect=1&reconnect_delay=2000"
         private const val MATCH = ViewGroup.LayoutParams.MATCH_PARENT
         private const val WRAP = ViewGroup.LayoutParams.WRAP_CONTENT
         private val PETROL = Color.parseColor("#0F232D")   // verde petróleo (fondo)
