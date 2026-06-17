@@ -165,9 +165,9 @@ class MainActivity : AppCompatActivity() {
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
         }, LinearLayout.LayoutParams(0, WRAP, 1f))
         bar.addView(android.widget.ImageView(this).apply {
-            setImageResource(R.drawable.marvin_iso)
+            setImageResource(R.drawable.marvin_isologo_bar)
             adjustViewBounds = true
-        }, LinearLayout.LayoutParams(WRAP, dp(20)))
+        }, LinearLayout.LayoutParams(WRAP, dp(22)))
         return bar
     }
 

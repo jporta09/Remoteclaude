@@ -69,10 +69,10 @@ class DisplayActivity : AppCompatActivity() {
         })
         bar.addView(barButton("↻", GREEN) { web.reload() })
         bar.addView(ImageView(this).apply {
-            setImageResource(R.drawable.marvin_iso)
+            setImageResource(R.drawable.marvin_isologo_bar)
             adjustViewBounds = true
             setPadding(dp(6), 0, dp(12), 0)
-        }, LinearLayout.LayoutParams(WRAP, dp(20)))
+        }, LinearLayout.LayoutParams(WRAP, dp(22)))
         return bar
     }
 
