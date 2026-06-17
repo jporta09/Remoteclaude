@@ -21,6 +21,11 @@ Xvnc ":${XNUM}" -geometry "${INIT_SIZE}" -depth 24 -rfbport "${VNC_PORT}" \
     -SecurityTypes None -AlwaysShared -listen tcp -ac -desktop marvin >/dev/null 2>&1 &
 for _ in $(seq 1 50); do [ -S "/tmp/.X11-unix/X${XNUM}" ] && break; sleep 0.2; done
 
+# Modo landscape fijo "1280x720" para el modo "Escritorio" del visor: la app lo
+# selecciona (xrandr --output VNC-0 --mode 1280x720) cuando NO está ajustado a pantalla.
+DISPLAY=":${XNUM}" xrandr --newmode 1280x720 74.50 1280 1344 1472 1664 720 723 728 748 -hsync +vsync 2>/dev/null || true
+DISPLAY=":${XNUM}" xrandr --addmode VNC-0 1280x720 2>/dev/null || true
+
 echo "[display] window manager (fluxbox) + fondo petróleo"
 # Fondo inicial petróleo. fluxbox llama a fbsetbg (wrapper -> xsetroot petróleo)
 # al arrancar y en cada resize, así el fondo se mantiene y NO aparece ningún warning.

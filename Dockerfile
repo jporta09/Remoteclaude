@@ -16,6 +16,7 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-ins
         procps \
         ca-certificates \
         sudo \
+        x11-xserver-utils \
     && printf 'en_US.UTF-8 UTF-8\nes_ES.UTF-8 UTF-8\n' >> /etc/locale.gen && locale-gen \
     && rm -rf /var/lib/apt/lists/* \
     && mkdir -p /run/sshd /etc/ssh/keys /etc/remoteclaude

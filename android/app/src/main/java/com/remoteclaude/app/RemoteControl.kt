@@ -55,6 +55,15 @@ class RemoteControl(
         }
     }
 
+    /**
+     * Fija el modo del display virtual (Xvnc :99) — p.ej. "1280x720" para el modo
+     * "Escritorio" del visor. Corre en el gateway, que llega al X del display por
+     * localhost:6099 (network_mode host). BLOQUEA.
+     */
+    fun setDisplayMode(mode: String) {
+        exec("DISPLAY=localhost:99 xrandr --output VNC-0 --mode '$mode' 2>/dev/null")
+    }
+
     /** Nombres de las sesiones tmux vivas en el gateway. */
     fun listSessions(): List<String> =
         exec("tmux ls -F '#{session_name}' 2>/dev/null")
