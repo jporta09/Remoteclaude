@@ -24,6 +24,7 @@ class SshTerminalSession(
     private val keyPair: KeyPair,
     @Volatile var tmuxSession: String,   // mutable: renombrar lo actualiza (lo lee el reconnect)
     client: TerminalSessionClient,
+    private val onAuthFailed: (() -> Unit)? = null,   // clave no autorizada -> avisar a la UI
 ) : TerminalSession(5000, client) {
 
     @Volatile private var userClosed = false
@@ -57,8 +58,9 @@ class SshTerminalSession(
                 c.connect({ _, _, _, _ -> true }, 15000, 15000)
                 conn = c
                 if (!c.authenticateWithPublicKey(user, keyPair)) {
-                    status("\r\n[autenticación SSH falló]\r\n")
+                    status("\r\n[autenticación SSH falló — la clave no está autorizada]\r\n")
                     userClosed = true
+                    onAuthFailed?.invoke()
                     break
                 }
                 val s = c.openSession()

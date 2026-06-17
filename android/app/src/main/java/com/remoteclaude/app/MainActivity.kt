@@ -126,10 +126,50 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun buildSession(name: String) =
+        SshTerminalSession(
+            HOST, PORT, USER, keyPair, name, sessionClient,
+            onAuthFailed = { runOnUiThread { onSessionAuthFailed() } },
+        )
+
     private fun openTab(name: String) {
-        val s = SshTerminalSession(HOST, PORT, USER, keyPair, name, sessionClient)
-        tabs.add(Tab(s))
+        tabs.add(Tab(buildSession(name)))
         switchTo(tabs.size - 1)
+    }
+
+    /** Reintentar la pestaña activa con una sesión nueva (tras autorizar la clave). */
+    private fun reconnectActiveTab() {
+        val idx = activeIndex
+        val name = tabs[idx].session.tmuxSession
+        tabs[idx].session.finishIfRunning()
+        tabs[idx] = Tab(buildSession(name))
+        switchTo(idx)
+    }
+
+    // La auth SSH falló (clave no autorizada): mostrar la clave para agregarla + reintentar.
+    @Volatile private var authDialogShown = false
+    private fun onSessionAuthFailed() {
+        if (authDialogShown) return   // varias pestañas fallan a la vez: un solo diálogo
+        authDialogShown = true
+        val pub = KeyStoreSsh.openSshPublicKey("remoteclaude-app")
+        val dialog = AlertDialog.Builder(this)
+            .setTitle("Autorización requerida")
+            .setMessage(
+                "Esta app no está autorizada en el gateway.\n\n" +
+                    "Agregá esta clave a authorized_keys y tocá Reintentar:\n\n$pub"
+            )
+            .setPositiveButton("Reintentar") { _, _ -> authDialogShown = false; reconnectActiveTab() }
+            .setNeutralButton("Copiar clave", null)   // se sobrescribe abajo para NO cerrar
+            .setNegativeButton("Cerrar") { _, _ -> authDialogShown = false }
+            .setOnCancelListener { authDialogShown = false }
+            .create()
+        dialog.show()
+        // Copiar sin cerrar el diálogo, así queda el botón Reintentar a mano.
+        dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener {
+            val cb = getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+            cb.setPrimaryClip(android.content.ClipData.newPlainText("clave pública", pub))
+            Toast.makeText(this, "Clave copiada", Toast.LENGTH_SHORT).show()
+        }
     }
 
     /** Nuevo tab con el "term N" libre más bajo (mira abiertas + detacheadas). */
