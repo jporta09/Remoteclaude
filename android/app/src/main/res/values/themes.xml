@@ -1,4 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.Remoteclaude" parent="Theme.Material3.DayNight.NoActionBar" />
+    <style name="Theme.Remoteclaude" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="colorPrimary">@color/rc_accent</item>
+        <item name="android:windowBackground">@color/rc_bg</item>
+        <item name="android:statusBarColor">@color/rc_bg</item>
+        <item name="android:navigationBarColor">@color/rc_bg</item>
+        <!-- barra oscura -> íconos claros -->
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
 </resources>

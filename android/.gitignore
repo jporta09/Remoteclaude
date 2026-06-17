@@ -6,3 +6,8 @@ local.properties
 captures/
 .cxx/
 app/src/main/assets/m2_test_key
+
+# Firma de release (secretos: NO commitear)
+*.jks
+*.keystore
+keystore.properties

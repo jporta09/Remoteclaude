@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Paleta de la app (misma que el teclado/terminal en MainActivity). -->
+    <color name="rc_bg">#11151C</color>
+    <color name="rc_surface">#1C2430</color>
+    <color name="rc_accent">#8FBCBB</color>
+    <color name="rc_fg">#D8DEE9</color>
+    <color name="ic_launcher_bg">#11151C</color>
+</resources>
