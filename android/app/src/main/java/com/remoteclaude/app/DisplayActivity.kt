@@ -4,6 +4,8 @@ import android.graphics.Color
 import android.os.Bundle
 import android.util.TypedValue
 import android.view.Gravity
+import android.view.MotionEvent
+import android.view.ScaleGestureDetector
 import android.view.View
 import android.view.ViewGroup
 import android.webkit.WebView
@@ -17,17 +19,19 @@ import androidx.appcompat.app.AppCompatActivity
 import kotlin.concurrent.thread
 
 /**
- * Visor del navegador headed (noVNC). Barra superior slim (volver / título / isologo) y
- * un cajón colapsable abajo-izquierda (flecha, estilo noVNC) con los controles:
+ * Visor del navegador headed (noVNC). Controles en un cajón colapsable abajo:
  *  - Ajustada (resize=remote): el escritorio LLENA el visor.
- *  - Escritorio (resize=scale + display 1280x720 landscape vía xrandr): se ve apaisado.
- *  - Zoom 1:1 (sólo en Escritorio): resize=off + clip -> el escritorio se ve a tamaño
- *    real (magnificado) y se navega ARRASTRANDO con el dedo. Off = escritorio completo.
- * Orientación libre (no se fuerza).
+ *  - Escritorio (resize=scale + display 1280x720 vía xrandr): se ve apaisado completo.
+ *  - Zoom (sólo en Escritorio): activa una capa de pinch-zoom PROPIA por encima de
+ *    noVNC. noVNC captura los toques de su canvas (preventDefault), por eso el pinch del
+ *    WebView no funciona; esta capa intercepta el gesto y magnifica/panea transformando
+ *    el WebView (scale + translation). Tocar Zoom de nuevo vuelve a 1x e interactúa.
+ * Orientación libre.
  */
 class DisplayActivity : AppCompatActivity() {
 
     private lateinit var web: WebView
+    private lateinit var zoomLayer: View
     private lateinit var btnFit: TextView
     private lateinit var btnZoom: TextView
     private lateinit var panel: LinearLayout
@@ -35,6 +39,15 @@ class DisplayActivity : AppCompatActivity() {
     private var fitMode = true
     private var zoomOn = false
     private var drawerOpen = false
+
+    // estado del pinch-zoom propio
+    private var scale = 1f
+    private var panX = 0f
+    private var panY = 0f
+    private var lastX = 0f
+    private var lastY = 0f
+    private lateinit var scaleDetector: ScaleGestureDetector
+
     private val monoFont by lazy { resources.getFont(R.font.mononoki) }
     private val control by lazy { RemoteControl("remoteclaude", 22, "root", KeyStoreSsh.getOrCreateKeyPair()) }
 
@@ -49,13 +62,18 @@ class DisplayActivity : AppCompatActivity() {
             settings.loadWithOverviewMode = true
             settings.mediaPlaybackRequiresUserGesture = false
             setBackgroundColor(PETROL)
-            webViewClient = object : WebViewClient() {
-                override fun onPageFinished(view: WebView?, url: String?) = applyView()
-            }
+            webViewClient = WebViewClient()
+        }
+
+        scaleDetector = ScaleGestureDetector(this, ScaleListener())
+        zoomLayer = View(this).apply {
+            visibility = View.GONE
+            setOnTouchListener { _, ev -> onZoomTouch(ev) }
         }
 
         val root = FrameLayout(this).apply { setBackgroundColor(PETROL) }
         root.addView(web, FrameLayout.LayoutParams(MATCH, MATCH))
+        root.addView(zoomLayer, FrameLayout.LayoutParams(MATCH, MATCH))   // capa de pinch (sobre noVNC)
         root.addView(buildTopBar(), FrameLayout.LayoutParams(MATCH, WRAP, Gravity.TOP))
         root.addView(buildDrawer(), FrameLayout.LayoutParams(WRAP, WRAP, Gravity.BOTTOM or Gravity.START))
         setContentView(root)
@@ -68,18 +86,50 @@ class DisplayActivity : AppCompatActivity() {
         "http://remoteclaude:6080/vnc.html?autoconnect=1&reconnect=1&reconnect_delay=2000&resize=" +
             if (fitMode) "remote" else "scale"
 
-    /** Ajusta el modo de vista de noVNC en vivo (sin recargar) vía su API RFB:
-     *  - Escritorio + 1:1: sin escala, recortado y con view-drag -> arrastrar PANEA.
-     *  - Escritorio normal: a escala (escritorio completo).
-     *  Se reaplica con delays porque UI.rfb existe recién tras autoconnect. */
-    private fun applyView() {
-        if (fitMode) return
-        val js = if (zoomOn)
-            "UI.rfb.scaleViewport=false;UI.rfb.clipViewport=true;UI.rfb.dragViewport=true;"
-        else
-            "UI.rfb.scaleViewport=true;UI.rfb.clipViewport=false;UI.rfb.dragViewport=false;"
-        val full = "(function(){try{if(window.UI&&UI.rfb){$js}}catch(e){}})();"
-        listOf(600L, 1800L, 3200L).forEach { d -> web.postDelayed({ web.evaluateJavascript(full, null) }, d) }
+    // --- pinch-zoom propio (sobre noVNC) ---
+    private inner class ScaleListener : ScaleGestureDetector.SimpleOnScaleGestureListener() {
+        override fun onScale(d: ScaleGestureDetector): Boolean {
+            val old = scale
+            scale = (scale * d.scaleFactor).coerceIn(1f, 6f)
+            val k = scale / old
+            // zoom hacia el punto focal del pinch
+            panX = d.focusX - (d.focusX - panX) * k
+            panY = d.focusY - (d.focusY - panY) * k
+            applyTransform()
+            return true
+        }
+    }
+
+    private fun onZoomTouch(ev: MotionEvent): Boolean {
+        scaleDetector.onTouchEvent(ev)
+        when (ev.actionMasked) {
+            MotionEvent.ACTION_DOWN, MotionEvent.ACTION_POINTER_DOWN,
+            MotionEvent.ACTION_POINTER_UP -> { lastX = ev.x; lastY = ev.y }
+            MotionEvent.ACTION_MOVE -> {
+                if (!scaleDetector.isInProgress && ev.pointerCount == 1) {
+                    panX += ev.x - lastX
+                    panY += ev.y - lastY
+                    lastX = ev.x; lastY = ev.y
+                    applyTransform()
+                }
+            }
+        }
+        return true
+    }
+
+    private fun applyTransform() {
+        val w = web.width.toFloat()
+        val h = web.height.toFloat()
+        panX = panX.coerceIn(w - scale * w, 0f)   // no dejar bordes vacíos
+        panY = panY.coerceIn(h - scale * h, 0f)
+        web.pivotX = 0f; web.pivotY = 0f
+        web.scaleX = scale; web.scaleY = scale
+        web.translationX = panX; web.translationY = panY
+    }
+
+    private fun resetZoom() {
+        scale = 1f; panX = 0f; panY = 0f
+        web.scaleX = 1f; web.scaleY = 1f; web.translationX = 0f; web.translationY = 0f
     }
 
     // --- barra superior ---
@@ -106,7 +156,7 @@ class DisplayActivity : AppCompatActivity() {
         return bar
     }
 
-    // --- cajón colapsable (abajo-izquierda, estilo noVNC) ---
+    // --- cajón colapsable (abajo-izquierda) ---
     private fun buildDrawer(): View {
         val row = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -146,7 +196,7 @@ class DisplayActivity : AppCompatActivity() {
     // --- modos ---
     private fun toggleFit() {
         fitMode = !fitMode
-        if (fitMode) zoomOn = false
+        if (fitMode) { zoomOn = false; zoomLayer.visibility = View.GONE; resetZoom() }
         updateButtons()
         if (fitMode) {
             web.loadUrl(url())
@@ -163,11 +213,16 @@ class DisplayActivity : AppCompatActivity() {
     private fun toggleZoom() {
         if (fitMode) return
         zoomOn = !zoomOn
+        if (zoomOn) {
+            zoomLayer.visibility = View.VISIBLE   // intercepta el pinch sobre noVNC
+        } else {
+            zoomLayer.visibility = View.GONE
+            resetZoom()
+        }
         updateButtons()
-        applyView()   // cambia escala<->1:1 en vivo (sin recargar)
         Toast.makeText(
             this,
-            if (zoomOn) "1:1 — arrastrá para mover" else "Escritorio completo",
+            if (zoomOn) "Zoom: pellizcá para acercar, arrastrá para mover" else "Zoom off",
             Toast.LENGTH_SHORT,
         ).show()
     }
@@ -176,7 +231,6 @@ class DisplayActivity : AppCompatActivity() {
         btnFit.text = if (fitMode) "⛶ Ajustada" else "🖥 Escritorio"
         btnFit.setTextColor(if (fitMode) GREEN else FG)
         btnZoom.visibility = if (fitMode) View.GONE else View.VISIBLE
-        btnZoom.text = if (zoomOn) "🔍 1:1" else "🔍 Escala"
         btnZoom.setTextColor(if (zoomOn) GREEN else FG)
     }
 
