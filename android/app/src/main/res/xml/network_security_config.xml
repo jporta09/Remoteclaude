@@ -1,11 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
   noVNC se sirve por HTTP (no HTTPS) dentro de la tailnet. Android 9+ bloquea
-  cleartext por defecto; lo habilitamos SOLO para el gateway por su nombre de
-  MagicDNS. Todo el resto sigue exigiendo HTTPS.
+  cleartext por defecto; lo habilitamos SOLO para el gateway (por MagicDNS) y para
+  el loopback, ya que con el Tailscale embebido la WebView carga el forward local
+  127.0.0.1:<puerto>. Todo el resto sigue exigiendo HTTPS.
 -->
 <network-security-config>
     <domain-config cleartextTrafficPermitted="true">
         <domain includeSubdomains="true">remoteclaude</domain>
+        <domain includeSubdomains="true">127.0.0.1</domain>
+        <domain includeSubdomains="true">localhost</domain>
     </domain-config>
 </network-security-config>
