@@ -111,6 +111,8 @@ class HostsActivity : AppCompatActivity() {
         updateVpnStatus()
     }
 
+    private val vpnPoll = Runnable { updateVpnStatus() }
+
     private fun updateVpnStatus() {
         val (txt, color) = when {
             !TailscaleBridge.isEnabled() ->
@@ -123,6 +125,11 @@ class HostsActivity : AppCompatActivity() {
         }
         vpnStatus.text = txt
         vpnStatus.setTextColor(getColor(color))
+        // Mientras conecta, refrescar solo hasta que muestre conectada ✓ (o error).
+        vpnStatus.removeCallbacks(vpnPoll)
+        if (TailscaleBridge.isEnabled() && !TailscaleBridge.isReady() && TailscaleBridge.error() == null) {
+            vpnStatus.postDelayed(vpnPoll, 1500)
+        }
     }
 
     private fun showVpnDialog() {
