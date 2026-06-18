@@ -24,6 +24,7 @@ import androidx.appcompat.app.AppCompatActivity
 class HostsActivity : AppCompatActivity() {
 
     private lateinit var list: LinearLayout
+    private lateinit var vpnStatus: TextView
     private val titleFont by lazy { resources.getFont(R.font.isocpeur) }     // títulos (marca)
     private val monoFont by lazy { resources.getFont(R.font.mononoki) }      // code / técnico
     private val bodyFont by lazy { resources.getFont(R.font.ubuntu) }        // cuerpo de texto (marca)
@@ -31,6 +32,7 @@ class HostsActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         window.statusBarColor = getColor(R.color.marvin_petrol)
+        TailscaleBridge.init(this)   // levanta el Tailscale embebido si hay auth key
 
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -59,8 +61,16 @@ class HostsActivity : AppCompatActivity() {
             typeface = monoFont
             setTextColor(getColor(R.color.marvin_amber))
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
-            setPadding(dp(20), 0, dp(20), dp(16))
+            setPadding(dp(20), 0, dp(20), dp(8))
         })
+        // Estado de la VPN (Tailscale embebido) — tocar para configurar el auth key
+        vpnStatus = TextView(this).apply {
+            typeface = monoFont
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+            setPadding(dp(20), 0, dp(20), dp(14))
+            setOnClickListener { showVpnDialog() }
+        }
+        root.addView(vpnStatus)
 
         list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         root.addView(ScrollView(this).apply { addView(list) },
@@ -85,6 +95,48 @@ class HostsActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         refresh()
+        updateVpnStatus()
+    }
+
+    private fun updateVpnStatus() {
+        val (txt, color) = when {
+            !TailscaleBridge.isEnabled() ->
+                "🔒 VPN: directa · tocá para usar Tailscale embebido" to R.color.marvin_muted
+            TailscaleBridge.isReady() ->
+                "🔒 Tailscale: conectada ✓" to R.color.marvin_green
+            TailscaleBridge.error() != null ->
+                "🔒 Tailscale: error — ${TailscaleBridge.error()} · tocá" to R.color.marvin_amber
+            else -> "🔒 Tailscale: conectando…" to R.color.marvin_amber
+        }
+        vpnStatus.text = txt
+        vpnStatus.setTextColor(getColor(color))
+    }
+
+    private fun showVpnDialog() {
+        val current = getSharedPreferences("remotemarvin", Context.MODE_PRIVATE)
+            .getString("ts_authkey", "").orEmpty()
+        val input = EditText(this).apply {
+            hint = "tskey-auth-…"
+            setText(current)
+            setSingleLine()
+            setPadding(dp(16), dp(12), dp(16), dp(12))
+        }
+        AlertDialog.Builder(this)
+            .setTitle("Tailscale embebido")
+            .setMessage(
+                "Pegá una auth key de tu tailnet (Admin console → Settings → Keys, marcala " +
+                    "Reusable). La app levanta su propio nodo y ya no necesitás la app de " +
+                    "Tailscale aparte. Vacío = conexión directa."
+            )
+            .setView(input)
+            .setPositiveButton("Guardar y conectar") { _, _ ->
+                TailscaleBridge.configure(this, input.text.toString())
+                updateVpnStatus()
+                vpnStatus.postDelayed({ updateVpnStatus() }, 3000)
+                vpnStatus.postDelayed({ updateVpnStatus() }, 9000)
+            }
+            .setNegativeButton("Cancelar", null)
+            .show()
     }
 
     private fun refresh() {

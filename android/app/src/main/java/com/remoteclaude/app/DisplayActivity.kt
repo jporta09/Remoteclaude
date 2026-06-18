@@ -41,6 +41,8 @@ class DisplayActivity : AppCompatActivity() {
     private var zoomOn = false
     private var drawerOpen = false
 
+    private var novncHost = "remoteclaude"   // resuelto por TailscaleBridge (forward local o directo)
+    private var novncPort = 6080
     private var curScale = 0.2f   // noVNC display.scale (CSS px por px del framebuffer)
     private var fitScale = 0.2f
     private var lastX = 0f
@@ -80,11 +82,17 @@ class DisplayActivity : AppCompatActivity() {
         setContentView(root)
 
         updateButtons()
-        web.loadUrl(url())
+        // Resolver el endpoint del noVNC (forward local del Tailscale embebido, o directo)
+        // fuera del hilo principal, y recién ahí cargar la URL.
+        thread {
+            val (h, p) = TailscaleBridge.endpoint("remoteclaude", 6080)
+            novncHost = h; novncPort = p
+            runOnUiThread { web.loadUrl(url()) }
+        }
     }
 
     private fun url() =
-        "http://remoteclaude:6080/vnc.html?autoconnect=1&reconnect=1&reconnect_delay=2000&resize=" +
+        "http://$novncHost:$novncPort/vnc.html?autoconnect=1&reconnect=1&reconnect_delay=2000&resize=" +
             if (fitMode) "remote" else "scale"
 
     // --- zoom nítido vía la API interna de noVNC ---

@@ -15,7 +15,8 @@ class RemoteControl(
     private val key: KeyPair,
 ) {
     private fun exec(command: String): String {
-        val c = Connection(host, port)
+        val (h, p) = TailscaleBridge.endpoint(host, port)
+        val c = Connection(h, p)
         return try {
             c.connect({ _, _, _, _ -> true }, 10000, 10000)
             if (!c.authenticateWithPublicKey(user, key)) return ""
@@ -39,7 +40,8 @@ class RemoteControl(
      */
     fun enrollThisDevice(password: String): String? {
         val pub = KeyStoreSsh.openSshPublicKey("remoteclaude-app")
-        val c = Connection(host, port)
+        val (h, p) = TailscaleBridge.endpoint(host, port)
+        val c = Connection(h, p)
         return try {
             c.connect({ _, _, _, _ -> true }, 10000, 10000)
             if (!c.authenticateWithPassword("enroll", password)) return null

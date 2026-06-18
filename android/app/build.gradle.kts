@@ -22,6 +22,8 @@ android {
         targetSdk = 34
         versionCode = 2
         versionName = "1.0.0"
+        // marvints.aar (Tailscale embebido) trae sólo el .so de arm64-v8a.
+        ndk { abiFilters += "arm64-v8a" }
     }
 
     signingConfigs {
@@ -59,4 +61,5 @@ dependencies {
     implementation("com.google.android.material:material:1.12.0")
     implementation(project(":terminal-view"))   // motor Termux vendorizado
     implementation("org.connectbot:sshlib:2.2.23")   // cliente SSH para Android (Apache-2.0)
+    implementation(":marvints@aar")   // Tailscale embebido (tsnet vía gomobile)
 }

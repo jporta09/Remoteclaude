@@ -54,7 +54,10 @@ class SshTerminalSession(
         while (!userClosed) {
             status(if (attempt == 0) "Conectando a $user@$host:$port ...\r\n" else "\r\n[reconectando…]\r\n")
             try {
-                val c = Connection(host, port)
+                // Si el Tailscale embebido está activo, se conecta al forward local
+                // (127.0.0.1:xxxx -> host:port por la tailnet); si no, directo.
+                val (h, p) = TailscaleBridge.endpoint(host, port)
+                val c = Connection(h, p)
                 c.connect({ _, _, _, _ -> true }, 15000, 15000)
                 conn = c
                 if (!c.authenticateWithPublicKey(user, keyPair)) {

@@ -11,6 +11,7 @@ dependencyResolutionManagement {
         google()
         mavenCentral()
         maven { url = uri("https://jitpack.io") }   // motor de Termux (M1+)
+        flatDir { dirs("app/libs") }                // marvints.aar (Tailscale embebido)
     }
 }
 
