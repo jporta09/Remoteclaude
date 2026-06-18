@@ -16,8 +16,11 @@ import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
+import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import com.journeyapps.barcodescanner.ScanContract
+import com.journeyapps.barcodescanner.ScanOptions
 
 /** Menú principal: lista de hosts a los que conectarse. Tocar uno abre la terminal;
  *  mantener apretado permite editar/borrar. El "+" agrega uno nuevo. */
@@ -28,6 +31,16 @@ class HostsActivity : AppCompatActivity() {
     private val titleFont by lazy { resources.getFont(R.font.isocpeur) }     // títulos (marca)
     private val monoFont by lazy { resources.getFont(R.font.mononoki) }      // code / técnico
     private val bodyFont by lazy { resources.getFont(R.font.ubuntu) }        // cuerpo de texto (marca)
+
+    // Scanner de QR (ZXing): el resultado es la auth key de Tailscale (ts-link-qr en la PC).
+    private val qrScanner = registerForActivityResult(ScanContract()) { result ->
+        val key = result.contents
+        when {
+            key.isNullOrBlank() -> {}   // cancelado
+            key.startsWith("tskey-") -> applyTailscaleKey(key.trim())
+            else -> Toast.makeText(this, "El QR no es una auth key de Tailscale", Toast.LENGTH_LONG).show()
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -124,19 +137,35 @@ class HostsActivity : AppCompatActivity() {
         AlertDialog.Builder(this)
             .setTitle("Tailscale embebido")
             .setMessage(
-                "Pegá una auth key de tu tailnet (Admin console → Settings → Keys, marcala " +
-                    "Reusable). La app levanta su propio nodo y ya no necesitás la app de " +
-                    "Tailscale aparte. Vacío = conexión directa."
+                "La app levanta su propio nodo Tailscale (no necesitás la app de Tailscale " +
+                    "aparte). Lo más fácil: en la PC corré  docker compose exec gateway " +
+                    "ts-link-qr  y escaneá el QR. O pegá una auth key a mano. Vacío = " +
+                    "conexión directa."
             )
             .setView(input)
             .setPositiveButton("Guardar y conectar") { _, _ ->
-                TailscaleBridge.configure(this, input.text.toString())
-                updateVpnStatus()
-                vpnStatus.postDelayed({ updateVpnStatus() }, 3000)
-                vpnStatus.postDelayed({ updateVpnStatus() }, 9000)
+                applyTailscaleKey(input.text.toString())
+            }
+            .setNeutralButton("Escanear QR") { _, _ ->
+                qrScanner.launch(
+                    ScanOptions().apply {
+                        setDesiredBarcodeFormats(ScanOptions.QR_CODE)
+                        setPrompt("Apuntá al QR de la PC (ts-link-qr)")
+                        setBeepEnabled(false)
+                        setOrientationLocked(false)
+                    }
+                )
             }
             .setNegativeButton("Cancelar", null)
             .show()
+    }
+
+    /** Guarda la auth key, reinicia el nodo embebido y refresca el estado. */
+    private fun applyTailscaleKey(key: String) {
+        TailscaleBridge.configure(this, key)
+        updateVpnStatus()
+        vpnStatus.postDelayed({ updateVpnStatus() }, 3000)
+        vpnStatus.postDelayed({ updateVpnStatus() }, 9000)
     }
 
     private fun refresh() {

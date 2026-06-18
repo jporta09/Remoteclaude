@@ -39,6 +39,10 @@ services:
       - HOST_USER=${HOST_USER:-root}   # usuario del host al que saltás
       - SSH_PORT=${SSH_PORT:-22}
       - ENROLL_PASSWORD=${ENROLL_PASSWORD:-}   # habilita auto-enrolamiento de claves
+      # OAuth client para mintear las auth keys del QR (comando `ts-link-qr`).
+      - TS_OAUTH_CLIENT_ID=${TS_OAUTH_CLIENT_ID:-}
+      - TS_OAUTH_CLIENT_SECRET=${TS_OAUTH_CLIENT_SECRET:-}
+      - TS_TAG=${TS_TAG:-tag:remotemarvin}
     volumes:
       - ./ssh/authorized_keys:/etc/remoteclaude/authorized_keys:ro
       - ssh-hostkeys:/etc/ssh/keys

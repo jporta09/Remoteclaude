@@ -17,6 +17,9 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-ins
         ca-certificates \
         sudo \
         x11-xserver-utils \
+        curl \
+        jq \
+        qrencode \
     && printf 'en_US.UTF-8 UTF-8\nes_ES.UTF-8 UTF-8\n' >> /etc/locale.gen && locale-gen \
     && rm -rf /var/lib/apt/lists/* \
     && mkdir -p /run/sshd /etc/ssh/keys /etc/remoteclaude
@@ -29,8 +32,10 @@ COPY scripts/entrypoint.sh /usr/local/bin/entrypoint.sh
 COPY scripts/host-shell.sh /usr/local/bin/host-shell
 COPY scripts/rc-enroll-key.sh /usr/local/bin/rc-enroll-key
 COPY scripts/rc-enroll-forced.sh /usr/local/bin/rc-enroll-forced
+COPY scripts/ts-link-qr.sh /usr/local/bin/ts-link-qr
 RUN chmod +x /usr/local/bin/entrypoint.sh /usr/local/bin/host-shell \
-        /usr/local/bin/rc-enroll-key /usr/local/bin/rc-enroll-forced
+        /usr/local/bin/rc-enroll-key /usr/local/bin/rc-enroll-forced \
+        /usr/local/bin/ts-link-qr
 
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
 CMD ["sleep", "infinity"]

@@ -62,4 +62,5 @@ dependencies {
     implementation(project(":terminal-view"))   // motor Termux vendorizado
     implementation("org.connectbot:sshlib:2.2.23")   // cliente SSH para Android (Apache-2.0)
     implementation(":marvints@aar")   // Tailscale embebido (tsnet vía gomobile)
+    implementation("com.journeyapps:zxing-android-embedded:4.3.0")   // scanner QR (vincular Tailscale)
 }
