@@ -27,33 +27,53 @@ When the goal is just for **Claude** to inspect a page (not the human), prefer t
 `webapp-testing` skill in **headless** mode + screenshots — it's faster and needs no
 display. Use *this* skill when the browser must be headed and/or human-visible.
 
+## First: ask WHERE it should draw (noVNC remoto vs monitor local)
+
+There are two screens, and picking the wrong one means the user sees nothing:
+
+- **Remoto (noVNC)** — the virtual display `:99` inside the `display` container, watched
+  from the phone (or any browser) at `:6080`. Use when the user is **away from the PC**
+  (típico: mirando desde el celu).
+- **Local (monitor físico)** — the user's own X session (`:0`), the browser pops up as a
+  normal window. Use when the user is **sentado en la PC**.
+
+**Unless it's already obvious from the conversation, ASK before launching** (one quick
+AskUserQuestion: "¿Lo ves por noVNC desde el celu, o estás local y lo abro en tu
+monitor?"). We learned this the hard way: defaulting to noVNC while the user was local
+meant the browser drew to a screen they weren't looking at. If the user already said
+"estoy local" / "desde el celu", skip the question.
+
 ## How to run something visible
 
-Use the helper, which checks the display is up, sets `DISPLAY`, runs your command,
-and prints the noVNC URL:
+Pick the helper for the chosen screen. Each checks its display is up, sets `DISPLAY`,
+and runs your command:
 
 ```bash
+# Remoto — dibuja en :99, se mira por noVNC
 scripts/run-visible.sh <your command...>
+
+# Local — dibuja en el monitor físico del usuario (detecta su display X)
+scripts/run-local.sh <your command...>
 ```
 
 Examples:
 ```bash
 scripts/run-visible.sh uv run python scripts/scrape_bus_alternatives.py
-scripts/run-visible.sh npx playwright test --headed
-scripts/run-visible.sh python my_nodriver_scraper.py
+scripts/run-local.sh   npx playwright test --headed
 ```
 
-Equivalent manual form (if you don't use the helper):
+Equivalent manual form (if you don't use the helpers):
 ```bash
-DISPLAY=localhost:99 <your command...>
+DISPLAY=localhost:99 <your command...>   # remoto (noVNC)
+DISPLAY=:0           <your command...>   # local (ajustá el número si no es :0)
 ```
 
-Then tell the user to watch at:
+**Solo en modo remoto**, decile al usuario dónde mirar (en local lo ve directo):
 ```
 http://remoteclaude:6080/vnc.html?autoconnect=1&resize=remote
 ```
 (or `http://<TS_HOSTNAME>:6080/...` if the node name differs). Always surface this
-URL — the user can only see the browser if they open it.
+URL in remote mode — the user can only see the browser if they open it.
 
 ## Making the browser actually headed
 
