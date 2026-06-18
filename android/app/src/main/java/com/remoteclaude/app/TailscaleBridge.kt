@@ -46,6 +46,9 @@ object TailscaleBridge {
         val dir = File(ctx.filesDir, "ts-state").apply { mkdirs() }
         thread(name = "tailscale-up") {
             try {
+                // Android bloquea net.Interfaces() de Go (netlink) -> tsnet no levanta. Le
+                // pasamos las interfaces enumeradas desde Java, que sí funciona en Android.
+                marvints.Marvints.setInterfaces(enumerateInterfaces())
                 marvints.Marvints.start(key, dir.absolutePath, hostname)
                 started = true
             } catch (e: Exception) {
@@ -56,12 +59,47 @@ object TailscaleBridge {
         }
     }
 
+    /**
+     * Enumera las interfaces de red vía java.net.NetworkInterface (funciona en Android, a
+     * diferencia de net.Interfaces() de Go) en el formato que espera marvints.SetInterfaces:
+     *   name;index;mtu;flags;hwaddrHex;cidr1,cidr2,...
+     * flags = bits de net.Flags (Up=1, Broadcast=2, Loopback=4, P2P=8, Multicast=16, Running=32).
+     */
+    private fun enumerateInterfaces(): String {
+        val sb = StringBuilder()
+        try {
+            val ifaces = java.net.NetworkInterface.getNetworkInterfaces() ?: return ""
+            for (ni in ifaces) {
+                val up = runCatching { ni.isUp }.getOrDefault(false)
+                val loop = runCatching { ni.isLoopback }.getOrDefault(false)
+                val p2p = runCatching { ni.isPointToPoint }.getOrDefault(false)
+                val multi = runCatching { ni.supportsMulticast() }.getOrDefault(false)
+                var flags = 0
+                if (up) flags = flags or 1 or 32
+                if (loop) flags = flags or 4
+                if (p2p) flags = flags or 8
+                if (multi) flags = flags or 16 or 2
+                val hwHex = runCatching { ni.hardwareAddress }.getOrNull()
+                    ?.joinToString("") { "%02x".format(it) } ?: ""
+                val cidrs = ni.interfaceAddresses.mapNotNull { ia ->
+                    val addr = ia.address?.hostAddress?.substringBefore('%') ?: return@mapNotNull null
+                    "$addr/${ia.networkPrefixLength}"
+                }.joinToString(",")
+                sb.append("${ni.name};${ni.index};${ni.mtu};$flags;$hwHex;$cidrs\n")
+            }
+        } catch (_: Exception) {
+        }
+        return sb.toString()
+    }
+
     /** Reconfigura la auth key (la guarda) y reinicia el nodo. */
     fun configure(ctx: Context, authKey: String) {
         ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
             .putString("ts_authkey", authKey.trim()).apply()
         synchronized(this) {
-            if (started) { try { marvints.Marvints.stop() } catch (_: Exception) {} }
+            // Siempre cerrar el nodo anterior (aunque aún esté conectando con una key
+            // consumida) para liberar el stateDir antes de reiniciar con la nueva.
+            try { marvints.Marvints.stop() } catch (_: Exception) {}
             started = false; enabled = false; initialized = false
             readyLatch = CountDownLatch(1)
         }
