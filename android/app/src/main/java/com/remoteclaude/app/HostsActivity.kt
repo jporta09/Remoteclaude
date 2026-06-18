@@ -153,6 +153,7 @@ class HostsActivity : AppCompatActivity() {
                         setPrompt("Apuntá al QR de la PC (ts-link-qr)")
                         setBeepEnabled(false)
                         setOrientationLocked(false)
+                        setCaptureActivity(PortraitCaptureActivity::class.java)
                     }
                 )
             }

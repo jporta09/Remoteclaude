@@ -31,8 +31,11 @@ echo "  │  Abrí la app → 🔒 (línea de Tailscale) → Vincular por QR"
 echo "  │  y escaneá esto. Válido 10 min, un solo uso."
 echo "  └────────────────────────────────────────────────────"
 echo
-qrencode -t ANSIUTF8 "$key"
+# -l L = menor corrección de error -> menos módulos -> QR más grande/legible para la cámara.
+# -m 3 = quiet zone (margen): muchos lectores fallan sin ese borde blanco.
+qrencode -t ANSIUTF8 -l L -m 3 "$key"
 echo
+echo "  Tip: si al lector le cuesta, agrandá la fuente de la terminal (Ctrl+'+')."
 echo "  Si no podés escanear, pegá esta key a mano:"
 echo "  $key"
 echo
