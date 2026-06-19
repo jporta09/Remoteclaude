@@ -91,8 +91,11 @@ public final class TerminalEmulator {
     /** The number of parameter arguments including colon separated sub-parameters. */
     private static final int MAX_ESCAPE_PARAMETERS = 32;
 
-    /** Needs to be large enough to contain reasonable OSC 52 pastes. */
-    private static final int MAX_OSC_STRING_LENGTH = 8192;
+    /** Needs to be large enough to contain reasonable OSC 52 pastes. Subido de 8192: con
+     *  tmux set-clipboard, copiar una selección larga manda toda la base64 en una sola OSC,
+     *  y si superaba el tope se descartaba (selecciones largas no se copiaban). 1 MB de OSC
+     *  ~= 768 KB de texto. */
+    private static final int MAX_OSC_STRING_LENGTH = 1024 * 1024;
 
     /** DECSET 1 - application cursor keys. */
     private static final int DECSET_BIT_APPLICATION_CURSOR_KEYS = 1;
