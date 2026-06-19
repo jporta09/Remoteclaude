@@ -41,6 +41,15 @@
             android:exported="false"
             android:configChanges="orientation|screenSize|keyboardHidden" />
 
+        <!-- Visor de documentos compartidos (host:~/RemoteMarvinDocs) -->
+        <activity
+            android:name=".DocsActivity"
+            android:exported="false" />
+        <activity
+            android:name=".DocViewerActivity"
+            android:exported="false"
+            android:configChanges="orientation|screenSize|keyboardHidden" />
+
         <!-- Lector de QR (vincular Tailscale) forzado a vertical -->
         <activity
             android:name=".PortraitCaptureActivity"

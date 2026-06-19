@@ -446,9 +446,16 @@ class MainActivity : AppCompatActivity() {
         tabBar.addView(TextView(this).apply {
             text = "🖥"
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
-            setPadding(dp(6), dp(4), dp(10), dp(4))
+            setPadding(dp(6), dp(4), dp(8), dp(4))
             gravity = Gravity.CENTER_VERTICAL
             setOnClickListener { openDisplay() }  // visor noVNC del navegador headed
+        })
+        tabBar.addView(TextView(this).apply {
+            text = "📄"
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
+            setPadding(dp(6), dp(4), dp(10), dp(4))
+            gravity = Gravity.CENTER_VERTICAL
+            setOnClickListener { openDocs() }  // visor de documentos compartidos
         })
         tabBar.addView(TextView(this).apply {
             text = "🔑"
@@ -463,6 +470,13 @@ class MainActivity : AppCompatActivity() {
     /** Abre el visor noVNC del navegador headed (M6). */
     private fun openDisplay() {
         startActivity(android.content.Intent(this, DisplayActivity::class.java))
+    }
+
+    /** Abre el visor de documentos compartidos (host:~/RemoteMarvinDocs). */
+    private fun openDocs() {
+        startActivity(android.content.Intent(this, DocsActivity::class.java).apply {
+            putExtra("hostname", host); putExtra("port", port); putExtra("user", user)
+        })
     }
 
     /** Muestra la clave pública (Keystore) para agregar a authorized_keys del gateway. */
