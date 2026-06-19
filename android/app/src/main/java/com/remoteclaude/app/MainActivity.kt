@@ -70,6 +70,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var ctrlButton: Button
     private lateinit var altButton: Button
     private lateinit var shiftButton: Button
+    private var selectMode = false   // dedo = selección nativa de tmux (en vez de scroll)
+    private lateinit var selButton: Button
 
     private var overflowShown = false
     private var keyboardUp = false   // teclado QWERTY visible -> ocultar la fila Shift
@@ -531,7 +533,25 @@ class MainActivity : AppCompatActivity() {
             shiftButton = weightKey("⇧ Shift") { toggleShift() }
             shiftButton.setTextColor(if (shiftActive) ACCENT else KEY_FG)
             shiftRow.addView(shiftButton)
+            selButton = weightKey("⧉ Sel") { toggleSelectMode() }
+            selButton.setTextColor(if (selectMode) ACCENT else KEY_FG)
+            shiftRow.addView(selButton)
         }
+    }
+
+    /** Alterna el modo selección: con el dedo arrastrás para seleccionar (selección nativa
+     *  de tmux, que scrollea sola) y al soltar copia al portapapeles vía OSC 52. */
+    private fun toggleSelectMode() {
+        selectMode = !selectMode
+        terminalView.setSelectionDragMode(selectMode)
+        if (::selButton.isInitialized) selButton.setTextColor(if (selectMode) ACCENT else KEY_FG)
+        Toast.makeText(
+            this,
+            if (selectMode) "Selección ON: arrastrá para marcar, soltá para copiar"
+            else "Selección OFF (vuelve el scroll)",
+            Toast.LENGTH_SHORT,
+        ).show()
+        terminalView.requestFocus()
     }
 
     private fun toggleOverflow() {

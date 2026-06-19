@@ -603,6 +603,47 @@ public final class TerminalView extends View {
         return false;
     }
 
+    /** Cuando está activo, un arrastre con el dedo se reporta como arrastre de botón-1 del
+     *  mouse, para que tmux haga su selección NATIVA (que scrollea sola al llegar al borde)
+     *  y, al soltar, copie por OSC 52 al portapapeles. Lo alterna un botón de la app. */
+    private boolean mSelectionDragMode = false;
+    private float mSelLastX, mSelLastY;
+
+    /** Auto-scroll continuo mientras el dedo se mantiene en el borde sup/inf durante la
+     *  selección: Android no manda ACTION_MOVE si el dedo está quieto, así que re-emitimos
+     *  el arrastre justo en el borde para que tmux siga scrolleando línea a línea. */
+    private final Runnable mSelAutoScroll = new Runnable() {
+        @Override
+        public void run() {
+            if (!mSelectionDragMode || mEmulator == null) return;
+            float ls = mRenderer.mFontLineSpacing;
+            float y;
+            if (mSelLastY < ls * 1.5f) y = -ls;                                 // borde superior -> fila 1
+            else if (mSelLastY > getHeight() - ls * 1.5f) y = getHeight() + ls; // borde inferior -> última fila
+            else return;                                                        // ya no está en el borde
+            long t = android.os.SystemClock.uptimeMillis();
+            MotionEvent ev = MotionEvent.obtain(t, t, MotionEvent.ACTION_MOVE, mSelLastX, y, 0);
+            sendMouseEventCode(ev, TerminalEmulator.MOUSE_LEFT_BUTTON_MOVED, true);
+            ev.recycle();
+            postDelayed(this, 60);
+        }
+    };
+
+    public void setSelectionDragMode(boolean enabled) {
+        mSelectionDragMode = enabled;
+        if (!enabled) removeCallbacks(mSelAutoScroll);
+    }
+
+    public boolean isSelectionDragMode() {
+        return mSelectionDragMode;
+    }
+
+    private void updateSelectionAutoScroll() {
+        float edge = mRenderer.mFontLineSpacing * 1.5f;
+        removeCallbacks(mSelAutoScroll);
+        if (mSelLastY < edge || mSelLastY > getHeight() - edge) postDelayed(mSelAutoScroll, 60);
+    }
+
     @SuppressLint("ClickableViewAccessibility")
     @Override
     @TargetApi(23)
@@ -613,6 +654,30 @@ public final class TerminalView extends View {
         if (isSelectingText()) {
             updateFloatingToolbarVisibility(event);
             mGestureRecognizer.onTouchEvent(event);
+            return true;
+        } else if (mSelectionDragMode && mEmulator.isMouseTrackingActive()
+                && !event.isFromSource(InputDevice.SOURCE_MOUSE)) {
+            // Modo selección: el dedo se reporta como botón-1 del mouse, así tmux selecciona
+            // de forma nativa (DOWN=empezar, MOVE=arrastrar, UP/CANCEL=soltar->copiar). No se
+            // pasa al gesture recognizer para no disparar el scroll de rueda.
+            switch (action) {
+                case MotionEvent.ACTION_DOWN:
+                    sendMouseEventCode(event, TerminalEmulator.MOUSE_LEFT_BUTTON, true);
+                    mSelLastX = event.getX();
+                    mSelLastY = event.getY();
+                    break;
+                case MotionEvent.ACTION_MOVE:
+                    mSelLastX = event.getX();
+                    mSelLastY = event.getY();
+                    sendMouseEventCode(event, TerminalEmulator.MOUSE_LEFT_BUTTON_MOVED, true);
+                    updateSelectionAutoScroll();
+                    break;
+                case MotionEvent.ACTION_UP:
+                case MotionEvent.ACTION_CANCEL:
+                    removeCallbacks(mSelAutoScroll);
+                    sendMouseEventCode(event, TerminalEmulator.MOUSE_LEFT_BUTTON, false);
+                    break;
+            }
             return true;
         } else if (event.isFromSource(InputDevice.SOURCE_MOUSE)) {
             if (event.isButtonPressed(MotionEvent.BUTTON_SECONDARY)) {

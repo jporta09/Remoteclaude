@@ -31,6 +31,15 @@ EOF
 sudo systemctl enable --now ssh
 sudo systemctl restart ssh
 
+echo "==> tmux.conf (persistencia + portapapeles del celu vía OSC 52)"
+if [ ! -f "$HOME/.tmux.conf" ]; then
+    cp "$(dirname "$0")/marvin.tmux.conf" "$HOME/.tmux.conf"
+    echo "    instalado en ~/.tmux.conf"
+else
+    echo "    ya existe ~/.tmux.conf — revisá que tenga: set -g mouse on / set -g set-clipboard on"
+    echo "    (referencia: scripts/marvin.tmux.conf)"
+fi
+
 cat <<'EOF'
 
 ============================================================
