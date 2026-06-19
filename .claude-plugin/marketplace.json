@@ -1,0 +1,15 @@
+{
+  "name": "remotemarvin",
+  "owner": { "name": "Juan Porta" },
+  "metadata": {
+    "description": "Marketplace local del proyecto RemoteMarvin/Remoteclaude.",
+    "version": "1.0.0"
+  },
+  "plugins": [
+    {
+      "name": "remotemarvin",
+      "source": "./plugins/remotemarvin",
+      "description": "Skills para usar RemoteMarvin desde Claude Code: guía, share-doc y headed-browser."
+    }
+  ]
+}
