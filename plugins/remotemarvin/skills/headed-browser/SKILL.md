@@ -45,6 +45,12 @@ meant the browser drew to a screen they weren't looking at. If the user already 
 
 ## How to run something visible
 
+**SIEMPRE lanzá con `run-visible.sh` (o `run-local.sh`). NO hagas vos chequeos manuales del
+display ni `docker compose up display`** — el helper auto-detecta dónde dibujar (container
+local / túnel remoto) y, si falta, imprime exactamente qué hacer. Si falla, **leé su mensaje
+y seguí esa instrucción; no improvises** (en un server remoto, arrancar un display local es
+SIEMPRE incorrecto — ver Notes).
+
 Pick the helper for the chosen screen. Each checks its display is up, sets `DISPLAY`,
 and runs your command:
 
@@ -108,7 +114,12 @@ the user wants to watch: launch with `headless=False` and wrap the run with
 - The X port (`6099`) is bound to the host's localhost only (X is insecure); noVNC
   (`6080`) is reachable over the tailnet. The user interacts (click/scroll/type) with
   the live browser through noVNC.
-- If the helper reports the display is down, bring it up from the repo:
-  `docker compose up -d display`.
+- Si `run-visible.sh` dice que no hay display:
+  - **En el HOST de la app** (esta máquina tiene el container `display`): `docker compose up -d display`.
+  - **En un SERVER remoto al que llegaste por SSH**: NO levantes un display local — el display
+    llega por el **túnel reverso** desde el host de la app. "No hay display" significa que el
+    túnel no está: decile al usuario que **re-SSH-ee desde la app** (o `export
+    MARVIN_DISPLAY=localhost:6099` antes del ssh). **NUNCA** corras `docker compose up display`
+    ni armes un Xvfb en el server remoto.
 - Native OpenGL apps (e.g. Kivy) don't render over this remote X; browsers do
   (Chromium uses `--disable-gpu` software rendering, which Playwright headed applies).
