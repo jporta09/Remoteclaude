@@ -1,15 +1,19 @@
-# Gateway de conexión remota agnóstico.
+# Conexión remota — variante "SSH directo al host" (sin contenedor privilegiado).
 #   - tailscale: pone al HOST en tu tailnet (red que sobrevive cortes/roaming).
-#   - gateway  : sshd + mosh; al loguearte, la shell salta al HOST (nsenter).
-# La EJECUCIÓN ocurre en el host, no en el contenedor. Nada se instala en el host.
+#   - display  : pantalla virtual + noVNC para ver el navegador headed del host.
 #
-#   1. cp .env.example .env   y completá TS_AUTHKEY y HOST_USER
-#   2. poné tu clave pública en  ssh/authorized_keys
-#   3. docker compose up -d --build
-#   Desde el celular:  mosh root@remoteclaude   ->   shell del host
+# La TERMINAL ya NO usa un contenedor: la app SSH-ea al sshd del HOST como tu usuario
+# (solo-clave) y corre tmux en el host. No hay nada con privilegios de root — la única
+# forma de obtener root es `sudo` puntual desde la sesión, como en cualquier shell.
+#
+#   1. En el host:  sudo apt install openssh-server tmux
+#   2. Autorizá la clave de la app en  ~/.ssh/authorized_keys  (botón 🔑 de la app)
+#   3. cp .env.example .env  (completá TS_AUTHKEY)  &&  docker compose up -d
+#   Desde la app:  conectá a  <usuario>@remoteclaude:22
 services:
-  # Red: une el HOST a la tailnet (network_mode: host => la IP de la tailnet vive
-  # en la red del host, así los servicios que levantes en el host son alcanzables).
+  # Red: une el HOST a la tailnet (network_mode: host => la IP de la tailnet vive en la
+  # red del host, así el sshd del host y el noVNC son alcanzables por la tailnet).
+  # Necesita NET_ADMIN/NET_RAW + /dev/net/tun para manejar el túnel; NO es privileged.
   tailscale:
     image: tailscale/tailscale:latest
     container_name: remoteclaude-ts
@@ -27,33 +31,9 @@ services:
       - ts-state:/var/lib/tailscale
     restart: unless-stopped
 
-  # Gateway: provee sshd/mosh y salta al host. Privilegiado a propósito: entrar a
-  # los namespaces del host (pid: host) es lo que permite ejecutar EN el host.
-  gateway:
-    build: .
-    container_name: remoteclaude-gw
-    network_mode: host        # sshd/mosh en la red del host -> alcanzable por la tailnet
-    pid: host                 # ver PID 1 del host para nsenter
-    privileged: true          # entrar a los namespaces del host
-    environment:
-      - HOST_USER=${HOST_USER:-root}   # usuario del host al que saltás
-      - SSH_PORT=${SSH_PORT:-22}
-      - ENROLL_PASSWORD=${ENROLL_PASSWORD:-}   # habilita auto-enrolamiento de claves
-      # OAuth client para mintear las auth keys del QR (comando `ts-link-qr`).
-      - TS_OAUTH_CLIENT_ID=${TS_OAUTH_CLIENT_ID:-}
-      - TS_OAUTH_CLIENT_SECRET=${TS_OAUTH_CLIENT_SECRET:-}
-      - TS_TAG=${TS_TAG:-tag:remotemarvin}
-    volumes:
-      - ./ssh/authorized_keys:/etc/remoteclaude/authorized_keys:ro
-      - ssh-hostkeys:/etc/ssh/keys
-      - gw-enrolled:/var/lib/remoteclaude   # claves enroladas en runtime (persisten)
-    depends_on:
-      - tailscale
-    restart: unless-stopped
-    command: ["sleep", "infinity"]
-
   # Pantalla virtual aislada para ver el navegador headed del host desde el celu.
   # El navegador corre EN EL HOST (DISPLAY=localhost:99) y dibuja en este Xvfb.
+  # Sin privilegios.
   display:
     build:
       context: .
@@ -68,5 +48,3 @@ services:
 
 volumes:
   ts-state:
-  ssh-hostkeys:
-  gw-enrolled:

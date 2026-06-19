@@ -81,17 +81,14 @@ class RemoteControl(
         exec("tmux rename-session -t '$old' '$new' 2>/dev/null")
     }
 
-    // --- Documentos compartidos (host:~/RemoteMarvinDocs) -----------------------
-    // exec() corre en el contenedor; saltamos al HOST con nsenter (igual que la shell
-    // interactiva) para leer ~/RemoteMarvinDocs del usuario del host.
-    private val hostShell =
-        "nsenter -t 1 -m -u -i -p -- su - \"\$(cat /etc/remoteclaude/host_user 2>/dev/null||echo root)\" -c"
+    // --- Documentos compartidos (~/RemoteMarvinDocs del usuario) ----------------
+    // exec() corre directamente como el usuario en el host (SSH al sshd del host), así
+    // que leemos ~/RemoteMarvinDocs sin saltos: el '~' lo expande el shell de login.
 
     /** Lista los docs compartidos: (nombre, bytes, mtimeEpoch), más nuevos primero. */
     fun listDocs(): List<Triple<String, Long, Long>> {
         val out = exec(
-            "$hostShell 'find ~/RemoteMarvinDocs -maxdepth 1 -type f " +
-                "-printf \"%f\\t%s\\t%T@\\n\" 2>/dev/null'"
+            "find ~/RemoteMarvinDocs -maxdepth 1 -type f -printf '%f\\t%s\\t%T@\\n' 2>/dev/null"
         )
         return out.lineSequence().mapNotNull {
             val p = it.split('\t')
@@ -108,7 +105,7 @@ class RemoteControl(
     /** Contenido de un doc en base64 (one-shot). Vacío si el nombre es inseguro. */
     fun readDocBase64(name: String): String {
         if (name.contains('\'') || name.contains('\n') || name.contains('/')) return ""
-        return exec("$hostShell 'base64 ~/RemoteMarvinDocs/$name'").replace("\n", "").trim()
+        return exec("base64 ~/RemoteMarvinDocs/'$name' 2>/dev/null").replace("\n", "").trim()
     }
 
     /** Sesiones vivas con el ÚLTIMO COMANDO tipeado (texto tras el último prompt), o vacío. */
