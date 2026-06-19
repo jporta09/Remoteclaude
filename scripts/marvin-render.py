@@ -12,6 +12,9 @@ Variables: MARVIN_RENDER_PORT (6090), MARVIN_DISPLAY_NUM (99)
 Endpoints:
   GET  /open?url=<URL>        -> abre la URL headed
   PUT  /file/<nombre.html>    -> guarda el body y abre file://... (para "pasar el HTML")
+  PUT  /doc  (X-Filename:..)  -> deposita el archivo en ~/RemoteMarvinDocs (visor 📄 del
+                                celu); NO lo renderiza. Lo usa marvin-share desde un server
+                                remoto para que el doc termine en el host que lee la app.
   GET  /                      -> estado
 """
 import os
@@ -24,7 +27,9 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 PORT = int(os.environ.get("MARVIN_RENDER_PORT", "6090"))
 DISPLAY_NUM = os.environ.get("MARVIN_DISPLAY_NUM", "99")
 DROP = "/tmp/marvin-render"
+DOCS = os.environ.get("REMOTEMARVIN_DOCS", os.path.expanduser("~/RemoteMarvinDocs"))
 os.makedirs(DROP, exist_ok=True)
+os.makedirs(DOCS, exist_ok=True)
 
 # Comando para abrir una URL headed y dejarla abierta. Usa Playwright (vía uv) en el display
 # local. Se puede override con MARVIN_BROWSER_CMD ("%U" se reemplaza por la URL).
@@ -68,11 +73,24 @@ class H(BaseHTTPRequestHandler):
             self._ok("marvin-render OK")
 
     def do_PUT(self):
-        name = os.path.basename(urllib.parse.urlparse(self.path).path) or "page.html"
+        path = urllib.parse.urlparse(self.path).path
         n = int(self.headers.get("Content-Length", 0))
+        body = self.rfile.read(n)
+        # /doc -> sólo depositar en RemoteMarvinDocs (visor 📄), sin abrir browser.
+        if path == "/doc" or path.startswith("/doc/"):
+            name = os.path.basename(
+                self.headers.get("X-Filename", "") or path[len("/doc/"):]
+            ) or "archivo"
+            dest = os.path.join(DOCS, name)
+            with open(dest, "wb") as f:
+                f.write(body)
+            self._ok(f"doc: {dest}")
+            return
+        # /file/<name> -> guardar y renderizar headed (pasar un HTML).
+        name = os.path.basename(path) or "page.html"
         dest = os.path.join(DROP, name)
         with open(dest, "wb") as f:
-            f.write(self.rfile.read(n))
+            f.write(body)
         render("file://" + dest)
         self._ok(f"render: file://{dest}")
 

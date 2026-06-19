@@ -20,8 +20,16 @@ PATH) con el/los archivo(s) que produjiste:
 scripts/marvin-share.sh grafico.png informe.pdf datos.csv
 ```
 
-It copies them to `~/RemoteMarvinDocs/` (override with `REMOTEMARVIN_DOCS`) and prints a
-confirmation. Then tell the user it's available: *"Lo dejé en 📄 Documentos de la app."*
+Los archivos terminan en el `~/RemoteMarvinDocs/` del **host de la app** (el que lee el
+celu) y el helper lo resuelve solo:
+
+- **En el host** → copia local a `~/RemoteMarvinDocs/` (override con `REMOTEMARVIN_DOCS`).
+- **En un server al que SSH-easte DESDE la app** → los sube por el **reverse tunnel
+  (`:6090`)** al render-daemon del host, que los deja en SU `~/RemoteMarvinDocs/`. Así no
+  quedan varados en el server (que la app no mira). No hay que hacer nada extra: si llegaste
+  por SSH desde la app, el túnel ya está; sólo corré el helper desde donde estés.
+
+Después avisá que está disponible: *"Lo dejé en 📄 Documentos de la app."*
 
 ## When to do it (without being asked)
 
