@@ -30,7 +30,7 @@ capability. Use the most specific one once the intent is clear.
   usá la skill `webapp-testing` (Playwright headless + screenshots).
 
 - **Vincular el celular a la tailnet (QR)** → en el host:
-  `docker compose exec gateway ts-link-qr` imprime un QR (auth key OAuth, un solo uso).
+  `./scripts/ts-link-qr.sh` imprime un QR (auth key OAuth, un solo uso).
   En la app: línea de Tailscale → Escanear QR. El estado pasa a *conectada ✓* y reconecta
   solo después.
 

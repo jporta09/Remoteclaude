@@ -4,8 +4,15 @@
 # RemoteMarvin (🔒 → Vincular por QR) y el nodo embebido de la app entra a tu tailnet sin
 # tocar la consola web ni la app de Tailscale.
 #
-# Uso (desde la PC):  docker compose exec gateway ts-link-qr
+# Uso (en la PC, desde el repo):  ./scripts/ts-link-qr.sh
+# Requiere curl, jq y qrencode instalados en el host.
 set -euo pipefail
+
+# Tomar las credenciales OAuth del .env del repo si no vienen ya del entorno.
+if [ -z "${TS_OAUTH_CLIENT_ID:-}" ] || [ -z "${TS_OAUTH_CLIENT_SECRET:-}" ]; then
+    ENV_FILE="$(cd "$(dirname "$0")/.." && pwd)/.env"
+    [ -f "$ENV_FILE" ] && { set -a; . "$ENV_FILE"; set +a; }
+fi
 
 : "${TS_OAUTH_CLIENT_ID:?falta TS_OAUTH_CLIENT_ID en .env (ver .env.example)}"
 : "${TS_OAUTH_CLIENT_SECRET:?falta TS_OAUTH_CLIENT_SECRET en .env (ver .env.example)}"

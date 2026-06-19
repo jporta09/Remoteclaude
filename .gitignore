@@ -7,3 +7,7 @@ playwright-report/
 # Secretos / config local (no commitear)
 .env
 ssh/authorized_keys
+
+# Fuentes comerciales (Brandon Grotesque) — NO commitear
+fonts/
+scripts/ts-admin-browser.py

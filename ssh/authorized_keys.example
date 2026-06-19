@@ -1,4 +1,0 @@
-# Copiá este archivo a  ssh/authorized_keys  y pegá tu clave PÚBLICA (una por línea).
-# En el celular, la app de SSH (Termius/Blink/Termux) te deja generar/copiar la pública.
-# Ejemplo:
-# ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAA... tu-celular

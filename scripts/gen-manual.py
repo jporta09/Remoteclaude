@@ -190,7 +190,7 @@ S.append(P("Para vincular el celu por QR necesitás un <b>OAuth client</b> de Ta
 S.append(P("Conectar el celular (vincular por QR)", h1))
 S.append(P("El nodo Tailscale de la app se enrola escaneando un QR — sin tocar la "
            "consola web ni tipear claves:"))
-S.append(B("En la PC: <font name='Mono' size='9'>docker compose exec gateway ts-link-qr</font> "
+S.append(B("En la PC: <font name='Mono' size='9'>./scripts/ts-link-qr.sh</font> "
            "→ imprime un QR (clave de un solo uso, vence en 10 min)."))
 S.append(B("En la app: tocá la <b>línea de estado de Tailscale</b> → <b>Escanear QR</b> → "
            "apuntá la cámara. El estado pasa a <b>conectada ✓</b>."))
