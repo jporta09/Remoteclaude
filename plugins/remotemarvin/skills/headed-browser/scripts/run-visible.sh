@@ -42,6 +42,25 @@ EOF
     exit 1
 fi
 
+# ¿Chromium tiene sus librerías de sistema? El modo HEADED las necesita; se instalan con
+# 'sudo playwright install-deps chromium' (una vez, root). Sin ellas Chromium no abre, así
+# que avisamos claro y salimos con código 3 (la skill cae al fallback "render en haviland").
+chrome="$(ls "$HOME"/.cache/ms-playwright/chromium*/chrome-linux*/chrome 2>/dev/null | head -1)"
+if [ -n "$chrome" ]; then
+    missing="$(ldd "$chrome" 2>/dev/null | awk '/not found/{print $1}' | sort -u | tr '\n' ' ')"
+    if [ -n "$missing" ]; then
+        cat >&2 <<EOF
+!! Chromium no puede correr acá: faltan librerías de sistema:
+   $missing
+   Se instalan UNA vez con:  sudo playwright install-deps chromium   (necesita root).
+   Sin sudo no se puede correr el navegador HEADED en esta máquina.
+   -> Fallback (solo mostrar un HTML / URL pública): renderizalo en el HOST de la app,
+      que sí tiene libs + display, con  marvin-show <url-o-archivo.html>
+EOF
+        exit 3
+    fi
+fi
+
 echo ">> Mirá desde el celu: http://${REMOTE_HOST}:${NOVNC_PORT}/vnc.html?autoconnect=1&resize=remote"
 echo ">> (DISPLAY=localhost:${DISPLAY_NUM})"
 exec env DISPLAY="localhost:${DISPLAY_NUM}" "$@"

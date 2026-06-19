@@ -70,6 +70,18 @@ Playwright ya está en `~/.cache/ms-playwright`). Va con algo de lag para UI pes
 por la red). Para algo fluido sin noVNC, usá **CDP** (`chromium --remote-debugging-port=9222`
 + `ssh -L 9222:localhost:9222`) y mirás por DevTools.
 
+**Y si `run-visible.sh` sale con código 3 (faltan las libs de Chromium en el server, sin
+sudo)?** El navegador no puede correr ahí. Caé al fallback **solo para mostrar un HTML / URL
+pública** (NO para scraping que necesite la red interna del server): renderizalo en el HOST
+de la app con
+```bash
+marvin-show https://example.com      # o:  marvin-show ./informe.html
+```
+`marvin-show` manda la URL/archivo al **render-daemon del host** (por el reverse tunnel en
+`localhost:6090`) y el host lo abre headed → noVNC → 🖥. Requiere que en el host esté
+corriendo `scripts/marvin-render.py` (lo arranca `setup-host`). Si necesitás la red interna
+del server (login, intranet), no hay salida sin las libs: pedí el `install-deps` al admin.
+
 Examples:
 ```bash
 scripts/run-visible.sh uv run python scripts/scrape_bus_alternatives.py

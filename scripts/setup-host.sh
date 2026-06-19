@@ -49,15 +49,26 @@ install -d -m700 "$HOME/.ssh"
 if ! grep -q 'RemoteForward 6099 127.0.0.1:6099' "$SSHCFG" 2>/dev/null; then
     cat >> "$SSHCFG" <<'CFG'
 
-# RemoteMarvin: llevar el display/noVNC a los servers que SSH-ees DESDE la app.
+# RemoteMarvin: a los servers que SSH-ees DESDE la app, llevar el display (6099, para
+# headed-browser remoto) y el render-daemon (6090, para mostrar HTML si al server le
+# faltan las libs de Chromium).
 Match exec "env | grep -q '^MARVIN_DISPLAY='"
     RemoteForward 6099 127.0.0.1:6099
+    RemoteForward 6090 127.0.0.1:6090
     ExitOnForwardFailure no
 CFG
     chmod 600 "$SSHCFG"
     echo "    agregado a ~/.ssh/config"
 else
     echo "    ya estaba en ~/.ssh/config"
+fi
+
+echo "==> render-daemon (mostrar HTML/URL de servers a los que SSH-eás, si no tienen libs)"
+if ss -ltn 2>/dev/null | grep -q '127.0.0.1:6090'; then
+    echo "    ya corriendo en :6090"
+else
+    nohup "$(dirname "$0")/marvin-render.py" >/tmp/marvin-render.log 2>&1 &
+    echo "    arrancado (127.0.0.1:6090)"
 fi
 
 cat <<'EOF'
