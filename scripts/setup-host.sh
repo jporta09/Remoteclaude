@@ -40,6 +40,26 @@ else
     echo "    (referencia: scripts/marvin.tmux.conf)"
 fi
 
+echo "==> ssh/config: el display sigue a tu SSH (solo desde sesiones de la app)"
+# Si SSH-eás a otro server DESDE una sesión de la app (MARVIN_DISPLAY seteada por la app),
+# se tiende un reverse tunnel del display local (X en 6099) al server remoto, para que el
+# headed-browser de allá dibuje en ESTE noVNC. Cualquier otro ssh no tiende nada.
+SSHCFG="$HOME/.ssh/config"
+install -d -m700 "$HOME/.ssh"
+if ! grep -q 'RemoteForward 6099 127.0.0.1:6099' "$SSHCFG" 2>/dev/null; then
+    cat >> "$SSHCFG" <<'CFG'
+
+# RemoteMarvin: llevar el display/noVNC a los servers que SSH-ees DESDE la app.
+Match exec "env | grep -q '^MARVIN_DISPLAY='"
+    RemoteForward 6099 127.0.0.1:6099
+    ExitOnForwardFailure no
+CFG
+    chmod 600 "$SSHCFG"
+    echo "    agregado a ~/.ssh/config"
+else
+    echo "    ya estaba en ~/.ssh/config"
+fi
+
 cat <<'EOF'
 
 ============================================================

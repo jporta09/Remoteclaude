@@ -56,6 +56,14 @@ scripts/run-visible.sh <your command...>
 scripts/run-local.sh <your command...>
 ```
 
+**Estás en un SERVER por SSH (no en el host de la app)?** `run-visible.sh` lo maneja solo:
+si llegaste a ese server **SSH-eando DESDE la app**, el `~/.ssh/config` del host tendió un
+reverse tunnel del display a `localhost:6099`, y el script lo detecta y dibuja ahí → se ve
+en el **noVNC del host de la app** (no hay que instalar nada en el server: el Chromium de
+Playwright ya está en `~/.cache/ms-playwright`). Va con algo de lag para UI pesada (es X11
+por la red). Para algo fluido sin noVNC, usá **CDP** (`chromium --remote-debugging-port=9222`
++ `ssh -L 9222:localhost:9222`) y mirás por DevTools.
+
 Examples:
 ```bash
 scripts/run-visible.sh uv run python scripts/scrape_bus_alternatives.py

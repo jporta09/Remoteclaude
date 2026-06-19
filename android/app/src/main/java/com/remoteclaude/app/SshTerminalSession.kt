@@ -68,10 +68,13 @@ class SshTerminalSession(
                 }
                 val s = c.openSession()
                 s.requestPTY("xterm-256color", cols, rows, 0, 0, null)
-                // tmux corre en el contenedor (default-command = host-shell, que nsenter
-                // al host). -u fuerza UTF-8 (sshd no pasa LANG, si no tmux manda los
-                // acentos como '_'). Crea o reengancha la sesión persistente (-D desengancha).
-                s.execCommand("tmux -u new -A -D -s '$tmuxSession'")
+                // -u fuerza UTF-8 (sshd no pasa LANG, si no tmux manda los acentos como
+                // '_'). Crea o reengancha la sesión persistente (-D desengancha).
+                // MARVIN_DISPLAY marca esta sesión como "de la app": queda en el global env
+                // de tmux y lo heredan los panes; el ~/.ssh/config la usa (Match exec) para
+                // tunelizar el display/noVNC a los servers que SSH-ees DESDE la app (headed
+                // browser remoto). Una terminal/tmux abierta a mano NO lo tiene.
+                s.execCommand("MARVIN_DISPLAY=localhost:6099 tmux -u new -A -D -s '$tmuxSession'")
                 sshSession = s
                 stdin = s.stdin
                 attempt = 0
