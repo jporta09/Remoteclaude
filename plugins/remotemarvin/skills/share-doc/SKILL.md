@@ -13,12 +13,11 @@ PDFs (page by page) and text natively.
 
 ## How
 
-Run the helper on the host with the file(s) you produced:
+Run the helper (viene bundleado en esta skill — no hay que instalarlo ni ponerlo en el
+PATH) con el/los archivo(s) que produjiste:
 
 ```bash
-marvin-share grafico.png informe.pdf datos.csv
-# o, si no está en el PATH:
-~/proyectos/Remoteclaude/scripts/marvin-share.sh <archivos...>
+scripts/marvin-share.sh grafico.png informe.pdf datos.csv
 ```
 
 It copies them to `~/RemoteMarvinDocs/` (override with `REMOTEMARVIN_DOCS`) and prints a

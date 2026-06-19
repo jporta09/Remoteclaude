@@ -17,6 +17,7 @@
 #   REMOTE_HOST     host de la tailnet a mirar  (remoteclaude)
 set -euo pipefail
 
+SELFDIR="$(cd "$(dirname "$0")" && pwd)"   # los helpers vecinos (marvin-show.sh) viven acá
 DISPLAY_NUM="${REMOTE_DISPLAY:-99}"
 XPORT=$((6000 + DISPLAY_NUM))
 NOVNC_PORT="${NOVNC_PORT:-6080}"
@@ -55,7 +56,8 @@ if [ -n "$chrome" ]; then
    Se instalan UNA vez con:  sudo playwright install-deps chromium   (necesita root).
    Sin sudo no se puede correr el navegador HEADED en esta máquina.
    -> Fallback (solo mostrar un HTML / URL pública): renderizalo en el HOST de la app,
-      que sí tiene libs + display, con  marvin-show <url-o-archivo.html>
+      que sí tiene libs + display:
+      $SELFDIR/marvin-show.sh <url-o-archivo.html>
 EOF
         exit 3
     fi

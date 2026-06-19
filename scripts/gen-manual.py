@@ -251,7 +251,7 @@ S.append(P("El botón del <b>monitor</b> abre el navegador <i>headed</i> que cor
 S.append(P("Visor de documentos", h1))
 S.append(P("El botón de la <b>hoja</b> muestra los documentos que se comparten desde la PC. "
            "En la PC, compartís con:"))
-S.append(C("marvin-share informe.pdf grafico.png datos.csv"))
+S.append(C("scripts/marvin-share.sh informe.pdf grafico.png datos.csv"))
 S.append(P("y aparecen en la app. El visor es <b>nativo</b>:"))
 S.append(B("<b>Imágenes</b> (png/jpg/webp…): con pinch-zoom y arrastre."))
 S.append(B("<b>PDF</b>: renderizado página por página."))

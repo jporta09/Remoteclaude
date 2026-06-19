@@ -18,9 +18,9 @@ capability. Use the most specific one once the intent is clear.
   skill needed; it's the app itself. Each host's tabs persist.
 
 - **Mostrar un documento que generaste** (imagen, PDF, txt, csv, informe, gráfico) en el
-  visor 📄 del celular → use the **`share-doc`** skill: corré `marvin-share <archivos>`
-  en el host y avisá que está en 📄 Documentos. Hacelo proactivamente al producir algo
-  visible.
+  visor 📄 del celular → use the **`share-doc`** skill: corré `scripts/marvin-share.sh
+  <archivos>` (viene bundleado en esa skill) y avisá que está en 📄 Documentos. Hacelo
+  proactivamente al producir algo visible.
 
 - **Mostrar un navegador en vivo** (scraping/automatización que el usuario *mira*, o que
   necesita display real anti-bot) → use the **`headed-browser`** skill: corré con

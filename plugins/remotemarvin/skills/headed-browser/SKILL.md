@@ -73,13 +73,14 @@ por la red). Para algo fluido sin noVNC, usá **CDP** (`chromium --remote-debugg
 **Y si `run-visible.sh` sale con código 3 (faltan las libs de Chromium en el server, sin
 sudo)?** El navegador no puede correr ahí. Caé al fallback **solo para mostrar un HTML / URL
 pública** (NO para scraping que necesite la red interna del server): renderizalo en el HOST
-de la app con
+de la app con el helper **bundleado en esta skill** (viene con el plugin — no hay que
+instalarlo ni ponerlo en el PATH):
 ```bash
-marvin-show https://example.com      # o:  marvin-show ./informe.html
+scripts/marvin-show.sh https://example.com      # o:  scripts/marvin-show.sh ./informe.html
 ```
-`marvin-show` manda la URL/archivo al **render-daemon del host** (por el reverse tunnel en
-`localhost:6090`) y el host lo abre headed → noVNC → 🖥. Requiere que en el host esté
-corriendo `scripts/marvin-render.py` (lo arranca `setup-host`). Si necesitás la red interna
+Manda la URL/archivo al **render-daemon del host** (por el reverse tunnel en `localhost:6090`)
+y el host lo abre headed → noVNC → 🖥. Requiere que en el host esté corriendo
+`scripts/marvin-render.py` (lo arranca `setup-host`). Si necesitás la red interna
 del server (login, intranet), no hay salida sin las libs: pedí el `install-deps` al admin.
 
 Examples:
