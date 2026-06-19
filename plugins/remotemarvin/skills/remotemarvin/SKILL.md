@@ -13,7 +13,8 @@ capability. Use the most specific one once the intent is clear.
 ## Capabilities and where each lives
 
 - **Terminal (SSH + tmux, persistente)** — the core. Multi-pestaña, sobrevive cortes y
-  bloqueo (auto-reconexión), salta al *host* real vía `nsenter` (no al contenedor). No
+  bloqueo (auto-reconexión); es SSH directo al sshd del *host* como tu usuario (sin root;
+  root sólo con `sudo` puntual). No
   skill needed; it's the app itself. Each host's tabs persist.
 
 - **Mostrar un documento que generaste** (imagen, PDF, txt, csv, informe, gráfico) en el
@@ -34,8 +35,9 @@ capability. Use the most specific one once the intent is clear.
   En la app: línea de Tailscale → Escanear QR. El estado pasa a *conectada ✓* y reconecta
   solo después.
 
-- **Gateway / setup** → `docker compose up -d --build` en el repo; credenciales en `.env`
-  (incluido el OAuth client para los QR). Ver `.env.example` y el README del repo.
+- **Host / setup** → `bash scripts/setup-host.sh` (sshd+tmux+docker) y `docker compose up -d`
+  (contenedores tailscale + display, sin privilegios). Credenciales en `.env` (incluido el
+  OAuth client para los QR). Ver `.env.example` y el README del repo.
 
 ## Cómo elegir rápido
 
