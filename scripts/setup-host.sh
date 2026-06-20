@@ -63,12 +63,31 @@ else
     echo "    ya estaba en ~/.ssh/config"
 fi
 
-echo "==> render-daemon (mostrar HTML/URL de servers a los que SSH-eás, si no tienen libs)"
+echo "==> render-daemon (mostrar HTML/URL + recibir docs de servers a los que SSH-eás)"
+# Servicio systemd --user: arranca en cada boot (con linger) y se reinicia si cae. Así no
+# depende de tener una terminal abierta ni muere al reiniciar la PC.
+DAEMON="$(cd "$(dirname "$0")" && pwd)/marvin-render.py"
+install -d "$HOME/.config/systemd/user"
+cat > "$HOME/.config/systemd/user/marvin-render.service" <<EOF
+[Unit]
+Description=RemoteMarvin render/docs daemon (127.0.0.1:6090)
+After=default.target
+
+[Service]
+ExecStart=$DAEMON
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=default.target
+EOF
+systemctl --user daemon-reload
+systemctl --user enable --now marvin-render.service
+loginctl enable-linger "$USER" >/dev/null 2>&1 || true
 if ss -ltn 2>/dev/null | grep -q '127.0.0.1:6090'; then
-    echo "    ya corriendo en :6090"
+    echo "    activo (127.0.0.1:6090, systemd --user, arranca en boot)"
 else
-    nohup "$(dirname "$0")/marvin-render.py" >/tmp/marvin-render.log 2>&1 &
-    echo "    arrancado (127.0.0.1:6090)"
+    echo "    instalado pero NO escucha en :6090 — revisá: systemctl --user status marvin-render"
 fi
 
 cat <<'EOF'
