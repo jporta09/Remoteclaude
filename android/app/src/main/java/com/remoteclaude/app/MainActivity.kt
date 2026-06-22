@@ -295,8 +295,12 @@ class MainActivity : AppCompatActivity() {
         if (saved.isEmpty()) {
             newTab()
         } else {
+            // Leer el tab activo ANTES de abrir: cada openTab() -> switchTo() -> refreshTabBar()
+            // -> saveTabs() pisa activeKey con el índice del último abierto. Si lo leyéramos
+            // después, siempre restauraría a la última pestaña.
+            val wantActive = prefs.getInt(activeKey, 0)
             saved.forEach { openTab(it) }   // tmux -A reengancha (o recrea si fue matada)
-            switchTo(prefs.getInt(activeKey, 0).coerceIn(0, tabs.size - 1))
+            switchTo(wantActive.coerceIn(0, tabs.size - 1))
         }
     }
 

@@ -31,9 +31,13 @@
             android:name=".HostsActivity"
             android:exported="false" />
 
+        <!-- Maneja rotación sin recrearse: preserva las pestañas y la activa, y evita
+             reenganchar todas las sesiones SSH en cada giro (el terminal se reajusta solo
+             vía TerminalView.onSizeChanged -> updateSize). -->
         <activity
             android:name=".MainActivity"
-            android:exported="false" />
+            android:exported="false"
+            android:configChanges="orientation|screenSize|keyboardHidden" />
 
         <!-- Visor noVNC del navegador headed (M6). Maneja rotación sin recrearse. -->
         <activity
