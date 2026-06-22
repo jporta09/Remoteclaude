@@ -64,31 +64,25 @@ else
 fi
 
 echo "==> render-daemon (mostrar HTML/URL + recibir docs de servers a los que SSH-eás)"
-# Servicio systemd --user: arranca en cada boot (con linger) y se reinicia si cae. Así no
-# depende de tener una terminal abierta ni muere al reiniciar la PC.
+# Servicio systemd --user, pero NO autostart en boot: lo arranca el hook 'client-attached'
+# de tmux (marvin.tmux.conf) cuando la APP se conecta. Así sólo corre mientras usás la app,
+# no desde el arranque de la PC. Restart=on-failure lo revive si cae estando en uso.
+# El linger mantiene vivo el gestor --user para que 'systemctl --user start' ande desde la
+# sesión SSH de la app.
 DAEMON="$(cd "$(dirname "$0")" && pwd)/marvin-render.py"
 install -d "$HOME/.config/systemd/user"
 cat > "$HOME/.config/systemd/user/marvin-render.service" <<EOF
 [Unit]
 Description=RemoteMarvin render/docs daemon (127.0.0.1:6090)
-After=default.target
 
 [Service]
 ExecStart=$DAEMON
 Restart=on-failure
 RestartSec=2
-
-[Install]
-WantedBy=default.target
 EOF
 systemctl --user daemon-reload
-systemctl --user enable --now marvin-render.service
 loginctl enable-linger "$USER" >/dev/null 2>&1 || true
-if ss -ltn 2>/dev/null | grep -q '127.0.0.1:6090'; then
-    echo "    activo (127.0.0.1:6090, systemd --user, arranca en boot)"
-else
-    echo "    instalado pero NO escucha en :6090 — revisá: systemctl --user status marvin-render"
-fi
+echo "    instalado (lo arranca tmux al conectar la app; no autostart en boot)"
 
 cat <<'EOF'
 
