@@ -25,8 +25,11 @@ local_v="$(ver < "$REPO/$PJ" 2>/dev/null || true)"
 BR="$(git -C "$REPO" rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
 [ -n "$BR" ] && [ "$BR" != "HEAD" ] || { say_ok "remotemarvin: ok (HEAD detached, no comparo)"; exit 0; }
 
-# fetch acotado y con timeout; si falla (sin red), no molestamos
-timeout 8 git -C "$REPO" fetch --quiet origin "$BR" 2>/dev/null || {
+# fetch acotado y con timeout; si falla (sin red/credenciales), no molestamos.
+# Sin prompts interactivos: bajo el hook no hay TTY, así que si la key pide passphrase o
+# faltan credenciales, que falle YA en vez de colgarse (igual lo cubre el timeout).
+GIT_TERMINAL_PROMPT=0 GIT_SSH_COMMAND="ssh -o BatchMode=yes -o ConnectTimeout=5" \
+    timeout 8 git -C "$REPO" fetch --quiet origin "$BR" 2>/dev/null || {
     say_ok "remotemarvin: no pude chequear actualizaciones (sin red/credenciales)"; exit 0; }
 
 remote_v="$(git -C "$REPO" show "origin/$BR:$PJ" 2>/dev/null | ver || true)"
