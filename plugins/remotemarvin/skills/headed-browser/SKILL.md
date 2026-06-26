@@ -46,10 +46,19 @@ meant the browser drew to a screen they weren't looking at. If the user already 
 ## How to run something visible
 
 **SIEMPRE lanzá con `run-visible.sh` (o `run-local.sh`). NO hagas vos chequeos manuales del
-display ni `docker compose up display`** — el helper auto-detecta dónde dibujar (container
-local / túnel remoto) y, si falta, imprime exactamente qué hacer. Si falla, **leé su mensaje
-y seguí esa instrucción; no improvises** (en un server remoto, arrancar un display local es
-SIEMPRE incorrecto — ver Notes).
+display ni de las libs (`ldd`), ni `docker compose up display`** — el helper auto-detecta
+dónde dibujar (container local / túnel remoto), chequea las libs de Chromium, y si algo falta
+imprime exactamente qué hacer. Si falla, **leé su mensaje y seguí esa instrucción; no
+improvises** (en un server remoto, arrancar un display local es SIEMPRE incorrecto — ver Notes).
+
+> ⛔ **REGLAS DURAS — nunca las rompas:**
+> 1. **NUNCA instales nada en un server remoto.** Prohibido `sudo`, `apt`, `playwright
+>    install-deps`, `dpkg`, bajar `.deb`, etc. Si faltan las libs de Chromium, la respuesta
+>    **NO** es instalarlas — es el fallback `marvin-show` (abajo). Asumí que **no tenés sudo**.
+> 2. **NUNCA hagas el chequeo de libs a mano** (`ldd`, `apt list`, etc.). Eso lo hace
+>    `run-visible.sh`; vos solo leés su salida y su código de salida.
+> 3. Si `run-visible.sh` sale con **código 3**, andá DIRECTO a `marvin-show` — no intentes
+>    "arreglar" las libs primero.
 
 Pick the helper for the chosen screen. Each checks its display is up, sets `DISPLAY`,
 and runs your command:
@@ -70,18 +79,30 @@ Playwright ya está en `~/.cache/ms-playwright`). Va con algo de lag para UI pes
 por la red). Para algo fluido sin noVNC, usá **CDP** (`chromium --remote-debugging-port=9222`
 + `ssh -L 9222:localhost:9222`) y mirás por DevTools.
 
-**Y si `run-visible.sh` sale con código 3 (faltan las libs de Chromium en el server, sin
-sudo)?** El navegador no puede correr ahí. Caé al fallback **solo para mostrar un HTML / URL
-pública** (NO para scraping que necesite la red interna del server): renderizalo en el HOST
-de la app con el helper **bundleado en esta skill** (viene con el plugin — no hay que
-instalarlo ni ponerlo en el PATH):
+**Y si `run-visible.sh` sale con código 3 (faltan las libs de Chromium en el server)?** El
+navegador NO puede correr ahí y **no lo vas a instalar** (regla dura #1). Caé al fallback
+**solo para mostrar un HTML / URL pública** (NO para scraping que necesite la red interna del
+server): renderizalo en el HOST de la app con el helper **bundleado en esta skill** (viene con
+el plugin — no hay que instalarlo ni ponerlo en el PATH):
 ```bash
 scripts/marvin-show.sh https://example.com      # o:  scripts/marvin-show.sh ./informe.html
 ```
 Manda la URL/archivo al **render-daemon del host** (por el reverse tunnel en `localhost:6090`)
-y el host lo abre headed → noVNC → 🖥. Requiere que en el host esté corriendo
-`scripts/marvin-render.py` (lo arranca `setup-host`). Si necesitás la red interna
-del server (login, intranet), no hay salida sin las libs: pedí el `install-deps` al admin.
+y el host lo abre headed → noVNC → 🖥.
+
+> 📁 **Path del helper en un server remoto:** tu CWD NO es el directorio de la skill, así que
+> `scripts/marvin-show.sh` (relativo) **no resuelve**. Usá la ruta absoluta del script dentro
+> de esta skill. Si no la tenés a mano:
+> ```bash
+> MS="$(find ~ -name marvin-show.sh -path '*headed-browser*' 2>/dev/null | head -1)"
+> "$MS" ./planograma.html
+> ```
+
+Requiere que en el host esté corriendo `scripts/marvin-render.py` (lo autoarranca el hook de
+tmux al conectar la app; si dice "daemon no alcanzable en :6090", **re-SSH-eá al server DESDE
+la app** para que se tienda el túnel `:6090`). Si necesitás la **red interna del server**
+(login, intranet) y faltan las libs, no hay salida desde acá: avisale al usuario que el admin
+del server tiene que correr el `install-deps` — **vos no lo intentes**.
 
 Examples:
 ```bash
