@@ -65,10 +65,12 @@ def get_model():
             from faster_whisper import WhisperModel
             t0 = time.time()
             # GPU si hay driver CUDA; si no (p.ej. nouveau o sin placa), CPU int8.
+            # int8_float16 y no float16: en las GTX 16xx (TU116, sin tensor cores) el
+            # fp16 puro es ~4x mas lento (medido: 4.2s vs 1.0s para 4s de audio).
             try:
-                print(f"[marvin-stt] cargando {MODEL} (cuda, float16)...", flush=True)
-                _model = WhisperModel(MODEL, device="cuda", compute_type="float16")
-                _mode = "cuda/float16"
+                print(f"[marvin-stt] cargando {MODEL} (cuda, int8_float16)...", flush=True)
+                _model = WhisperModel(MODEL, device="cuda", compute_type="int8_float16")
+                _mode = "cuda/int8_float16"
             except Exception as e:  # noqa: BLE001 - cualquier fallo de CUDA -> CPU
                 print(f"[marvin-stt] sin CUDA ({e}); uso cpu/int8", flush=True)
                 _model = WhisperModel(MODEL, device="cpu", compute_type="int8")
