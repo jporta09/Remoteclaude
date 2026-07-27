@@ -137,6 +137,13 @@ class RemoteControl(
         }
     }
 
+    /**
+     * Modo de energía del daemon de dictado: "status" | "always" | "ondemand".
+     * Devuelve el mensaje del cliente (o vacío si el host no tiene marvin-stt). BLOQUEA.
+     */
+    fun sttMode(action: String): String =
+        exec("~/.local/bin/marvin-stt mode '$action' 2>&1").trim()
+
     /** Sesiones vivas con el ÚLTIMO COMANDO tipeado (texto tras el último prompt), o vacío. */
     fun sessionsWithLastLine(): List<Pair<String, String>> {
         // Por cada sesión: captura el pane y, con sed, toma el texto que sigue al último

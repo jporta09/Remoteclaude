@@ -3,15 +3,45 @@
 # Lo invoca la app por SSH (push-to-talk). Si el daemon (marvin-stt.py, puerto 6091)
 # no está corriendo, lo arranca vía systemd --user y espera a que levante.
 #
-#   marvin-stt < audio.wav
+#   marvin-stt < audio.wav              # transcribir
+#   marvin-stt mode status              # ver modo de energia + estado del daemon
+#   marvin-stt mode always              # siempre encendido (autostart + sin idle-exit)
+#   marvin-stt mode ondemand            # default: arranca al usarlo, se apaga a los 10min
 #
 # Variables: MARVIN_STT_PORT (6091)
 set -euo pipefail
 
 PORT="${MARVIN_STT_PORT:-6091}"
 URL="http://127.0.0.1:${PORT}"
+MODE_FILE="$HOME/.config/marvin/stt-mode"
+export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
 
 up() { curl -fsS --max-time 2 "$URL/" >/dev/null 2>&1; }
+
+if [ "${1:-}" = "mode" ]; then
+    case "${2:-status}" in
+        always)
+            install -d "$(dirname "$MODE_FILE")"
+            echo always > "$MODE_FILE"
+            systemctl --user enable --now marvin-stt.service >/dev/null 2>&1 || true
+            echo "STT: siempre encendido (arranca en boot, no se apaga solo)"
+            ;;
+        ondemand)
+            install -d "$(dirname "$MODE_FILE")"
+            echo ondemand > "$MODE_FILE"
+            systemctl --user disable marvin-stt.service >/dev/null 2>&1 || true
+            echo "STT: bajo demanda (default: arranca al dictar, se apaga tras 10 min sin uso)"
+            ;;
+        status)
+            mode="$(cat "$MODE_FILE" 2>/dev/null || echo ondemand)"
+            if up; then estado="$(curl -fsS --max-time 2 "$URL/")"; else estado="daemon apagado"; fi
+            echo "modo: $mode | $estado"
+            ;;
+        *)
+            echo "uso: marvin-stt mode [status|always|ondemand]" >&2; exit 2 ;;
+    esac
+    exit 0
+fi
 
 if ! up; then
     XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}" \

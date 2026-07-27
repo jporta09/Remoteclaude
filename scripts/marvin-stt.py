@@ -28,6 +28,17 @@ PORT = int(os.environ.get("MARVIN_STT_PORT", "6091"))
 MODEL = os.environ.get("MARVIN_STT_MODEL", "large-v3-turbo")
 LANG = os.environ.get("MARVIN_STT_LANG", "es") or None
 IDLE = int(os.environ.get("MARVIN_STT_IDLE", "600"))
+# Modo de energia, conmutable desde la app via `marvin-stt mode ...` (se relee en
+# caliente): "ondemand" (default) = idle-exit; "always" = nunca se apaga solo.
+MODE_FILE = os.path.expanduser("~/.config/marvin/stt-mode")
+
+
+def power_mode() -> str:
+    try:
+        with open(MODE_FILE) as f:
+            return "always" if f.read().strip() == "always" else "ondemand"
+    except OSError:
+        return "ondemand"
 
 _lock = threading.Lock()
 _model = None
@@ -99,6 +110,8 @@ def transcribe(wav_bytes: bytes) -> str:
 def watchdog():
     while True:
         time.sleep(30)
+        if power_mode() == "always":
+            continue
         if time.time() - _last_use > IDLE:
             print(f"[marvin-stt] {IDLE}s sin uso, me apago (el cliente me relanza)", flush=True)
             os._exit(0)
@@ -117,7 +130,7 @@ class H(BaseHTTPRequestHandler):
         self.wfile.write(data)
 
     def do_GET(self):
-        self._send(200, f"marvin-stt OK (modelo {MODEL}: {_mode})")
+        self._send(200, f"marvin-stt OK (modelo {MODEL}: {_mode}; energia: {power_mode()})")
 
     def do_POST(self):
         global _last_use

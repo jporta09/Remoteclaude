@@ -90,12 +90,20 @@ echo "==> stt-daemon (dictado por voz de la app: WAV -> texto con faster-whisper
 # GPU (CUDA float16) si hay driver NVIDIA; si no, CPU int8 — el daemon decide solo.
 UV_BIN="$(command -v uv || echo "$HOME/.local/bin/uv")"
 STT_PY="$(cd "$(dirname "$0")" && pwd)/marvin-stt.py"
+# Restart=on-failure: revive crashes pero respeta el idle-exit (salida limpia).
+# [Install]: permite `marvin-stt mode always` (enable = arranca en boot); por default
+# queda disabled (bajo demanda).
 cat > "$HOME/.config/systemd/user/marvin-stt.service" <<EOF
 [Unit]
 Description=RemoteMarvin STT daemon (dictado, 127.0.0.1:6091)
 
 [Service]
 ExecStart=$UV_BIN run --with faster-whisper --with nvidia-cublas-cu12 --with nvidia-cudnn-cu12 $STT_PY
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=default.target
 EOF
 systemctl --user daemon-reload
 install -d "$HOME/.local/bin"
