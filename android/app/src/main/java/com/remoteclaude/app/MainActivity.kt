@@ -1,6 +1,8 @@
 package com.remoteclaude.app
 
+import android.Manifest
 import android.content.Context
+import android.content.pm.PackageManager
 import android.graphics.Color
 import android.graphics.Rect
 import android.graphics.Typeface
@@ -70,6 +72,9 @@ class MainActivity : AppCompatActivity() {
     private lateinit var ctrlButton: Button
     private lateinit var altButton: Button
     private lateinit var shiftButton: Button
+    private lateinit var micButton: Button
+    private val recorder = WavRecorder()
+    private var transcribing = false
     private var selectMode = false   // dedo = selección nativa de tmux (en vez de scroll)
     private lateinit var selButton: Button
 
@@ -540,6 +545,88 @@ class MainActivity : AppCompatActivity() {
             selButton = weightKey("⧉ Sel") { toggleSelectMode() }
             selButton.setTextColor(if (selectMode) ACCENT else KEY_FG)
             shiftRow.addView(selButton)
+            micButton = weightKey("🎤 Dictar") {}
+            micButton.setOnTouchListener { _, ev -> onMicTouch(ev) }
+            shiftRow.addView(micButton)
+        }
+    }
+
+    // --- Dictado por voz (push-to-talk): grabás mientras apretás 🎤; al soltar, el WAV
+    // viaja por SSH al host (cliente marvin-stt -> faster-whisper) y el texto aparece
+    // en el terminal como si lo hubieras tipeado (sin Enter: revisás y mandás).
+    private fun onMicTouch(ev: MotionEvent): Boolean {
+        when (ev.actionMasked) {
+            MotionEvent.ACTION_DOWN -> startDictation()
+            MotionEvent.ACTION_UP -> finishDictation()
+            MotionEvent.ACTION_CANCEL -> { recorder.cancel(); micIdle() }
+        }
+        return true
+    }
+
+    private fun startDictation() {
+        if (transcribing) return
+        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) !=
+            PackageManager.PERMISSION_GRANTED
+        ) {
+            requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), REQ_MIC)
+            return
+        }
+        if (recorder.start()) {
+            micButton.text = "🎤 Grabando"
+            micButton.setTextColor(0xFFE05555.toInt())
+        } else {
+            Toast.makeText(this, "No pude abrir el micrófono", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun finishDictation() {
+        val wav = recorder.stop() ?: run { micIdle(); return }
+        transcribing = true
+        micButton.text = "🎤 …"
+        micButton.setTextColor(ACCENT)
+        thread {
+            try {
+                val text = control.transcribe(wav)
+                runOnUiThread {
+                    if (text.isNotBlank()) {
+                        val bytes = "$text ".toByteArray(Charsets.UTF_8)
+                        session.write(bytes, 0, bytes.size)
+                    }
+                    micIdle()
+                }
+            } catch (e: Exception) {
+                runOnUiThread {
+                    Toast.makeText(
+                        this,
+                        "Dictado falló: ${e.message ?: "sin conexión"}",
+                        Toast.LENGTH_LONG,
+                    ).show()
+                    micIdle()
+                }
+            } finally {
+                transcribing = false
+            }
+        }
+    }
+
+    private fun micIdle() {
+        if (::micButton.isInitialized) {
+            micButton.text = "🎤 Dictar"
+            micButton.setTextColor(KEY_FG)
+        }
+    }
+
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<out String>,
+        grantResults: IntArray,
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == REQ_MIC &&
+            grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED
+        ) {
+            Toast.makeText(this, "Listo: mantené 🎤 apretado para dictar", Toast.LENGTH_SHORT)
+                .show()
         }
     }
 
@@ -769,6 +856,7 @@ class MainActivity : AppCompatActivity() {
         // Paleta CTR de Marvin
         private val ACCENT = Color.parseColor("#71BF44")        // verde CTR
         private val KEY_FG = Color.parseColor("#F2F2F2")        // gris claro
+        private const val REQ_MIC = 71                          // permiso RECORD_AUDIO
         private val KEYPAD_BG = Color.parseColor("#0F232D")     // verde petróleo
         private val CHEV_FG = Color.parseColor("#5E8B7E")       // verde alt apagado
         private val CHEV_BG = Color.parseColor("#0A1A20")       // petróleo más oscuro

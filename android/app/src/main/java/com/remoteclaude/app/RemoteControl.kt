@@ -108,6 +108,35 @@ class RemoteControl(
         return exec("base64 ~/RemoteMarvinDocs/'$name' 2>/dev/null").replace("\n", "").trim()
     }
 
+    // --- Dictado por voz ---------------------------------------------------------
+
+    /**
+     * Manda un WAV al host y devuelve el texto transcripto (daemon marvin-stt vía el
+     * cliente `marvin-stt`). El primer dictado puede tardar (arranque del daemon /
+     * carga del modelo). Lanza IllegalStateException con mensaje legible si falla.
+     * BLOQUEA: llamar fuera del hilo principal.
+     */
+    fun transcribe(wav: ByteArray): String {
+        val (h, p) = TailscaleBridge.endpoint(host, port)
+        val c = Connection(h, p)
+        try {
+            c.connect({ _, _, _, _ -> true }, 10000, 10000)
+            if (!c.authenticateWithPublicKey(user, key))
+                throw IllegalStateException("no autenticó (clave no autorizada)")
+            val s = c.openSession()
+            s.execCommand("~/.local/bin/marvin-stt 2>&1")
+            s.stdin.use { it.write(wav) }        // close = EOF: el cliente empieza
+            val out = String(s.stdout.readBytes(), Charsets.UTF_8).trim()
+            s.close()
+            if (out.startsWith("error:") || out.contains("command not found") ||
+                out.contains("No such file")
+            ) throw IllegalStateException(out.ifBlank { "falló el dictado en el host" })
+            return out
+        } finally {
+            try { c.close() } catch (_: Exception) {}
+        }
+    }
+
     /** Sesiones vivas con el ÚLTIMO COMANDO tipeado (texto tras el último prompt), o vacío. */
     fun sessionsWithLastLine(): List<Pair<String, String>> {
         // Por cada sesión: captura el pane y, con sed, toma el texto que sigue al último

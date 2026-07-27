@@ -6,6 +6,8 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <!-- Cámara: escanear el QR de vinculación de Tailscale (ts-link-qr) -->
     <uses-permission android:name="android.permission.CAMERA" />
+    <!-- Dictado por voz push-to-talk (el STT corre en el host, acá solo se graba) -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-feature android:name="android.hardware.camera" android:required="false" />
 
     <application
