@@ -109,6 +109,26 @@ systemctl --user daemon-reload
 install -d "$HOME/.local/bin"
 ln -sf "$(cd "$(dirname "$0")" && pwd)/marvin-stt" "$HOME/.local/bin/marvin-stt"
 echo "    instalado (cliente: marvin-stt; daemon bajo demanda en :6091)"
+
+echo "==> stt-live (dictado EN VIVO: parciales por WebSocket mientras hablás)"
+# WhisperLiveKit en :6092. Sin idle-exit propio: en modo ondemand queda apagado y la
+# app lo arranca fire-and-forget al primer dictado; `marvin-stt mode always` lo deja
+# resident junto al batch (VRAM: ~2GB batch + ~2GB live, entra en una placa de 6GB).
+STT_LIVE_PY="$(cd "$(dirname "$0")" && pwd)/marvin-stt-live.py"
+cat > "$HOME/.config/systemd/user/marvin-stt-live.service" <<EOF
+[Unit]
+Description=RemoteMarvin STT live daemon (dictado en vivo, 127.0.0.1:6092)
+
+[Service]
+ExecStart=$UV_BIN run --with whisperlivekit --with nvidia-cublas-cu12 --with nvidia-cudnn-cu12 $STT_LIVE_PY
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=default.target
+EOF
+systemctl --user daemon-reload
+echo "    instalado (se activa con: marvin-stt mode always, o al primer dictado)"
 # Prewarm en background: fuerza la descarga del modelo (~1.6GB) AHORA y no en el primer
 # dictado. Manda 1s de silencio; resultado en /tmp/marvin-stt-prewarm.log.
 (

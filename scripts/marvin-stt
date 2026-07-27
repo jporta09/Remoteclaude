@@ -18,24 +18,29 @@ export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
 
 up() { curl -fsS --max-time 2 "$URL/" >/dev/null 2>&1; }
 
+LIVE_PORT="${MARVIN_STT_LIVE_PORT:-6092}"
+
 if [ "${1:-}" = "mode" ]; then
     case "${2:-status}" in
         always)
             install -d "$(dirname "$MODE_FILE")"
             echo always > "$MODE_FILE"
             systemctl --user enable --now marvin-stt.service >/dev/null 2>&1 || true
-            echo "STT: siempre encendido (arranca en boot, no se apaga solo)"
+            systemctl --user enable --now marvin-stt-live.service >/dev/null 2>&1 || true
+            echo "STT: siempre encendido (batch + en vivo; arranca en boot, no se apaga solo)"
             ;;
         ondemand)
             install -d "$(dirname "$MODE_FILE")"
             echo ondemand > "$MODE_FILE"
             systemctl --user disable marvin-stt.service >/dev/null 2>&1 || true
+            systemctl --user disable --now marvin-stt-live.service >/dev/null 2>&1 || true
             echo "STT: bajo demanda (default: arranca al dictar, se apaga tras 10 min sin uso)"
             ;;
         status)
             mode="$(cat "$MODE_FILE" 2>/dev/null || echo ondemand)"
             if up; then estado="$(curl -fsS --max-time 2 "$URL/")"; else estado="daemon apagado"; fi
-            echo "modo: $mode | $estado"
+            if (exec 3<>"/dev/tcp/127.0.0.1/$LIVE_PORT") 2>/dev/null; then live="en vivo: activo"; else live="en vivo: apagado"; fi
+            echo "modo: $mode | $estado | $live"
             ;;
         *)
             echo "uso: marvin-stt mode [status|always|ondemand]" >&2; exit 2 ;;
