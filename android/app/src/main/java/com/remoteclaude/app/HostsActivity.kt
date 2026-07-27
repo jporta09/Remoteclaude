@@ -15,8 +15,10 @@ import android.widget.EditText
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ScrollView
+import android.widget.Switch
 import android.widget.TextView
 import android.widget.Toast
+import kotlin.concurrent.thread
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import com.journeyapps.barcodescanner.ScanContract
@@ -252,10 +254,38 @@ class HostsActivity : AppCompatActivity() {
         val port = field("Puerto", existing?.port?.toString() ?: "22", number = true)
         val user = field("Usuario", existing?.user ?: "root")
 
+        // Dictado: el modo vive en el HOST (~/.config/marvin/stt-mode), no acá. Al abrir
+        // se consulta el estado real por SSH; al guardar, si cambió, se aplica.
+        val stt = Switch(this).apply {
+            text = "⚡ Dictado siempre encendido"
+            isEnabled = false
+            setPadding(dp(16), dp(12), dp(16), dp(12))
+        }
+        var sttInitial: Boolean? = null   // estado consultado (null = desconocido)
+        if (existing != null) {
+            thread {
+                val st = try {
+                    RemoteControl(existing.hostname, existing.port, existing.user,
+                        KeyStoreSsh.getOrCreateKeyPair()).sttMode("status")
+                } catch (_: Exception) { "" }
+                runOnUiThread {
+                    if (st.contains("modo:")) {
+                        sttInitial = st.contains("modo: always")
+                        stt.isChecked = sttInitial == true
+                        stt.isEnabled = true
+                    } else {
+                        stt.text = "⚡ Dictado siempre encendido (host inaccesible o sin dictado)"
+                    }
+                }
+            }
+        } else {
+            stt.isEnabled = true   // host nuevo: se intenta aplicar al guardar
+        }
+
         val box = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(8), dp(4), dp(8), dp(4))
-            addView(label); addView(hostname); addView(port); addView(user)
+            addView(label); addView(hostname); addView(port); addView(user); addView(stt)
         }
         AlertDialog.Builder(this)
             .setTitle(if (existing == null) "Nuevo host" else "Editar host")
@@ -273,6 +303,23 @@ class HostsActivity : AppCompatActivity() {
                 )
                 HostStore.upsert(this, host)
                 refresh()
+                // aplicar el modo de dictado si cambió (baseline: ondemand si no se supo)
+                if (stt.isEnabled && (sttInitial ?: false) != stt.isChecked) {
+                    val action = if (stt.isChecked) "always" else "ondemand"
+                    thread {
+                        val msg = try {
+                            RemoteControl(host.hostname, host.port, host.user,
+                                KeyStoreSsh.getOrCreateKeyPair()).sttMode(action)
+                        } catch (_: Exception) { "" }
+                        runOnUiThread {
+                            Toast.makeText(
+                                this,
+                                msg.ifBlank { "No se pudo aplicar el modo de dictado (host inaccesible)" },
+                                Toast.LENGTH_LONG,
+                            ).show()
+                        }
+                    }
+                }
             }
             .setNegativeButton("Cancelar", null)
             .show()

@@ -668,48 +668,8 @@ class MainActivity : AppCompatActivity() {
             rowTop.addView(weightKey("End") { sendKey(KeyEvent.KEYCODE_MOVE_END) })
             rowTop.addView(weightKey("PgUp") { sendKey(KeyEvent.KEYCODE_PAGE_UP) })
             rowTop.addView(weightKey("PgDn") { sendKey(KeyEvent.KEYCODE_PAGE_DOWN) })
-            rowTop.addView(weightKey("🎤⚙") { showSttModeDialog() })
         }
         rowTop.addView(chevron)
-    }
-
-    /** Modo de energía del dictado en el host: bajo demanda (default) o siempre encendido. */
-    private fun showSttModeDialog() {
-        Toast.makeText(this, "Consultando modo de dictado…", Toast.LENGTH_SHORT).show()
-        thread {
-            val status = try { control.sttMode("status") } catch (_: Exception) { "" }
-            runOnUiThread {
-                if (status.isBlank()) {
-                    Toast.makeText(
-                        this,
-                        "El host no tiene el dictado instalado (setup-host.sh)",
-                        Toast.LENGTH_LONG,
-                    ).show()
-                    return@runOnUiThread
-                }
-                AlertDialog.Builder(this)
-                    .setTitle("Dictado por voz")
-                    .setMessage(status)
-                    .setItems(
-                        arrayOf(
-                            "⚡ Siempre encendido (respuesta inmediata, ~2GB de GPU siempre ocupados)",
-                            "🌙 Bajo demanda (default: arranca al dictar, 1er dictado tarda ~30s)",
-                        ),
-                    ) { _, which ->
-                        val action = if (which == 0) "always" else "ondemand"
-                        thread {
-                            val msg = try { control.sttMode(action) } catch (e: Exception) {
-                                "falló: ${e.message}"
-                            }
-                            runOnUiThread {
-                                Toast.makeText(this, msg.ifBlank { "sin respuesta" }, Toast.LENGTH_LONG).show()
-                            }
-                        }
-                    }
-                    .setNegativeButton("Cerrar", null)
-                    .show()
-            }
-        }
     }
 
     private fun chevronButton(): Button {
