@@ -84,6 +84,38 @@ systemctl --user daemon-reload
 loginctl enable-linger "$USER" >/dev/null 2>&1 || true
 echo "    instalado (lo arranca tmux al conectar la app; no autostart en boot)"
 
+echo "==> stt-daemon (dictado por voz de la app: WAV -> texto con faster-whisper)"
+# Bajo demanda: lo arranca el cliente `marvin-stt` en el primer dictado y se apaga solo
+# tras 10 min sin uso (idle-exit = salida limpia; por eso sin Restart= ni autostart).
+# GPU (CUDA float16) si hay driver NVIDIA; si no, CPU int8 — el daemon decide solo.
+UV_BIN="$(command -v uv || echo "$HOME/.local/bin/uv")"
+STT_PY="$(cd "$(dirname "$0")" && pwd)/marvin-stt.py"
+cat > "$HOME/.config/systemd/user/marvin-stt.service" <<EOF
+[Unit]
+Description=RemoteMarvin STT daemon (dictado, 127.0.0.1:6091)
+
+[Service]
+ExecStart=$UV_BIN run --with faster-whisper --with nvidia-cublas-cu12 --with nvidia-cudnn-cu12 $STT_PY
+EOF
+systemctl --user daemon-reload
+install -d "$HOME/.local/bin"
+ln -sf "$(cd "$(dirname "$0")" && pwd)/marvin-stt" "$HOME/.local/bin/marvin-stt"
+echo "    instalado (cliente: marvin-stt; daemon bajo demanda en :6091)"
+# Prewarm en background: fuerza la descarga del modelo (~1.6GB) AHORA y no en el primer
+# dictado. Manda 1s de silencio; resultado en /tmp/marvin-stt-prewarm.log.
+(
+  python3 - <<'PY'
+import wave
+w = wave.open("/tmp/marvin-stt-prewarm.wav", "wb")
+w.setnchannels(1); w.setsampwidth(2); w.setframerate(16000)
+w.writeframes(b"\x00\x00" * 16000)
+w.close()
+PY
+  "$HOME/.local/bin/marvin-stt" < /tmp/marvin-stt-prewarm.wav >/dev/null \
+    && echo "prewarm STT OK" || echo "prewarm STT falló (se reintenta al primer uso)"
+) >/tmp/marvin-stt-prewarm.log 2>&1 &
+echo "    prewarm del modelo en background (log: /tmp/marvin-stt-prewarm.log)"
+
 cat <<'EOF'
 
 ============================================================

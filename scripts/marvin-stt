@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+# Cliente de dictado: WAV por stdin -> texto transcripto por stdout.
+# Lo invoca la app por SSH (push-to-talk). Si el daemon (marvin-stt.py, puerto 6091)
+# no está corriendo, lo arranca vía systemd --user y espera a que levante.
+#
+#   marvin-stt < audio.wav
+#
+# Variables: MARVIN_STT_PORT (6091)
+set -euo pipefail
+
+PORT="${MARVIN_STT_PORT:-6091}"
+URL="http://127.0.0.1:${PORT}"
+
+up() { curl -fsS --max-time 2 "$URL/" >/dev/null 2>&1; }
+
+if ! up; then
+    XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}" \
+        systemctl --user start marvin-stt.service 2>/dev/null || {
+        echo "error: marvin-stt no está instalado en este host (corré setup-host.sh)" >&2
+        exit 3
+    }
+    for _ in $(seq 1 30); do up && break; sleep 1; done
+    up || { echo "error: el daemon marvin-stt no levantó (journalctl --user -u marvin-stt)" >&2; exit 4; }
+fi
+
+# El primer pedido puede tardar: descarga/carga del modelo (prewarm lo evita).
+exec curl -fsS --max-time 180 --data-binary @- "$URL/stt"
