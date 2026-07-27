@@ -19,7 +19,7 @@ class WavRecorder {
     val isRecording get() = record != null
 
     @SuppressLint("MissingPermission")  // el caller pide RECORD_AUDIO antes
-    fun start(): Boolean {
+    fun start(onChunk: ((ByteArray) -> Unit)? = null): Boolean {
         if (record != null) return true
         val minBuf = AudioRecord.getMinBufferSize(RATE, CH, ENC)
         if (minBuf <= 0) return false
@@ -32,7 +32,10 @@ class WavRecorder {
             val buf = ByteArray(4096)
             while (record === r) {
                 val n = r.read(buf, 0, buf.size)
-                if (n > 0) synchronized(pcm) { pcm.write(buf, 0, n) }
+                if (n > 0) {
+                    synchronized(pcm) { pcm.write(buf, 0, n) }
+                    onChunk?.invoke(buf.copyOf(n))   // streaming en vivo (fase 2)
+                }
             }
         }
         return true

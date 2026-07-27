@@ -73,8 +73,10 @@ class MainActivity : AppCompatActivity() {
     private lateinit var altButton: Button
     private lateinit var shiftButton: Button
     private lateinit var micButton: Button
+    private lateinit var dictBubble: TextView
     private val recorder = WavRecorder()
     private var transcribing = false
+    private var live: LiveDictation? = null
     private var selectMode = false   // dedo = selección nativa de tmux (en vez de scroll)
     private lateinit var selButton: Button
 
@@ -128,10 +130,22 @@ class MainActivity : AppCompatActivity() {
         keyPair = KeyStoreSsh.getOrCreateKeyPair()
         control = RemoteControl(host, port, user, keyPair)
 
+        // burbuja del dictado en vivo (fase 2): parciales mientras sostenés 🎤
+        dictBubble = TextView(this).apply {
+            visibility = View.GONE
+            setBackgroundColor(0xF20F232D.toInt())
+            setTextColor(Color.parseColor("#A9CCE8"))
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+            typeface = Typeface.MONOSPACE
+            maxLines = 3
+            setPadding(dp(12), dp(8), dp(12), dp(8))
+        }
+
         val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         root.addView(buildHostBar(), LinearLayout.LayoutParams(MATCH, WRAP))
         root.addView(buildTabBar(), LinearLayout.LayoutParams(MATCH, WRAP))
         root.addView(terminalView, LinearLayout.LayoutParams(MATCH, 0, 1f))
+        root.addView(dictBubble, LinearLayout.LayoutParams(MATCH, WRAP))
         root.addView(buildKeypad(), LinearLayout.LayoutParams(MATCH, WRAP))
         setContentView(root)
 
@@ -558,7 +572,11 @@ class MainActivity : AppCompatActivity() {
         when (ev.actionMasked) {
             MotionEvent.ACTION_DOWN -> startDictation()
             MotionEvent.ACTION_UP -> finishDictation()
-            MotionEvent.ACTION_CANCEL -> { recorder.cancel(); micIdle() }
+            MotionEvent.ACTION_CANCEL -> {
+                recorder.cancel()
+                live?.cancel(); live = null
+                hideDictBubble(); micIdle()
+            }
         }
         return true
     }
@@ -571,42 +589,77 @@ class MainActivity : AppCompatActivity() {
             requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), REQ_MIC)
             return
         }
-        if (recorder.start()) {
+        // sesión de streaming best-effort; se crea ANTES del recorder para que los
+        // primeros chunks queden encolados hasta que el túnel/WS abra (no se pierden)
+        val l = LiveDictation(host, port, user, keyPair) { txt ->
+            runOnUiThread {
+                if (dictBubble.visibility == View.VISIBLE) dictBubble.text = txt.takeLast(220)
+            }
+        }
+        live = l
+        if (recorder.start(onChunk = { chunk -> live?.feed(chunk) })) {
             micButton.text = "🎤 Grabando"
             micButton.setTextColor(0xFFE05555.toInt())
+            thread {
+                val ok = l.start()
+                if (ok) {
+                    runOnUiThread {
+                        if (recorder.isRecording) {
+                            dictBubble.text = "🎙 Escuchando…"
+                            dictBubble.visibility = View.VISIBLE
+                        }
+                    }
+                } else {
+                    if (live === l) live = null
+                    // sin server en vivo: fase 1 cubre este dictado; arrancarlo para el próximo
+                    try { control.kickLiveStt() } catch (_: Exception) {}
+                }
+            }
         } else {
+            live = null
             Toast.makeText(this, "No pude abrir el micrófono", Toast.LENGTH_SHORT).show()
         }
     }
 
     private fun finishDictation() {
-        val wav = recorder.stop() ?: run { micIdle(); return }
+        val l = live; live = null
+        val wav = recorder.stop() ?: run { l?.cancel(); hideDictBubble(); micIdle(); return }
         transcribing = true
         micButton.text = "🎤 …"
         micButton.setTextColor(ACCENT)
         thread {
-            try {
-                val text = control.transcribe(wav)
-                runOnUiThread {
-                    if (text.isNotBlank()) {
-                        val bytes = "$text ".toByteArray(Charsets.UTF_8)
-                        session.write(bytes, 0, bytes.size)
-                    }
-                    micIdle()
-                }
-            } catch (e: Exception) {
-                runOnUiThread {
-                    Toast.makeText(
-                        this,
-                        "Dictado falló: ${e.message ?: "sin conexión"}",
-                        Toast.LENGTH_LONG,
-                    ).show()
-                    micIdle()
-                }
-            } finally {
-                transcribing = false
+            var text: String? = null
+            if (l != null && l.available) {
+                text = try { l.stop() } catch (_: Exception) { null }
             }
+            if (text.isNullOrBlank()) {
+                l?.cancel()
+                text = try { control.transcribe(wav) } catch (e: Exception) {
+                    runOnUiThread {
+                        Toast.makeText(
+                            this,
+                            "Dictado falló: ${e.message ?: "sin conexión"}",
+                            Toast.LENGTH_LONG,
+                        ).show()
+                    }
+                    null
+                }
+            }
+            runOnUiThread {
+                if (!text.isNullOrBlank()) {
+                    val bytes = "$text ".toByteArray(Charsets.UTF_8)
+                    session.write(bytes, 0, bytes.size)
+                }
+                hideDictBubble()
+                micIdle()
+            }
+            transcribing = false
         }
+    }
+
+    private fun hideDictBubble() {
+        dictBubble.visibility = View.GONE
+        dictBubble.text = ""
     }
 
     private fun micIdle() {

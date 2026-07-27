@@ -20,8 +20,8 @@ android {
         applicationId = "com.remoteclaude.app"
         minSdk = 26
         targetSdk = 34
-        versionCode = 5
-        versionName = "1.1.2"
+        versionCode = 6
+        versionName = "1.2.0"
         // marvints.aar (Tailscale embebido) trae sólo el .so de arm64-v8a.
         ndk { abiFilters += "arm64-v8a" }
     }
@@ -61,6 +61,7 @@ dependencies {
     implementation("com.google.android.material:material:1.12.0")
     implementation(project(":terminal-view"))   // motor Termux vendorizado
     implementation("org.connectbot:sshlib:2.2.23")   // cliente SSH para Android (Apache-2.0)
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")   // WebSocket del dictado en vivo
     implementation(":marvints@aar")   // Tailscale embebido (tsnet vía gomobile)
     implementation("com.journeyapps:zxing-android-embedded:4.3.0")   // scanner QR (vincular Tailscale)
 }

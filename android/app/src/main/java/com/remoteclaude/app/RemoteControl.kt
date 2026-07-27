@@ -138,6 +138,14 @@ class RemoteControl(
     }
 
     /**
+     * Arranca (fire-and-forget) el server de dictado EN VIVO en el host, para que el
+     * PRÓXIMO dictado ya tenga streaming (modo ondemand). No bloquea esperando la carga.
+     */
+    fun kickLiveStt() {
+        exec("XDG_RUNTIME_DIR=/run/user/\$(id -u) systemctl --user start marvin-stt-live.service >/dev/null 2>&1 &")
+    }
+
+    /**
      * Modo de energía del daemon de dictado: "status" | "always" | "ondemand".
      * Devuelve el mensaje del cliente (o vacío si el host no tiene marvin-stt). BLOQUEA.
      */
