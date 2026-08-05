@@ -7,12 +7,13 @@ import com.trilead.ssh2.Session
 import java.io.OutputStream
 import java.security.KeyPair
 import java.util.concurrent.Executors
+import java.util.concurrent.RejectedExecutionException
 import kotlin.concurrent.thread
 
 /**
  * M5: sesión SSH con tmux + auto-reconexión (sobrevive al bloqueo / cortes de red).
  *
- * Abre SSH al gateway → shell del host (vía nsenter) → `tmux new -A -D -s <name>`, que
+ * Abre SSH al sshd del HOST como tu usuario → `tmux new -A -D -s <name>`, que
  * persiste del lado del server. Si la conexión cae (bloqueo, cambio de red), el loop
  * reconecta solo y vuelve a engancharse al mismo tmux (todo intacto). El
  * ConnectivityManager (desde la Activity) avisa caída/vuelta de red para reaccionar rápido.
@@ -60,6 +61,10 @@ class SshTerminalSession(
                 val c = Connection(h, p)
                 c.connect({ _, _, _, _ -> true }, 15000, 15000)
                 conn = c
+                // Cerrar la pestaña mientras conectábamos dejaba el hilo colgado para
+                // siempre: closeCurrent() corría ANTES de que conn existiera, así que no
+                // cerraba nada y el loop seguía hasta quedar leyendo un socket vivo.
+                if (userClosed) { try { c.close() } catch (_: Exception) {}; break }
                 if (!c.authenticateWithPublicKey(user, keyPair)) {
                     status("\r\n[autenticación SSH falló — la clave no está autorizada]\r\n")
                     userClosed = true
@@ -74,7 +79,10 @@ class SshTerminalSession(
                 // de tmux y lo heredan los panes; el ~/.ssh/config la usa (Match exec) para
                 // tunelizar el display/noVNC a los servers que SSH-ees DESDE la app (headed
                 // browser remoto). Una terminal/tmux abierta a mano NO lo tiene.
-                s.execCommand("MARVIN_DISPLAY=localhost:6099 tmux -u new -A -D -s '$tmuxSession'")
+                s.execCommand(
+                    "MARVIN_DISPLAY=localhost:6099 tmux -u new -A -D -s " +
+                        ShellQuote.sq(tmuxSession)
+                )
                 sshSession = s
                 stdin = s.stdin
                 attempt = 0
@@ -97,9 +105,9 @@ class SshTerminalSession(
 
                 val out = s.stdout
                 val buf = ByteArray(8192)
-                while (true) {
+                while (!userClosed) {
                     val n = out.read(buf)
-                    if (n == -1) break
+                    if (n <= 0) break     // -1 = fin; 0 no debería pasar, pero no lo tratamos como dato
                     onTransportInput(buf, 0, n)
                 }
             } catch (_: Exception) {
@@ -160,12 +168,17 @@ class SshTerminalSession(
         cols = columns
         this.rows = rows
         // resizePTY hace I/O de red -> NUNCA en el hilo principal (lo llama el layout).
-        val s = sshSession ?: return
-        ioExecutor.execute {
-            try {
-                s.resizePTY(columns, rows, 0, 0)
-            } catch (_: Exception) {
+        // La sesión se resuelve DENTRO del executor: si se reconectó en el medio, hay que
+        // redimensionar la NUEVA. Y execute() puede tirar RejectedExecution si la pestaña
+        // ya se cerró (shutdownNow) — pasaba al redimensionar justo después de cerrar.
+        try {
+            ioExecutor.execute {
+                try {
+                    sshSession?.resizePTY(cols, rows, 0, 0)
+                } catch (_: Exception) {
+                }
             }
+        } catch (_: RejectedExecutionException) {
         }
     }
 

@@ -36,13 +36,17 @@ class LiveDictation(
     @Volatile var available = false
         private set
 
-    private var conn: Connection? = null
-    private var fwd: LocalPortForwarder? = null
-    private var ws: WebSocket? = null
+    // @Volatile: los cruzan 4 hilos (start, el grabador vía feed, el de finish vía stop,
+    // y el main vía cancel). Sin esto el grabador podía no ver nunca el WebSocket abierto
+    // y encolar audio hasta descartarlo.
+    @Volatile private var conn: Connection? = null
+    @Volatile private var fwd: LocalPortForwarder? = null
+    @Volatile private var ws: WebSocket? = null
+    @Volatile private var closed = false
     private val pending = ArrayList<ByteArray>()   // chunks previos a que el WS abra
     private val stopped = CountDownLatch(1)
-    @Volatile private var committed = ""
-    @Volatile private var buffer = ""
+    /** Texto completo del último snapshot, publicado de una sola vez (ver handleMessage). */
+    @Volatile private var full = ""
 
     /** Abre túnel + WebSocket. BLOQUEA (~1-2s); llamar en un thread. */
     fun start(): Boolean {
@@ -84,8 +88,14 @@ class LiveDictation(
             )
             opened.await(5, TimeUnit.SECONDS)
             if (!ok) { closeQuiet(); return false }
-            ws = sock
+            // Si soltaron el micrófono mientras abríamos, cancel() ya corrió sobre campos
+            // todavía nulos y no cerró nada: sin este chequeo quedaban colgados una
+            // conexión SSH, un ServerSocket y un WebSocket por cada dictado corto.
+            if (closed) { try { sock.close(1000, null) } catch (_: Exception) {}; closeQuiet(); return false }
+            // publicar el socket y drenar la cola bajo el MISMO lock que usa feed(), para
+            // que un chunk nuevo no se adelante a los encolados (audio desordenado).
             synchronized(pending) {
+                ws = sock
                 pending.forEach { sock.send(it.toByteString()) }
                 pending.clear()
             }
@@ -107,9 +117,12 @@ class LiveDictation(
                 val t = lines.getJSONObject(i).optString("text").trim()
                 if (t.isNotEmpty()) { if (sb.isNotEmpty()) sb.append(' '); sb.append(t) }
             }
-            committed = sb.toString()
-            buffer = j.optString("buffer_transcription").trim()
+            val committed = sb.toString()
+            val buffer = j.optString("buffer_transcription").trim()
+            // UNA sola escritura: antes eran dos y stop(), leyendo desde otro hilo, podía
+            // combinar el 'committed' nuevo con el 'buffer' viejo y duplicar palabras.
             val shown = (committed + if (buffer.isNotEmpty()) " $buffer" else "").trim()
+            full = shown
             if (shown.isNotEmpty()) onPartial(shown)
         } catch (_: Exception) {
             // mensaje no-JSON o schema inesperado: se ignora (best-effort)
@@ -118,11 +131,13 @@ class LiveDictation(
 
     /** Chunk de PCM del micrófono. Si el WS aún no abrió, se encola (no se pierde audio). */
     fun feed(chunk: ByteArray) {
-        val w = ws
-        if (w != null) {
-            w.send(chunk.toByteString())
-        } else {
-            synchronized(pending) { if (pending.size < 400) pending.add(chunk) }  // tope ~2MB
+        synchronized(pending) {
+            val w = ws
+            when {
+                w != null -> w.send(chunk.toByteString())
+                pending.size < 400 -> pending.add(chunk)
+                else -> {}   // tope ~2MB sin túnel: se descarta (el batch cubre el dictado)
+            }
         }
     }
 
@@ -135,14 +150,14 @@ class LiveDictation(
         try { w.send(ByteString.EMPTY) } catch (_: Exception) {}
         stopped.await(4, TimeUnit.SECONDS)
         closeQuiet()
-        val text = (committed + if (buffer.isNotEmpty()) " $buffer" else "").trim()
-        return text.ifBlank { null }
+        return full.ifBlank { null }
     }
 
     /** Aborta sin esperar nada (cancelación). */
     fun cancel() = closeQuiet()
 
     private fun closeQuiet() {
+        closed = true
         available = false
         try { ws?.close(1000, null) } catch (_: Exception) {}
         try { fwd?.close() } catch (_: Exception) {}

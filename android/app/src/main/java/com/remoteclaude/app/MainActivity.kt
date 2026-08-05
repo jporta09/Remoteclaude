@@ -59,8 +59,15 @@ class MainActivity : AppCompatActivity() {
     private val tabsKey get() = "tabs_$hostId"
     private val activeKey get() = "active_$hostId"
 
-    /** Sesión del tab activo (la usan el teclado y los modificadores). */
-    private val session get() = tabs[activeIndex].session
+    /**
+     * Sesión del tab activo (la usan el teclado y los modificadores).
+     *
+     * Nullable a propósito: entre que se abre la pantalla y que la primera pestaña queda
+     * creada hay una ventana (el alta hace I/O de red con timeout de 10s) en la que NO hay
+     * sesión. Antes esto era `tabs[activeIndex]` y cualquier tecla en esa ventana tiraba
+     * IndexOutOfBounds. Lo mismo al cerrar la última pestaña.
+     */
+    private val session get() = tabs.getOrNull(activeIndex)?.session
 
     private var fontSizePx = 0
     private var minFontPx = 0
@@ -75,7 +82,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var micButton: Button
     private lateinit var dictBubble: TextView
     private val recorder = WavRecorder()
-    private var transcribing = false
+    @Volatile private var transcribing = false
     private var live: LiveDictation? = null
     private var selectMode = false   // dedo = selección nativa de tmux (en vez de scroll)
     private lateinit var selButton: Button
@@ -88,8 +95,10 @@ class MainActivity : AppCompatActivity() {
 
     private val connectivity by lazy { getSystemService(ConnectivityManager::class.java) }
     private val networkCallback = object : ConnectivityManager.NetworkCallback() {
-        override fun onAvailable(network: Network) { tabs.forEach { it.session.onNetworkAvailable() } }
-        override fun onLost(network: Network) { tabs.forEach { it.session.onNetworkLost() } }
+        // OJO: sin Handler estas llegan en el hilo de ConnectivityManager. Se itera una
+        // copia porque el hilo principal puede estar agregando/quitando pestañas.
+        override fun onAvailable(network: Network) { tabs.toList().forEach { it.session.onNetworkAvailable() } }
+        override fun onLost(network: Network) { tabs.toList().forEach { it.session.onNetworkLost() } }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -149,7 +158,7 @@ class MainActivity : AppCompatActivity() {
         root.addView(buildKeypad(), LinearLayout.LayoutParams(MATCH, WRAP))
         setContentView(root)
 
-        connectivity.registerDefaultNetworkCallback(networkCallback)
+        connectivity.registerDefaultNetworkCallback(networkCallback, android.os.Handler(mainLooper))
         watchKeyboard()
 
         restoreTabsOrNew()
@@ -160,6 +169,8 @@ class MainActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         try { connectivity.unregisterNetworkCallback(networkCallback) } catch (_: Exception) {}
+        recorder.cancel()
+        live?.cancel(); live = null
         tabs.forEach { it.session.finishIfRunning() }
         super.onDestroy()
     }
@@ -357,8 +368,20 @@ class MainActivity : AppCompatActivity() {
     private fun closeTabKeep(index: Int) {
         if (index !in tabs.indices) return
         tabs.removeAt(index).session.finishIfRunning()
-        if (tabs.isEmpty()) { newTab(); return }
-        switchTo(index.coerceAtMost(tabs.size - 1))
+        if (tabs.isEmpty()) {
+            // refrescar ANTES de volver: si no, queda en pantalla el chip de la pestaña
+            // cerrada y las prefs siguen listándola (al reabrir resucitaba).
+            activeIndex = 0
+            refreshTabBar()
+            newTab()
+            return
+        }
+        // mantener la pestaña en la que estabas: si cerraste una anterior, su índice bajó.
+        val newActive = when {
+            index < activeIndex -> activeIndex - 1
+            else -> activeIndex.coerceAtMost(tabs.size - 1)
+        }
+        switchTo(newActive)
     }
 
     /** Long-press en una pestaña: renombrarla (renombra también la sesión tmux). */
@@ -374,12 +397,27 @@ class MainActivity : AppCompatActivity() {
             .setTitle("Renombrar pestaña")
             .setView(input)
             .setPositiveButton("OK") { _, _ ->
-                val newName = input.text.toString().trim().replace("'", "").replace("\"", "").take(40)
+                val newName = TmuxName.sanitize(input.text.toString())
                 val old = tab.session.tmuxSession
-                if (newName.isNotEmpty() && newName != old) {
-                    tab.session.tmuxSession = newName
-                    thread { control.renameSession(old, newName) }
-                    refreshTabBar()
+                if (newName == old) return@setPositiveButton
+                if (tabs.any { it.session.tmuxSession == newName }) {
+                    Toast.makeText(this, "Ya hay una pestaña con ese nombre", Toast.LENGTH_SHORT).show()
+                    return@setPositiveButton
+                }
+                // Renombrar en el host PRIMERO: si falla (host caído, nombre duplicado) y
+                // hubiéramos persistido igual, al reconectar `tmux new -A` abriría una
+                // sesión NUEVA vacía y la sesión real quedaría huérfana e inalcanzable.
+                thread {
+                    val ok = control.renameSession(old, newName)
+                    runOnUiThread {
+                        if (isFinishing || isDestroyed) return@runOnUiThread
+                        if (ok) {
+                            tab.session.tmuxSession = newName
+                            refreshTabBar()
+                        } else {
+                            Toast.makeText(this, "No pude renombrar en el host", Toast.LENGTH_LONG).show()
+                        }
+                    }
                 }
             }
             .setNegativeButton("Cancelar", null)
@@ -624,6 +662,9 @@ class MainActivity : AppCompatActivity() {
     private fun finishDictation() {
         val l = live; live = null
         val wav = recorder.stop() ?: run { l?.cancel(); hideDictBubble(); micIdle(); return }
+        // La sesión destino se fija ACÁ, no al terminar: el round-trip tarda segundos y si
+        // mientras tanto cambiás de pestaña, el texto se escribía en la pestaña equivocada.
+        val target = session ?: run { l?.cancel(); hideDictBubble(); micIdle(); return }
         transcribing = true
         micButton.text = "🎤 …"
         micButton.setTextColor(ACCENT)
@@ -648,12 +689,14 @@ class MainActivity : AppCompatActivity() {
             runOnUiThread {
                 if (!text.isNullOrBlank()) {
                     val bytes = "$text ".toByteArray(Charsets.UTF_8)
-                    session.write(bytes, 0, bytes.size)
+                    target.write(bytes, 0, bytes.size)
                 }
                 hideDictBubble()
                 micIdle()
+                // dentro del post al main: si se soltaba en el worker, el main podía no ver
+                // el cambio y el botón de dictado quedaba inutilizable el resto de la sesión.
+                transcribing = false
             }
-            transcribing = false
         }
     }
 
@@ -787,7 +830,7 @@ class MainActivity : AppCompatActivity() {
 
     /** Shift+Tab = back-tab (CSI Z): la secuencia que Claude lee para cambiar de modo. */
     private fun sendShiftTab() =
-        session.write(byteArrayOf(0x1b, '['.code.toByte(), 'Z'.code.toByte()), 0, 3)
+        session?.write(byteArrayOf(0x1b, '['.code.toByte(), 'Z'.code.toByte()), 0, 3)
 
     private fun toggleCtrl() {
         ctrlActive = !ctrlActive
@@ -823,7 +866,7 @@ class MainActivity : AppCompatActivity() {
             val text = cb.primaryClip?.getItemAt(0)?.coerceToText(this@MainActivity)?.toString()
             if (text.isNullOrEmpty()) return
             val bytes = text.toByteArray(Charsets.UTF_8)
-            this@MainActivity.session.write(bytes, 0, bytes.size)
+            this@MainActivity.session?.write(bytes, 0, bytes.size)
         }
         override fun onBell(session: TerminalSession) {}
         override fun onColorsChanged(session: TerminalSession) {}
@@ -876,13 +919,13 @@ class MainActivity : AppCompatActivity() {
                     else -> -1
                 }
                 if (b >= 0) {
-                    this@MainActivity.session.write(byteArrayOf(b.toByte()), 0, 1)
+                    this@MainActivity.session?.write(byteArrayOf(b.toByte()), 0, 1)
                     return true
                 }
             }
             if (altActive) {
                 resetModifiers()
-                this@MainActivity.session.write(byteArrayOf(27), 0, 1)
+                this@MainActivity.session?.write(byteArrayOf(27), 0, 1)
             }
             return false
         }

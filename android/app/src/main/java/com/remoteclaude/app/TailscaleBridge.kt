@@ -100,7 +100,10 @@ object TailscaleBridge {
             // Siempre cerrar el nodo anterior (aunque aún esté conectando con una key
             // consumida) para liberar el stateDir antes de reiniciar con la nueva.
             try { marvints.Marvints.stop() } catch (_: Exception) {}
-            started = false; enabled = false; initialized = false
+            started = false
+            // Sin esto, tras re-escanear el QR el cache seguía devolviendo los puertos
+            // del nodo VIEJO (ya cerrado): la app decía "conectado" y NADA funcionaba.
+            forwards.clear(); enabled = false; initialized = false
             readyLatch = CountDownLatch(1)
         }
         init(ctx)
