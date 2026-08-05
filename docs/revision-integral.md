@@ -16,18 +16,18 @@ archivos del repo, nunca a la configuración de una máquina puntual.
 | # | Hallazgo | Estado |
 |---|---|---|
 | S1 | **noVNC expuesto a la LAN sin autenticación**: `docker-compose.yml` publica `6080` en `0.0.0.0` y `Xvnc` corre con `-SecurityTypes None -ac`. Verificado en vivo con `ss` y `ps`. Sin firewall, cualquiera en el wifi controla el escritorio virtual. | ✅ **cerrado y verificado**: el 6080 sólo escucha en loopback (desde la LAN da rechazado) y el visor anda por túnel SSH · ⏳ falta password VNC y quitar `-ac` (defensa en profundidad) |
-| S2 | **Host key sin verificar** en las 5 rutas SSH (`{_,_,_,_->true}`): habilita MITM sobre la terminal completa. `sshlib` ya trae `KnownHosts` para resolverlo. | ⏳ P0.2 |
+| S2 | **Host key sin verificar** en las 5 rutas SSH (`{_,_,_,_->true}`): habilita MITM sobre la terminal completa. `sshlib` ya trae `KnownHosts` para resolverlo. | ✅ pinning TOFU en las 5 rutas (`HostKeys`), verificado end-to-end |
 | S3 | **`RemoteForward` incondicional**: todo server al que SSH-eás desde la app recibe un canal a tu display X y al render-daemon, que no tiene auth y abre URLs arbitrarias (incluido `file://`) y escribe archivos sin límite de tamaño. | ✅ allowlist por host (`marvin-display-allowed`, bloque con sentinelas migrable) + daemon endurecido (sólo http/s, nombres y extensiones validados, tope de 25 MB, token opcional). Verificado con `ssh -G` y batería contra el daemon |
 | S4 | **El túnel del dictado bindea `0.0.0.0` en el celular** (`createLocalPortForwarder(int,…)` → `new ServerSocket(port)`, verificado en el jar): durante un dictado, cualquiera en la red del teléfono entra al WhisperLiveKit del host. | ✅ bind a IPv4 loopback explícito en `LiveDictation` y `PortTunnel` |
-| S5 | **Auth key de Tailscale en claro** en `SharedPreferences`, precargada y visible en un `EditText`, con `allowBackup="true"`. | ⏳ P0.5 |
+| S5 | **Auth key de Tailscale en claro** en `SharedPreferences`, precargada y visible en un `EditText`, con `allowBackup="true"`. | ✅ `SecretStore` (AES-GCM en Keystore) + migración, campo enmascarado, `allowBackup=false` |
 
 ### Medios
 
 | # | Hallazgo | Estado |
 |---|---|---|
 | S6 | Interpolación ad-hoc en comandos remotos; `renameSession` saneaba `new` pero no `old`. | ✅ `ShellQuote`/`TmuxName` en los 6 call sites |
-| S7 | OSC 52 sin tope ni confirmación tras decodificar: escritura silenciosa del portapapeles. | ⏳ P0.6 |
-| S8 | Enrolamiento muerto: manda una password a un host no verificado y su mitad server se borró del repo. `ENROLL_PASSWORD` quedó huérfano en `.env` (que usa 8 claves vs 5 documentadas). | ⏳ P0.8 |
+| S7 | OSC 52 sin tope ni confirmación tras decodificar: escritura silenciosa del portapapeles. | ✅ diálogo arriba de 100 KB, verificado end-to-end con el fixture |
+| S8 | Enrolamiento muerto: manda una password a un host no verificado y su mitad server se borró del repo. `ENROLL_PASSWORD` quedó huérfano en `.env` (que usa 8 claves vs 5 documentadas). | ✅ flujo y diálogo borrados; `.env.example` sincronizado |
 | S9 | Units systemd sin hardening; prewarm con rutas fijas en `/tmp`; `curl \| sh` en el setup. | ⏳ P4 |
 | S10 | `ts-link-qr.sh` imprime la auth key en claro y pasa el `client_secret` por argv (visible en `/proc`). | ⏳ P4 |
 
@@ -116,3 +116,33 @@ El plan de mejora por fases (P0 seguridad → P1 correctitud → P2 tests/CI →
 P4 docs) vive en el plan de trabajo de la sesión. Regla: **P3 no arranca hasta que P2 esté
 verde**, porque partir `MainActivity` sin red de contención es justamente donde se rompen
 las cosas que el usuario descubre desde el celular.
+
+---
+
+## Pendientes: qué falta y en qué fase va
+
+Cerrado hasta acá: **P0** (seguridad), **P1** (correctitud) y **P2** (tests + CI).
+Lo que sigue abierto, con su destino:
+
+### P3 — refactor y build
+| Pendiente | Por qué ahí |
+|---|---|
+| **R8 / `isMinifyEnabled`** en release | Es el único cambio que puede romper el AAR de gomobile por reflexión. Va junto al trabajo del AAR y necesita una pasada E2E + humo manual para validarlo; hacerlo suelto es pedir un bug silencioso en release. |
+| **`marvints.aar` multi-ABI y reproducible** | Hoy son 14 MB commiteados, construidos a mano con rutas absolutas y sólo arm64 (por eso el E2E depende de la traducción del emulador). |
+| Partir `MainActivity` (918 líneas) | El objetivo original de P3, ahora con la red de tests debajo. |
+| `marvints.go`: listeners que `Stop()` nunca cierra; `pipe()` sin timeout de dial; `Start` que devuelve OK mientras todavía está levantando | Es código Go del bridge: mismo módulo, mismo build, misma verificación. |
+
+### P4 — infraestructura del host y documentación
+| Pendiente | Nota |
+|---|---|
+| **`display-entrypoint.sh` sin supervisión** | Si Xvnc o websockify mueren, el container queda vivo como zombi y `restart: unless-stopped` nunca actúa: el visor queda mudo sin que nada avise. **Es funcional, no cosmético.** |
+| **`setup-host.sh`**: no reinicia las units que reescribe, no verifica `uv`, y nunca actualiza un `~/.tmux.conf` preexistente | El síntoma típico es "actualicé y no cambió nada", o un host donde el render-daemon jamás autoarranca. **También funcional.** |
+| **`marvin-stt-live` sin idle-exit** | La app lo arranca igual en modo *ondemand*, así que ~2 GB de VRAM quedan tomados hasta cerrar sesión. |
+| `marvin-stt.py`: el watchdog puede matar una transcripción en curso; fuga de temporales; `ensure_cuda_ld` sin sentinela de re-exec | Robustez del daemon. |
+| S9/S10: hardening de units, `mktemp` en el prewarm, `ts-link-qr` sin imprimir la key ni pasar el secreto por argv | Ya estaban asignados a P4. |
+| Docs (`README`, `android/README`, `DESIGN.md`) y `LICENSE` GPL-3.0 | Los tres describen el gateway con `nsenter` que no existe más; falta el LICENSE pese a vendorizar Termux. |
+
+### Cobertura de tests que falta
+Los daemons del host tienen suite (`test/host/`) sólo para `marvin-render`. Los arreglos
+de `setup-host` y `display-entrypoint` de P4 deberían entrar con tests propios — el
+fixture ya existe y puede hospedarlos.
