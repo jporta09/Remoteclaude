@@ -10,7 +10,6 @@ import okhttp3.WebSocket
 import okhttp3.WebSocketListener
 import okio.ByteString
 import okio.ByteString.Companion.toByteString
-import org.json.JSONObject
 import java.net.InetAddress
 import java.net.InetSocketAddress
 import java.net.ServerSocket
@@ -118,25 +117,13 @@ class LiveDictation(
     }
 
     private fun handleMessage(text: String) {
-        try {
-            val j = JSONObject(text)
-            if (j.optString("type") == "ready_to_stop") { stopped.countDown(); return }
-            val lines = j.optJSONArray("lines") ?: return
-            val sb = StringBuilder()
-            for (i in 0 until lines.length()) {
-                val t = lines.getJSONObject(i).optString("text").trim()
-                if (t.isNotEmpty()) { if (sb.isNotEmpty()) sb.append(' '); sb.append(t) }
-            }
-            val committed = sb.toString()
-            val buffer = j.optString("buffer_transcription").trim()
-            // UNA sola escritura: antes eran dos y stop(), leyendo desde otro hilo, podía
-            // combinar el 'committed' nuevo con el 'buffer' viejo y duplicar palabras.
-            val shown = (committed + if (buffer.isNotEmpty()) " $buffer" else "").trim()
-            full = shown
-            if (shown.isNotEmpty()) onPartial(shown)
-        } catch (_: Exception) {
-            // mensaje no-JSON o schema inesperado: se ignora (best-effort)
-        }
+        val parsed = WlkSnapshot.parse(text)
+        if (parsed.readyToStop) { stopped.countDown(); return }
+        val shown = parsed.text ?: return
+        // UNA sola publicación: si fueran dos campos, stop() (otro hilo) podría mezclar
+        // el 'committed' nuevo con el 'buffer' viejo y duplicar palabras.
+        full = shown
+        if (shown.isNotEmpty()) onPartial(shown)
     }
 
     /** Chunk de PCM del micrófono. Si el WS aún no abrió, se encola (no se pierde audio). */

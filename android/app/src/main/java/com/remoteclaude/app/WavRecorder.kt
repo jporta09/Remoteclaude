@@ -59,26 +59,13 @@ class WavRecorder {
         worker?.join(1000)
         val data = synchronized(pcm) { pcm.toByteArray() }
         if (data.size < RATE / 4) return null   // < ~0.12s: ruido de un toque
-        return wavHeader(data.size) + data
+        return WavHeader.of(data.size) + data
     }
 
     fun cancel() {
         record ?: return
         record = null
         worker?.join(1000)
-    }
-
-    private fun wavHeader(dataLen: Int): ByteArray {
-        val byteRate = RATE * 2
-        fun le32(v: Int) = byteArrayOf(
-            (v and 0xff).toByte(), (v shr 8 and 0xff).toByte(),
-            (v shr 16 and 0xff).toByte(), (v shr 24 and 0xff).toByte(),
-        )
-        fun le16(v: Int) = byteArrayOf((v and 0xff).toByte(), (v shr 8 and 0xff).toByte())
-        return "RIFF".toByteArray() + le32(36 + dataLen) + "WAVE".toByteArray() +
-            "fmt ".toByteArray() + le32(16) + le16(1) + le16(1) +
-            le32(RATE) + le32(byteRate) + le16(2) + le16(16) +
-            "data".toByteArray() + le32(dataLen)
     }
 
     private companion object {

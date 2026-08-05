@@ -1,0 +1,55 @@
+name: CI
+
+# Rápido y sin dispositivo: lo que puede correr en cada push sin pelear con un emulador.
+# La suite E2E instrumentada NO va acá (ver test/e2e/README.md): el APK es arm64-only y
+# bajo traducción en un runner virtualizado tarda ~30 min y es intermitente. Corre local
+# con `make e2e`, y más adelante como job nocturno o en un runner self-hosted.
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  android:
+    name: App (unit + lint + build)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/wrapper-validation@v4
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Tests unitarios
+        working-directory: android
+        run: ./gradlew :app:testDebugUnitTest
+      - name: Lint de Android
+        working-directory: android
+        run: ./gradlew :app:lintDebug
+      - name: Build debug
+        working-directory: android
+        run: ./gradlew :app:assembleDebug
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: reportes-android
+          path: |
+            android/app/build/reports/
+            android/app/build/test-results/
+
+  host:
+    name: Scripts y daemons del host
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - name: shellcheck
+        run: |
+          uv run --with shellcheck-py shellcheck --severity=warning \
+            scripts/*.sh scripts/marvin-stt scripts/marvin-display-allowed \
+            scripts/marvin-allow-display \
+            plugins/remotemarvin/scripts/*.sh \
+            plugins/remotemarvin/skills/*/scripts/*.sh
+      - name: Tests de los daemons
+        run: uv run --with pytest pytest test/host/ -q

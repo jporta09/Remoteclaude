@@ -29,8 +29,6 @@ import kotlin.math.min
  */
 class DocViewerActivity : AppCompatActivity() {
 
-    enum class Kind { IMAGE, PDF, TEXT, OTHER }
-
     private val monoFont by lazy { resources.getFont(R.font.mononoki) }
     private lateinit var content: LinearLayout
 
@@ -88,11 +86,11 @@ class DocViewerActivity : AppCompatActivity() {
 
     private fun render(name: String, bytes: ByteArray) {
         content.removeAllViews()
-        when (kindOf(name)) {
-            Kind.IMAGE -> showImage(bytes)
-            Kind.PDF -> showPdf(bytes)
-            Kind.TEXT -> showText(bytes)
-            Kind.OTHER -> message("Tipo no soportado en el visor. Bajalo por la terminal.")
+        when (DocKind.of(name)) {
+            DocKind.IMAGE -> showImage(bytes)
+            DocKind.PDF -> showPdf(bytes)
+            DocKind.TEXT -> showText(bytes)
+            DocKind.OTHER -> message("Tipo no soportado en el visor. Bajalo por la terminal.")
         }
     }
 
@@ -232,13 +230,5 @@ class DocViewerActivity : AppCompatActivity() {
         private const val MATCH = ViewGroup.LayoutParams.MATCH_PARENT
         private const val WRAP = ViewGroup.LayoutParams.WRAP_CONTENT
 
-        fun kindOf(name: String): Kind = when (name.substringAfterLast('.', "").lowercase()) {
-            "png", "jpg", "jpeg", "webp", "gif", "bmp" -> Kind.IMAGE
-            "pdf" -> Kind.PDF
-            "txt", "csv", "tsv", "md", "markdown", "log", "json", "yaml", "yml",
-            "xml", "html", "htm", "ini", "conf", "sh", "py", "kt", "js", "ts",
-            "c", "cpp", "h", "go", "rs", "sql", "toml", "" -> Kind.TEXT
-            else -> Kind.OTHER
-        }
     }
 }

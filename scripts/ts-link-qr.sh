@@ -11,6 +11,8 @@ set -euo pipefail
 # Tomar las credenciales OAuth del .env del repo si no vienen ya del entorno.
 if [ -z "${TS_OAUTH_CLIENT_ID:-}" ] || [ -z "${TS_OAUTH_CLIENT_SECRET:-}" ]; then
     ENV_FILE="$(cd "$(dirname "$0")/.." && pwd)/.env"
+    # la ruta del .env es del usuario, no una constante que shellcheck pueda seguir
+    # shellcheck source=/dev/null
     [ -f "$ENV_FILE" ] && { set -a; . "$ENV_FILE"; set +a; }
 fi
 

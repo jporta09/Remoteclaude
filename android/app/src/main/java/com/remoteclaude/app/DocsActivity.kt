@@ -159,10 +159,10 @@ class DocsActivity : AppCompatActivity() {
         })
     }
 
-    private fun iconFor(name: String) = when (DocViewerActivity.kindOf(name)) {
-        DocViewerActivity.Kind.IMAGE -> "🖼"
-        DocViewerActivity.Kind.PDF -> "📕"
-        DocViewerActivity.Kind.TEXT -> "📄"
+    private fun iconFor(name: String) = when (DocKind.of(name)) {
+        DocKind.IMAGE -> "🖼"
+        DocKind.PDF -> "📕"
+        DocKind.TEXT -> "📄"
         else -> "📎"
     }
 
