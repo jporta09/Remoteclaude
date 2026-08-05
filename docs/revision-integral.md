@@ -102,7 +102,7 @@ archivos del repo, nunca a la configuración de una máquina puntual.
 
 | Hallazgo | Estado |
 |---|---|
-| **Cero tests, CI y linters** en todo el proyecto. | ✅ arrancado (15 tests unitarios) / ⏳ resto |
+| **Cero tests, CI y linters** en todo el proyecto. | ✅ 34 tests JVM + 16 pytest + **6 E2E instrumentados** contra fixture desechable + CI bloqueante + job nocturno de E2E |
 | `marvints.aar`: 14 MB commiteados, build manual con rutas absolutas, sin versión ni checksum, solo arm64. | ⏳ P3 |
 | README raíz, README de android y DESIGN.md describen una arquitectura eliminada (gateway privilegiado, `nsenter`, mosh, sshj, Compose). | ⏳ P4 |
 | Sin `LICENSE` en la raíz pese a vendorizar Termux (GPL-3.0). | ⏳ P4 |

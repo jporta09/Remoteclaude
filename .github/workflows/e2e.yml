@@ -1,0 +1,40 @@
+name: E2E (nocturno)
+
+# La suite instrumentada NO es gate de PR: el APK es arm64-only y bajo traducción en un
+# runner virtualizado tarda y es intermitente. Corre de noche y a mano, informativa.
+# El camino principal sigue siendo local: `make e2e` con el AVD liviano.
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 5 * * 1"   # lunes 05:00 UTC
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    continue-on-error: true    # informativo hasta que se estabilice en runners de GitHub
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: '17' }
+      - name: Fixture
+        run: docker compose -f test/e2e/docker-compose.e2e.yml up -d --build --wait
+      - name: Suite en emulador
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          target: google_apis
+          arch: x86_64
+          profile: pixel_2
+          ram-size: 2048M
+          emulator-options: -no-window -no-audio -no-boot-anim -no-snapshot -gpu swiftshader_indirect
+          script: |
+            adb reverse tcp:2222 tcp:2222
+            adb reverse tcp:2223 tcp:2223
+            cd android && ./gradlew :app:connectedDebugAndroidTest \
+              -Pandroid.testInstrumentationRunnerArguments.package=com.remoteclaude.app \
+              -Pandroid.testInstrumentationRunnerArguments.notClass=com.remoteclaude.app.HarnessSetupTest
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: reportes-e2e
+          path: android/app/build/reports/androidTests/
