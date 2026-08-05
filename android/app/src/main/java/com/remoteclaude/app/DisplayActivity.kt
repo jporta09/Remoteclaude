@@ -76,7 +76,16 @@ class DisplayActivity : AppCompatActivity() {
             settings.mediaPlaybackRequiresUserGesture = false
             settings.cacheMode = android.webkit.WebSettings.LOAD_NO_CACHE   // ui.js fresco (con el parche)
             setBackgroundColor(PETROL)
-            webViewClient = WebViewClient()
+            webViewClient = object : WebViewClient() {
+                override fun onReceivedError(
+                    view: WebView?,
+                    request: android.webkit.WebResourceRequest?,
+                    error: android.webkit.WebResourceError?,
+                ) {
+                    // sólo el documento principal; los sub-recursos no deben disparar fallback
+                    if (request?.isForMainFrame == true) fallbackToDirect()
+                }
+            }
         }
 
         scaleDetector = ScaleGestureDetector(this, ScaleListener())
@@ -109,6 +118,27 @@ class DisplayActivity : AppCompatActivity() {
                 val (h, p) = TailscaleBridge.endpoint(sshHost, 6080)
                 novncHost = h; novncPort = p
             }
+            runOnUiThread {
+                if (isFinishing || isDestroyed) return@runOnUiThread
+                web.loadUrl(url())
+            }
+        }
+    }
+
+    /**
+     * Si la carga por el túnel falla (p.ej. el host todavía publica el 6080 y el forward
+     * no sirve), se reintenta UNA vez por el endpoint directo. Sin esto, un túnel que se
+     * crea pero no funciona deja el visor en una pantalla de error.
+     */
+    private var triedDirect = false
+
+    private fun fallbackToDirect() {
+        if (triedDirect || novncHost != "127.0.0.1") return
+        triedDirect = true
+        thread {
+            tunnel?.close(); tunnel = null
+            val (h, p) = TailscaleBridge.endpoint(sshHost, 6080)
+            novncHost = h; novncPort = p
             runOnUiThread {
                 if (isFinishing || isDestroyed) return@runOnUiThread
                 web.loadUrl(url())

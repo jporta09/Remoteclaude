@@ -22,6 +22,7 @@ android {
         targetSdk = 34
         versionCode = 7
         versionName = "1.3.0"
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         // marvints.aar (Tailscale embebido) trae sólo el .so de arm64-v8a.
         ndk { abiFilters += "arm64-v8a" }
     }
@@ -72,6 +73,11 @@ dependencies {
     // Tests unitarios JVM (sin device). org.json real: el del android.jar es un stub que
     // lanza "Method not mocked", y varios parseos nuestros lo usan.
     testImplementation("junit:junit:4.13.2")
+    androidTestImplementation("androidx.test.ext:junit:1.2.1")
+    androidTestImplementation("androidx.test:runner:1.6.2")
+    androidTestImplementation("androidx.test:rules:1.6.1")
+    androidTestImplementation("androidx.test.espresso:espresso-core:3.6.1")
+    androidTestImplementation("com.google.truth:truth:1.4.2")
     testImplementation("org.json:json:20240303")
     testImplementation("com.google.truth:truth:1.4.2")
 }

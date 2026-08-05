@@ -38,7 +38,10 @@ class PortTunnel(
             // sshlib no expone el puerto que asignaría con 0, así que se reserva uno libre
             // (misma carrera benigna de siempre: si lo toman en el medio, open() devuelve
             // null y el caller cae al camino directo).
-            val loopback = InetAddress.getLoopbackAddress()
+            //
+            // IPv4 EXPLÍCITO: getLoopbackAddress() devuelve ::1 cuando hay IPv6, y entonces
+            // el túnel escucha en [::1] mientras la WebView pide 127.0.0.1 -> refused.
+            val loopback = InetAddress.getByName("127.0.0.1")
             val local = ServerSocket(0, 1, loopback).use { it.localPort }
             val bind = InetSocketAddress(loopback, local)
             c.createLocalPortForwarder(bind, "127.0.0.1", remotePort).also { fwd = it }
