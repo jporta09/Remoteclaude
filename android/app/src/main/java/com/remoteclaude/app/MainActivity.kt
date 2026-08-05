@@ -97,7 +97,13 @@ class MainActivity : AppCompatActivity() {
     private val networkCallback = object : ConnectivityManager.NetworkCallback() {
         // OJO: sin Handler estas llegan en el hilo de ConnectivityManager. Se itera una
         // copia porque el hilo principal puede estar agregando/quitando pestañas.
-        override fun onAvailable(network: Network) { tabs.toList().forEach { it.session.onNetworkAvailable() } }
+        override fun onAvailable(network: Network) {
+            // Al cambiar de red hay que re-alimentar la lista de interfaces al nodo
+            // embebido: en Android, Go no puede enumerarlas y sin esto el Tailscale
+            // embebido no se recupera de un wifi->datos (el roaming que promete el diseño).
+            TailscaleBridge.refreshInterfaces()
+            tabs.toList().forEach { it.session.onNetworkAvailable() }
+        }
         override fun onLost(network: Network) { tabs.toList().forEach { it.session.onNetworkLost() } }
     }
 
@@ -300,6 +306,7 @@ class MainActivity : AppCompatActivity() {
      * Ahora se muestra la clave pública y qué hacer con ella.
      */
     private fun onSessionAuthFailed() {
+        if (isFinishing || isDestroyed) return
         if (authDialogShown) return   // varias pestañas fallan a la vez: un solo diálogo
         authDialogShown = true
         val pub = KeyStoreSsh.openSshPublicKey("remoteclaude-app")

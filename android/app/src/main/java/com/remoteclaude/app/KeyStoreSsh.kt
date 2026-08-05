@@ -22,10 +22,19 @@ object KeyStoreSsh {
     private const val TYPE = "ecdsa-sha2-nistp256"
 
     /** Devuelve el par (creándolo en el Keystore la primera vez). */
+    @Volatile private var cached: java.security.KeyPair? = null
+
+    /**
+     * Sincronizado y cacheado: sin lock, dos hilos podían generar a la vez y el segundo
+     * PISABA el alias, dejando la app des-autorizada en un host donde la clave anterior
+     * ya estaba en authorized_keys. Además evita I/O del Keystore en el hilo principal.
+     */
+    @Synchronized
     fun getOrCreateKeyPair(): KeyPair {
+        cached?.let { return it }
         val ks = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
         (ks.getEntry(ALIAS, null) as? KeyStore.PrivateKeyEntry)?.let {
-            return KeyPair(it.certificate.publicKey, it.privateKey)
+            return KeyPair(it.certificate.publicKey, it.privateKey).also { kp -> cached = kp }
         }
         val kpg = KeyPairGenerator.getInstance(KeyProperties.KEY_ALGORITHM_EC, "AndroidKeyStore")
         kpg.initialize(
@@ -34,7 +43,7 @@ object KeyStoreSsh {
                 .setDigests(KeyProperties.DIGEST_SHA256)
                 .build()
         )
-        return kpg.generateKeyPair()
+        return kpg.generateKeyPair().also { cached = it }
     }
 
     /** Línea para `authorized_keys`: `ecdsa-sha2-nistp256 <base64> <comment>`. */

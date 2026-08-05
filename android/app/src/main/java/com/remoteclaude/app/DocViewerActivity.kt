@@ -71,15 +71,33 @@ class DocViewerActivity : AppCompatActivity() {
         root.addView(content, LinearLayout.LayoutParams(MATCH, 0, 1f))
         setContentView(root)
 
+        // El tamaño ya venía por Intent pero no se usaba: bajar un doc grande cuesta
+        // ~8x su tamaño en memoria (base64 -> String UTF-16 -> replace -> decode) y el
+        // OutOfMemoryError NO lo atrapaba el catch(Exception) -> se moría el proceso.
+        val size = intent.getLongExtra("size", 0L)
+        if (size > MAX_DOC_BYTES) {
+            message("El documento pesa ${size / 1024 / 1024} MB; el visor admite hasta " +
+                "${MAX_DOC_BYTES / 1024 / 1024} MB. Bajalo por la terminal.")
+            return
+        }
+
         message("Cargando $name…")
         val control = RemoteControl(this, host, port, user, KeyStoreSsh.getOrCreateKeyPair())
         thread {
-            val b64 = try { control.readDocBase64(name) } catch (_: Exception) { "" }
-            val bytes = if (b64.isBlank()) null else
-                try { Base64.decode(b64, Base64.DEFAULT) } catch (_: Exception) { null }
+            val bytes = try {
+                val b64 = control.readDocBase64(name)
+                if (b64.isBlank()) null else Base64.decode(b64, Base64.DEFAULT)
+            } catch (_: Throwable) {
+                null   // Throwable, no Exception: OutOfMemoryError es un Error
+            }
             runOnUiThread {
+                if (isFinishing || isDestroyed) return@runOnUiThread
                 if (bytes == null || bytes.isEmpty()) { message("No pude bajar el documento."); return@runOnUiThread }
-                render(name, bytes)
+                try {
+                    render(name, bytes)
+                } catch (_: Throwable) {
+                    message("No pude mostrar el documento (¿demasiado grande?).")
+                }
             }
         }
     }
@@ -95,7 +113,18 @@ class DocViewerActivity : AppCompatActivity() {
     }
 
     private fun showImage(bytes: ByteArray) {
-        val bmp = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+        // Primero se leen sólo las dimensiones para elegir un submuestreo: una foto de
+        // 12 MP en ARGB_8888 son ~48 MB y tumbaba la app.
+        val probe = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeByteArray(bytes, 0, bytes.size, probe)
+        val maxW = resources.displayMetrics.widthPixels.coerceAtLeast(1)
+        var sample = 1
+        while (probe.outWidth / sample > maxW * 2) sample *= 2
+        val opts = BitmapFactory.Options().apply {
+            inSampleSize = sample
+            inPreferredConfig = Bitmap.Config.RGB_565
+        }
+        val bmp = BitmapFactory.decodeByteArray(bytes, 0, bytes.size, opts)
             ?: return message("No pude decodificar la imagen.")
         content.addView(
             ZoomableImageView(this).apply { setImageBitmap(bmp) },
@@ -104,7 +133,11 @@ class DocViewerActivity : AppCompatActivity() {
     }
 
     private fun showPdf(bytes: ByteArray) {
-        val file = File(cacheDir, "view.pdf").apply { writeBytes(bytes) }
+        // Archivo propio por apertura: con un nombre fijo, abrir un segundo documento
+        // pisaba el que todavía estaba renderizando el anterior.
+        val file = File.createTempFile("view", ".pdf", cacheDir).apply {
+            writeBytes(bytes); deleteOnExit()
+        }
         val scroll = ScrollView(this)
         val pages = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -119,7 +152,9 @@ class DocViewerActivity : AppCompatActivity() {
                     for (i in 0 until renderer.pageCount) {
                         renderer.openPage(i).use { page ->
                             val h = (targetW.toFloat() / page.width * page.height).toInt()
-                            val bmp = Bitmap.createBitmap(targetW, h, Bitmap.Config.ARGB_8888)
+                            // RGB_565 = la mitad de memoria por página; sin alfa no se
+                            // pierde nada visible en un PDF.
+                            val bmp = Bitmap.createBitmap(targetW, h, Bitmap.Config.RGB_565)
                             bmp.eraseColor(android.graphics.Color.WHITE)
                             page.render(bmp, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
                             pages.addView(ImageView(this).apply {
@@ -227,6 +262,8 @@ class DocViewerActivity : AppCompatActivity() {
     }
 
     companion object {
+        /** Tope de descarga: arriba de esto el pico de memoria tumba el proceso. */
+        private const val MAX_DOC_BYTES = 8L * 1024 * 1024
         private const val MATCH = ViewGroup.LayoutParams.MATCH_PARENT
         private const val WRAP = ViewGroup.LayoutParams.WRAP_CONTENT
 

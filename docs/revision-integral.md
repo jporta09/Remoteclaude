@@ -43,8 +43,8 @@ archivos del repo, nunca a la configuración de una máquina puntual.
 | `WavRecorder.stop()` liberaba el `AudioRecord` aunque el join se agotara; el worker seguía leyéndolo → excepción en hilo sin catch. | ✅ |
 | `onSizeChanged` sobre un executor ya apagado → `RejectedExecutionException` al redimensionar después de cerrar. | ✅ |
 | Timer del splash sin cancelar: rotar apilaba dos `HostsActivity`. | ✅ |
-| Diálogos mostrados desde hilos de fondo sobre una Activity muerta → `BadTokenException`. | ⏳ |
-| Visor de documentos: descarga con pico de ~8× el tamaño del archivo, PDF renderizado entero en `ARGB_8888` en el hilo principal, `catch (Exception)` que no atrapa `OutOfMemoryError` → el proceso muere con archivos grandes. El `size` ya viaja por Intent pero nunca se lee. | ⏳ |
+| Diálogos mostrados desde hilos de fondo sobre una Activity muerta → `BadTokenException`. | ✅ guardas `isFinishing/isDestroyed` en los diálogos que se muestran tras I/O |
+| Visor de documentos: descarga con pico de ~8× el tamaño del archivo, PDF renderizado entero en `ARGB_8888`, `catch (Exception)` que no atrapa `OutOfMemoryError`. | ✅ tope de 8 MB (usando el `size` que ya viajaba), `catch (Throwable)`, submuestreo de imágenes y `RGB_565` en PDF, archivo temporal propio por apertura |
 | `DisplayActivity`: `coerceIn(min > max)` en pantallas de más de 1920 dp → crash al tocar Zoom. | ✅ |
 
 ### Fugas de recursos
@@ -66,9 +66,9 @@ archivos del repo, nunca a la configuración de una máquina puntual.
 | `renameSession` persistía aunque el host no aplicara el cambio → sesión real huérfana. | ✅ |
 | `transcribe()` ignoraba el exit status: el error del cliente se tipeaba como transcripción. | ✅ |
 | `exec()` devolvía `""` ante cualquier fallo, indistinguible de vacío. | ✅ |
-| Doble toque en un host abre dos `MainActivity` que se pelean la misma sesión tmux (`-D` mutuo). | ⏳ |
+| Doble toque en un host abre dos `MainActivity` que se pelean la misma sesión tmux (`-D` mutuo). | ✅ `launchMode=singleTop` |
 | Tras autorizar la clave, solo la pestaña activa se recupera; las demás quedan muertas. | ⏳ |
-| Las interfaces de red se pasan a tsnet una sola vez: al cambiar de wifi a datos el nodo embebido no se recupera (rompe el roaming que el diseño promete). | ⏳ |
+| Las interfaces de red se pasan a tsnet una sola vez: al cambiar de wifi a datos el nodo embebido no se recupera. | ✅ `refreshInterfaces()` desde el callback de red |
 
 ### Concurrencia
 
@@ -79,7 +79,7 @@ archivos del repo, nunca a la configuración de una máquina puntual.
 | `committed`+`buffer` publicados por separado → palabras duplicadas al soltar. | ✅ |
 | `feed()` podía adelantarse al drenaje de la cola → audio desordenado. | ✅ |
 | Callback de red iterando la lista viva de pestañas desde otro hilo. | ✅ |
-| `KeyStoreSsh.getOrCreateKeyPair()` sin sincronizar: dos hilos pueden generar y pisar la clave. | ⏳ |
+| `KeyStoreSsh.getOrCreateKeyPair()` sin sincronizar: dos hilos pueden generar y pisar la clave. | ✅ `@Synchronized` + cache (además saca I/O del Keystore del hilo principal) |
 
 ---
 

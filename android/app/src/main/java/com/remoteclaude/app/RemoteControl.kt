@@ -166,6 +166,10 @@ class RemoteControl(
 
     /** Sesiones vivas con el ÚLTIMO COMANDO tipeado (texto tras el último prompt), o vacío. */
     fun sessionsWithLastLine(): List<Pair<String, String>> {
+        // Sólo nombres que tmux reconoce como sesión: `ssh host cmd` sourcea ~/.bashrc y
+        // cualquier eco de bienvenida aparecía como "sesión" fantasma en el menú (y al
+        // elegirla se creaba una sesión basura con ese texto como nombre).
+        val reales = listSessions().toSet()
         // Por cada sesión: captura el pane y, con sed, toma el texto que sigue al último
         // prompt (`…$ ` / `…# `) — o sea el último comando ejecutado. Vacío si no corrió nada.
         val script = "tmux ls -F '#{session_name}' 2>/dev/null | while IFS= read -r s; do " +
@@ -179,6 +183,6 @@ class RemoteControl(
                     p.size == 1 && p[0].isNotBlank() -> p[0].trim() to ""
                     else -> null
                 }
-            }.toList()
+            }.filter { it.first in reales }.toList()
     }
 }

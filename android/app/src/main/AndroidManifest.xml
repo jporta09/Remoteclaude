@@ -42,6 +42,7 @@
         <activity
             android:name=".MainActivity"
             android:exported="false"
+            android:launchMode="singleTop"
             android:configChanges="orientation|screenSize|keyboardHidden" />
 
         <!-- Visor noVNC del navegador headed (M6). Maneja rotación sin recrearse. -->

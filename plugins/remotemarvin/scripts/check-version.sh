@@ -22,6 +22,9 @@ REPO="$(git -C "$HERE" rev-parse --show-toplevel 2>/dev/null || true)"
 PJ="plugins/remotemarvin/.claude-plugin/plugin.json"
 ver() { grep -o '"version"[^,]*' | grep -o '[0-9][0-9.]*' | head -1; }
 local_v="$(ver < "$REPO/$PJ" 2>/dev/null || true)"
+# Sin versión local no hay nada que comparar (p.ej. el plugin vive dentro de otro repo):
+# antes esto avisaba "instalado v, disponible vX" en CADA sesión, para siempre.
+[ -n "$local_v" ] || { say_ok "remotemarvin: ok (sin plugin.json acá)"; exit 0; }
 BR="$(git -C "$REPO" rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
 [ -n "$BR" ] && [ "$BR" != "HEAD" ] || { say_ok "remotemarvin: ok (HEAD detached, no comparo)"; exit 0; }
 
@@ -35,7 +38,10 @@ GIT_TERMINAL_PROMPT=0 GIT_SSH_COMMAND="ssh -o BatchMode=yes -o ConnectTimeout=5"
 remote_v="$(git -C "$REPO" show "origin/$BR:$PJ" 2>/dev/null | ver || true)"
 [ -n "$remote_v" ] || { say_ok "remotemarvin: ok"; exit 0; }
 
-if [ "$local_v" = "$remote_v" ]; then
+# sort -V: comparar como strings daba "1.10 < 1.9" y avisaba al revés. Sólo se avisa si
+# el remoto es ESTRICTAMENTE mayor (tener local adelantado es normal en desarrollo).
+mayor="$(printf '%s\n%s\n' "$local_v" "$remote_v" | sort -V | tail -1)"
+if [ "$local_v" = "$remote_v" ] || [ "$mayor" = "$local_v" ]; then
     say_ok "remotemarvin: al día (v$local_v)"
 else
     echo "⚠️  El plugin remotemarvin está DESACTUALIZADO: instalado v$local_v, disponible v$remote_v en origin/$BR."

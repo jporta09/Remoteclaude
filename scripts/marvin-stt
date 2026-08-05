@@ -59,4 +59,11 @@ if ! up; then
 fi
 
 # El primer pedido puede tardar: descarga/carga del modelo (prewarm lo evita).
-exec curl -fsS --max-time 180 --data-binary @- "$URL/stt"
+# --fail-with-body (no -f): con -f, curl DESCARTA el cuerpo del error, así que el
+# "error: ..." del daemon se perdía y llegaba sólo el texto de curl por stderr — que la
+# app tomaba como si fuera la transcripción y lo tipeaba en la terminal.
+curl -sS --fail-with-body --max-time 180 --data-binary @- "$URL/stt" || {
+    rc=$?
+    echo "error: falló el dictado (curl $rc)" >&2
+    exit 5
+}

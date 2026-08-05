@@ -94,6 +94,16 @@ object TailscaleBridge {
         return sb.toString()
     }
 
+    /**
+     * Re-informa las interfaces de red al nodo embebido. Hay que llamarla al cambiar de
+     * red: el getter registrado devuelve una lista fija y, sin refrescarla, tsnet no ve
+     * la interfaz nueva y la conexión no se recupera.
+     */
+    fun refreshInterfaces() {
+        if (!enabled) return
+        runCatching { marvints.Marvints.setInterfaces(enumerateInterfaces()) }
+    }
+
     /** Reconfigura la auth key (la guarda) y reinicia el nodo. */
     fun configure(ctx: Context, authKey: String) {
         SecretStore.put(ctx, "ts_authkey", authKey.trim())

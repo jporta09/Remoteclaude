@@ -20,8 +20,8 @@ android {
         applicationId = "com.remoteclaude.app"
         minSdk = 26
         targetSdk = 34
-        versionCode = 9
-        versionName = "1.5.0"
+        versionCode = 10
+        versionName = "1.6.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         // marvints.aar (Tailscale embebido) trae sólo el .so de arm64-v8a.
         ndk { abiFilters += "arm64-v8a" }
@@ -62,6 +62,12 @@ android {
     }
     kotlinOptions {
         jvmTarget = "17"
+    }
+
+    lint {
+        // Que un warning nuevo no pase desapercibido: el CI lo corre en cada push.
+        abortOnError = true
+        warningsAsErrors = false
     }
 
     testOptions {

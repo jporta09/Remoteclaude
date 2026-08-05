@@ -17,12 +17,16 @@ fi
 # Display local: LOCAL_DISPLAY -> sesión activa (loginctl) -> who -> :0.
 disp="${LOCAL_DISPLAY:-}"
 if [ -z "$disp" ]; then
-    disp=$(who 2>/dev/null | grep -oE '\(:[0-9]+(\.[0-9]+)?\)' | tr -d '()' | head -1)
+    # || true: sin sesión X local el grep no matchea, el pipeline falla y errexit mataba el
+# script en silencio — el fallback a :0 de abajo era código muerto.
+disp=$(who 2>/dev/null | grep -oE '\(:[0-9]+(\.[0-9]+)?\)' | tr -d '()' | head -1 || true)
 fi
 [ -z "$disp" ] && disp=":0"
 
 # Verificar que el socket X exista.
-sock="/tmp/.X11-unix/X${disp#:}"; sock="${sock%%.*}"
+# normalizar ANTES: "${sock%%.*}" cortaba en el punto de ".X11-unix" y dejaba "/tmp/",
+# así que el chequeo de existencia siempre pasaba.
+disp="${disp%%.*}"; sock="/tmp/.X11-unix/X${disp#:}"
 if [ ! -e "$sock" ]; then
     echo "!! No encuentro una sesión gráfica local en $disp (socket $sock)." >&2
     echo "   ¿Estás local en la PC con sesión iniciada? Si no, usá run-visible.sh (noVNC)." >&2

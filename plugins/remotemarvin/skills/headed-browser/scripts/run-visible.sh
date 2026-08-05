@@ -46,7 +46,9 @@ fi
 # ¿Chromium tiene sus librerías de sistema? El modo HEADED las necesita; se instalan con
 # 'sudo playwright install-deps chromium' (una vez, root). Sin ellas Chromium no abre, así
 # que avisamos claro y salimos con código 3 (la skill cae al fallback "render en haviland").
-chrome="$(ls "$HOME"/.cache/ms-playwright/chromium*/chrome-linux*/chrome 2>/dev/null | head -1)"
+# || true: con pipefail, un glob sin match hace fallar el ls y errexit aborta el script
+# SIN mensaje y con código 2 (que además choca con el de "uso incorrecto").
+chrome="$(ls "$HOME"/.cache/ms-playwright/chromium*/chrome-linux*/chrome 2>/dev/null | head -1 || true)"
 if [ -n "$chrome" ]; then
     missing="$(ldd "$chrome" 2>/dev/null | awk '/not found/{print $1}' | sort -u | tr '\n' ' ')"
     if [ -n "$missing" ]; then
