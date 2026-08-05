@@ -9,6 +9,11 @@
 #   marvin-show https://example.com
 #   marvin-show ./informe.html
 set -euo pipefail
+
+# Token opcional del render-daemon (lo genera setup-host). Si no existe, no se manda.
+TOKENF="$HOME/.config/marvin/render-token"
+AUTH=()
+[ -f "$TOKENF" ] && AUTH=(-H "X-Marvin-Token: $(cat "$TOKENF")")
 PORT="${MARVIN_RENDER_PORT:-6090}"
 BASE="http://127.0.0.1:${PORT}"
 
@@ -24,10 +29,9 @@ if ! curl -fsS -o /dev/null "${BASE}/" 2>/dev/null; then
 fi
 
 if printf '%s' "$arg" | grep -qiE '^https?://'; then
-    enc=$(printf '%s' "$arg" | sed 's/ /%20/g')
-    curl -fsS "${BASE}/open?url=${enc}"
+        curl -fsS "${AUTH[@]}" -G --data-urlencode "url=$arg" "${BASE}/open"
 elif [ -f "$arg" ]; then
-    curl -fsS -T "$arg" "${BASE}/file/$(basename -- "$arg")"
+    curl -fsS "${AUTH[@]}" -T "$arg" "${BASE}/file/$(basename -- "$arg")"
 else
     echo "✗ no es URL ni archivo: $arg" >&2; exit 2
 fi

@@ -9,6 +9,8 @@
 # Uso:  bash scripts/setup-host.sh
 set -euo pipefail
 
+SCRIPTS="$(cd "$(dirname "$0")" && pwd)"
+
 echo "==> Docker"
 if ! command -v docker >/dev/null 2>&1; then
     curl -fsSL https://get.docker.com | sh
@@ -46,21 +48,49 @@ echo "==> ssh/config: el display sigue a tu SSH (solo desde sesiones de la app)"
 # headed-browser de allá dibuje en ESTE noVNC. Cualquier otro ssh no tiende nada.
 SSHCFG="$HOME/.ssh/config"
 install -d -m700 "$HOME/.ssh"
-if ! grep -q 'RemoteForward 6099 127.0.0.1:6099' "$SSHCFG" 2>/dev/null; then
-    cat >> "$SSHCFG" <<'CFG'
+install -m755 "$SCRIPTS/marvin-display-allowed" "$HOME/.local/bin/marvin-display-allowed" 2>/dev/null || {
+    install -d "$HOME/.local/bin"
+    install -m755 "$SCRIPTS/marvin-display-allowed" "$HOME/.local/bin/marvin-display-allowed"; }
+install -m755 "$SCRIPTS/marvin-allow-display" "$HOME/.local/bin/marvin-allow-display"
 
-# RemoteMarvin: a los servers que SSH-ees DESDE la app, llevar el display (6099, para
-# headed-browser remoto) y el render-daemon (6090, para mostrar HTML si al server le
-# faltan las libs de Chromium).
-Match exec "env | grep -q '^MARVIN_DISPLAY='"
+# Bloque delimitado por sentinelas: así se puede ACTUALIZAR en cada corrida. Antes se
+# hacía append con un grep como guarda, o sea que una versión vieja quedaba para siempre.
+BEGIN="# >>> RemoteMarvin >>>"
+END="# <<< RemoteMarvin <<<"
+touch "$SSHCFG"; chmod 600 "$SSHCFG"
+if grep -qF "$BEGIN" "$SSHCFG"; then
+    sed -i "/$BEGIN/,/$END/d" "$SSHCFG"
+fi
+# Migración del bloque viejo (sin sentinelas) para no dejarlo duplicado y activo.
+if grep -q "Match exec \"env | grep -q '\^MARVIN_DISPLAY='\"" "$SSHCFG" 2>/dev/null; then
+    sed -i "/Match exec \"env | grep -q '\^MARVIN_DISPLAY='\"/,+3d" "$SSHCFG"
+    echo "    (migrado el bloque viejo, que reenviaba a CUALQUIER server)"
+fi
+cat >> "$SSHCFG" <<CFG
+$BEGIN
+# A los servers HABILITADOS a los que SSH-ees DESDE la app, llevarles el display (6099,
+# headed-browser remoto) y el render-daemon (6090, mostrar HTML/documentos).
+# Habilitar uno:  marvin-allow-display <host>
+Match exec "\$HOME/.local/bin/marvin-display-allowed %h"
     RemoteForward 6099 127.0.0.1:6099
     RemoteForward 6090 127.0.0.1:6090
     ExitOnForwardFailure no
+$END
 CFG
-    chmod 600 "$SSHCFG"
-    echo "    agregado a ~/.ssh/config"
+echo "    ~/.ssh/config actualizado (ahora sólo a servers habilitados)"
+
+echo "==> token del render-daemon (opcional, NO se genera solo)"
+install -d -m700 "$HOME/.config/marvin"
+# A propósito no se crea acá: el control primario es el allowlist de arriba (un server no
+# habilitado ni siquiera tiene el túnel). Si además querés token, tené en cuenta que los
+# clientes que corren EN EL SERVER REMOTO lo buscan en el home de ESE server, así que hay
+# que copiárselo o se van a comer un 403:
+#     head -c 32 /dev/urandom | base64 | tr -d "\n" > ~/.config/marvin/render-token
+#     scp ~/.config/marvin/render-token <server>:~/.config/marvin/render-token
+if [ -s "$HOME/.config/marvin/render-token" ]; then
+    echo "    activo (recordá copiarlo a los servers habilitados)"
 else
-    echo "    ya estaba en ~/.ssh/config"
+    echo "    sin token (el allowlist ya limita quién puede llegar)"
 fi
 
 echo "==> render-daemon (mostrar HTML/URL + recibir docs de servers a los que SSH-eás)"

@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+# Habilita (o quita) el reenvío del display/render-daemon hacia un server.
+#
+#   marvin-allow-display <host>        # habilitar
+#   marvin-allow-display -r <host>     # quitar
+#   marvin-allow-display               # listar
+set -euo pipefail
+
+list="${MARVIN_DISPLAY_HOSTS:-$HOME/.config/marvin/display-hosts}"
+install -d -m700 "$(dirname "$list")"
+[ -f "$list" ] || { : > "$list"; chmod 600 "$list"; }
+
+case "${1:-}" in
+    "")
+        echo "servers habilitados para el display remoto:"
+        grep -v '^\s*\(#\|$\)' "$list" 2>/dev/null | sed 's/^/  /' || echo "  (ninguno)"
+        ;;
+    -r)
+        host="${2:?uso: marvin-allow-display -r <host>}"
+        grep -vxF "$host" "$list" > "$list.tmp" && mv "$list.tmp" "$list"
+        echo "quitado: $host"
+        ;;
+    *)
+        host="$1"
+        grep -qxF "$host" "$list" 2>/dev/null || echo "$host" >> "$list"
+        echo "habilitado: $host (vale para los SSH que hagas DESDE la app)"
+        ;;
+esac

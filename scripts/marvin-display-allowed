@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+# ¿Hay que tenderle el display (y el render-daemon) a ESTE server?
+#
+# Lo usa el bloque `Match exec` de ~/.ssh/config. Devuelve 0 sólo si:
+#   1. la sesión viene de la app (MARVIN_DISPLAY seteada por SshTerminalSession), y
+#   2. el host destino está explícitamente habilitado.
+#
+# Antes alcanzaba con (1): CUALQUIER server al que SSH-earas desde la app recibía un
+# canal a tu display X y al render-daemon (que abre URLs y escribe archivos en tu
+# máquina). Un server comprometido, o simplemente ajeno, no debería tener eso.
+#
+#   marvin-display-allowed <host>
+set -euo pipefail
+
+[ -n "${MARVIN_DISPLAY:-}" ] || exit 1
+host="${1:-}"
+[ -n "$host" ] || exit 1
+
+list="${MARVIN_DISPLAY_HOSTS:-$HOME/.config/marvin/display-hosts}"
+[ -f "$list" ] || exit 1
+
+# comparación exacta por línea, ignorando comentarios y espacios
+grep -qxF "$host" <(sed -e 's/#.*//' -e 's/[[:space:]]//g' "$list" | grep -v '^$') 2>/dev/null

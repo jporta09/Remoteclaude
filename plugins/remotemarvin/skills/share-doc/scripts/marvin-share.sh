@@ -14,6 +14,9 @@
 set -euo pipefail
 
 DEST="${REMOTEMARVIN_DOCS:-$HOME/RemoteMarvinDocs}"
+TOKENF="$HOME/.config/marvin/render-token"
+AUTH=()
+[ -f "$TOKENF" ] && AUTH=(-H "X-Marvin-Token: $(cat "$TOKENF")")
 SINK="http://127.0.0.1:${MARVIN_RENDER_PORT:-6090}"
 
 [ "$#" -ge 1 ] || { echo "uso: scripts/marvin-share.sh <archivo> [archivo...]" >&2; exit 2; }
@@ -32,14 +35,14 @@ for f in "$@"; do
     if [ ! -f "$f" ]; then echo "✗ no existe: $f" >&2; continue; fi
     name="$(basename -- "$f")"
     if [ "$use_sink" = 1 ]; then
-        if curl -fsS --max-time 60 -T "$f" -H "X-Filename: $name" "$SINK/doc" >/dev/null 2>&1; then
+        if curl -fsS "${AUTH[@]}" --max-time 60 -T "$f" -H "X-Filename: $name" "$SINK/doc" >/dev/null 2>&1; then
             echo "✓ $name (→ host)"
             n=$((n + 1))
         else
             echo "✗ falló subir al host: $name" >&2
         fi
     else
-        cp -f -- "$f" "$DEST/"
+        cp -f -- "$f" "$DEST/" || { echo "✗ no pude copiar: $name" >&2; continue; }
         echo "✓ $name"
         n=$((n + 1))
     fi
