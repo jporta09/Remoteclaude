@@ -15,10 +15,10 @@ archivos del repo, nunca a la configuración de una máquina puntual.
 
 | # | Hallazgo | Estado |
 |---|---|---|
-| S1 | **noVNC expuesto a la LAN sin autenticación**: `docker-compose.yml` publica `6080` en `0.0.0.0` y `Xvnc` corre con `-SecurityTypes None -ac`. Verificado en vivo con `ss` y `ps`. Sin firewall, cualquiera en el wifi controla el escritorio virtual. | ⏳ P0.1 |
+| S1 | **noVNC expuesto a la LAN sin autenticación**: `docker-compose.yml` publica `6080` en `0.0.0.0` y `Xvnc` corre con `-SecurityTypes None -ac`. Verificado en vivo con `ss` y `ps`. Sin firewall, cualquiera en el wifi controla el escritorio virtual. | ✅ app v1.3.0 tuneliza + compose a loopback (**falta recrear el container**) · ⏳ password VNC y quitar `-ac` |
 | S2 | **Host key sin verificar** en las 5 rutas SSH (`{_,_,_,_->true}`): habilita MITM sobre la terminal completa. `sshlib` ya trae `KnownHosts` para resolverlo. | ⏳ P0.2 |
 | S3 | **`RemoteForward` incondicional**: todo server al que SSH-eás desde la app recibe un canal a tu display X y al render-daemon, que no tiene auth y abre URLs arbitrarias (incluido `file://`) y escribe archivos sin límite de tamaño. | ⏳ P0.3/P0.4 |
-| S4 | **El túnel del dictado bindea `0.0.0.0` en el celular** (`createLocalPortForwarder(int,…)` → `new ServerSocket(port)`, verificado en el jar): durante un dictado, cualquiera en la red del teléfono entra al WhisperLiveKit del host. | ⏳ P0 |
+| S4 | **El túnel del dictado bindea `0.0.0.0` en el celular** (`createLocalPortForwarder(int,…)` → `new ServerSocket(port)`, verificado en el jar): durante un dictado, cualquiera en la red del teléfono entra al WhisperLiveKit del host. | ⏳ (`PortTunnel` ya bindea a loopback; falta migrar `LiveDictation` a usarlo) |
 | S5 | **Auth key de Tailscale en claro** en `SharedPreferences`, precargada y visible en un `EditText`, con `allowBackup="true"`. | ⏳ P0.5 |
 
 ### Medios
@@ -45,7 +45,7 @@ archivos del repo, nunca a la configuración de una máquina puntual.
 | Timer del splash sin cancelar: rotar apilaba dos `HostsActivity`. | ✅ |
 | Diálogos mostrados desde hilos de fondo sobre una Activity muerta → `BadTokenException`. | ⏳ |
 | Visor de documentos: descarga con pico de ~8× el tamaño del archivo, PDF renderizado entero en `ARGB_8888` en el hilo principal, `catch (Exception)` que no atrapa `OutOfMemoryError` → el proceso muere con archivos grandes. El `size` ya viaja por Intent pero nunca se lee. | ⏳ |
-| `DisplayActivity`: `coerceIn(min > max)` en pantallas de más de 1920 dp → crash al tocar Zoom. | ⏳ |
+| `DisplayActivity`: `coerceIn(min > max)` en pantallas de más de 1920 dp → crash al tocar Zoom. | ✅ |
 
 ### Fugas de recursos
 

@@ -42,7 +42,11 @@ services:
     environment:
       - SCREEN_GEOMETRY=${SCREEN_GEOMETRY:-1360x768x24}
     ports:
-      - "6080:6080"             # noVNC -> visible por la tailnet (lo ves en el celu)
+      # noVNC SOLO en loopback: la app llega tunelizando este puerto por su conexión SSH
+      # (PortTunnel.kt). Antes era "6080:6080" = 0.0.0.0, o sea que cualquiera en la LAN
+      # tenía el escritorio virtual sin credenciales (Xvnc corre sin password).
+      # OJO: requiere la app >= v1.3.0. Una anterior se conecta directo y deja de ver el visor.
+      - "127.0.0.1:6080:6080"
       - "127.0.0.1:6099:6099"   # Xvfb TCP -> solo el host local dibuja acá (X es inseguro)
     restart: unless-stopped
 
