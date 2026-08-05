@@ -59,7 +59,7 @@ class DisplayActivity : AppCompatActivity() {
 
     private val density get() = resources.displayMetrics.density
     private val monoFont by lazy { resources.getFont(R.font.mononoki) }
-    private val control by lazy { RemoteControl(sshHost, sshPort, sshUser, KeyStoreSsh.getOrCreateKeyPair()) }
+    private val control by lazy { RemoteControl(this, sshHost, sshPort, sshUser, KeyStoreSsh.getOrCreateKeyPair()) }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -108,7 +108,7 @@ class DisplayActivity : AppCompatActivity() {
             // Preferimos tunelizar el noVNC por SSH: así el host puede publicarlo sólo en
             // su loopback y deja de estar expuesto a la red local. Si el túnel no se puede
             // tender (host viejo, sin sshd), caemos al endpoint directo de siempre.
-            val t = PortTunnel(sshHost, sshPort, sshUser, KeyStoreSsh.getOrCreateKeyPair())
+            val t = PortTunnel(this, sshHost, sshPort, sshUser, KeyStoreSsh.getOrCreateKeyPair())
             val localPort = t.open(6080)
             if (localPort != null) {
                 tunnel = t

@@ -1,5 +1,6 @@
 package com.remoteclaude.app
 
+import android.content.Context
 import com.trilead.ssh2.Connection
 import java.security.KeyPair
 
@@ -9,11 +10,16 @@ import java.security.KeyPair
  * fuera del hilo principal.
  */
 class RemoteControl(
+    ctx: Context,
     private val host: String,
     private val port: Int,
     private val user: String,
     private val key: KeyPair,
 ) {
+    private val appCtx = ctx.applicationContext
+
+    /** Verificador de clave de host. Este camino NO pregunta: si cambió, falla. */
+    private fun verifier() = HostKeys.verifier(appCtx, host, port)
     /** Salida de un comando remoto: distingue "no hay nada" de "falló". */
     data class Exec(val out: String, val ok: Boolean, val error: String? = null) {
         val failed get() = !ok
@@ -33,7 +39,7 @@ class RemoteControl(
             // si no la excepción escapaba hasta el thread {} del caller y mataba la app.
             val (h, p) = TailscaleBridge.endpoint(host, port)
             val conn = Connection(h, p).also { c = it }
-            conn.connect({ _, _, _, _ -> true }, 10000, 10000)
+            conn.connect(verifier(), 10000, 10000)
             if (!conn.authenticateWithPublicKey(user, key))
                 return Exec("", false, "la clave de la app no está autorizada en el host")
             val s = conn.openSession()
@@ -64,7 +70,7 @@ class RemoteControl(
         val (h, p) = TailscaleBridge.endpoint(host, port)
         val c = Connection(h, p)
         return try {
-            c.connect({ _, _, _, _ -> true }, 10000, 10000)
+            c.connect(verifier(), 10000, 10000)
             if (!c.authenticateWithPassword("enroll", password)) return null
             val s = c.openSession()
             s.execCommand(pub)   // el ForceCommand lo recibe como SSH_ORIGINAL_COMMAND
@@ -145,7 +151,7 @@ class RemoteControl(
         val (h, p) = TailscaleBridge.endpoint(host, port)
         val c = Connection(h, p)
         try {
-            c.connect({ _, _, _, _ -> true }, 10000, 10000)
+            c.connect(verifier(), 10000, 10000)
             if (!c.authenticateWithPublicKey(user, key))
                 throw IllegalStateException("no autenticó (clave no autorizada)")
             val s = c.openSession()

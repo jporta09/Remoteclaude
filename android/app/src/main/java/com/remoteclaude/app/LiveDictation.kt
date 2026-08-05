@@ -1,5 +1,6 @@
 package com.remoteclaude.app
 
+import android.content.Context
 import com.trilead.ssh2.Connection
 import com.trilead.ssh2.LocalPortForwarder
 import okhttp3.OkHttpClient
@@ -10,6 +11,8 @@ import okhttp3.WebSocketListener
 import okio.ByteString
 import okio.ByteString.Companion.toByteString
 import org.json.JSONObject
+import java.net.InetAddress
+import java.net.InetSocketAddress
 import java.net.ServerSocket
 import java.security.KeyPair
 import java.util.concurrent.CountDownLatch
@@ -27,12 +30,15 @@ import java.util.concurrent.TimeUnit
  * el server responde {"type":"ready_to_stop"} tras el flush final.
  */
 class LiveDictation(
+    ctx: Context,
     private val host: String,
     private val port: Int,
     private val user: String,
     private val key: KeyPair,
     private val onPartial: (String) -> Unit,
 ) {
+    private val appCtx = ctx.applicationContext
+
     @Volatile var available = false
         private set
 
@@ -53,11 +59,15 @@ class LiveDictation(
         try {
             val (h, p) = TailscaleBridge.endpoint(host, port)
             val c = Connection(h, p)
-            c.connect({ _, _, _, _ -> true }, 8000, 8000)
+            c.connect(HostKeys.verifier(appCtx, host, port), 8000, 8000)
             if (!c.authenticateWithPublicKey(user, key)) { c.close(); return false }
             conn = c
-            val local = ServerSocket(0).use { it.localPort }   // puerto libre (carrera improbable)
-            fwd = c.createLocalPortForwarder(local, "127.0.0.1", 6092)
+            // IPv4 loopback EXPLÍCITO: el overload que toma sólo el puerto hace
+            // ServerSocket(port) = escucha en 0.0.0.0, o sea que cualquiera en la red del
+            // celular podía entrar por este túnel al WhisperLiveKit del host.
+            val loopback = InetAddress.getByName("127.0.0.1")
+            val local = ServerSocket(0, 1, loopback).use { it.localPort }
+            fwd = c.createLocalPortForwarder(InetSocketAddress(loopback, local), "127.0.0.1", 6092)
             val client = OkHttpClient.Builder()
                 .connectTimeout(4, TimeUnit.SECONDS)
                 .readTimeout(0, TimeUnit.SECONDS)   // stream sin límite

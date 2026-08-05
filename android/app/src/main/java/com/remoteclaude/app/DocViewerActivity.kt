@@ -74,7 +74,7 @@ class DocViewerActivity : AppCompatActivity() {
         setContentView(root)
 
         message("Cargando $name…")
-        val control = RemoteControl(host, port, user, KeyStoreSsh.getOrCreateKeyPair())
+        val control = RemoteControl(this, host, port, user, KeyStoreSsh.getOrCreateKeyPair())
         thread {
             val b64 = try { control.readDocBase64(name) } catch (_: Exception) { "" }
             val bytes = if (b64.isBlank()) null else

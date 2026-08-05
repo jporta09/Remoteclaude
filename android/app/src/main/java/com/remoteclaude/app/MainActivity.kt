@@ -137,7 +137,7 @@ class MainActivity : AppCompatActivity() {
         terminalView.setBackgroundColor(KEYPAD_BG)   // petróleo, evita flash negro
 
         keyPair = KeyStoreSsh.getOrCreateKeyPair()
-        control = RemoteControl(host, port, user, keyPair)
+        control = RemoteControl(this, host, port, user, keyPair)
 
         // burbuja del dictado en vivo (fase 2): parciales mientras sostenés 🎤
         dictBubble = TextView(this).apply {
@@ -231,9 +231,39 @@ class MainActivity : AppCompatActivity() {
 
     private fun buildSession(name: String) =
         SshTerminalSession(
-            host, port, user, keyPair, name, sessionClient,
+            this, host, port, user, keyPair, name, sessionClient,
             onAuthFailed = { runOnUiThread { onSessionAuthFailed() } },
+            onHostKeyChanged = { old, new -> runOnUiThread { onHostKeyChanged(old, new) } },
         )
+
+    /**
+     * La clave del host cambió: la conexión ya fue rechazada. Se le muestra al usuario las
+     * dos huellas y se le deja decidir. Sólo la terminal pregunta esto — los caminos de
+     * fondo (documentos, dictado, visor) fallan sin preguntar, para que confiar en una
+     * clave nueva sea siempre una decisión explícita.
+     */
+    private var hostKeyDialogShown = false
+
+    private fun onHostKeyChanged(old: String, new: String) {
+        if (isFinishing || isDestroyed || hostKeyDialogShown) return
+        hostKeyDialogShown = true
+        AlertDialog.Builder(this)
+            .setTitle("La clave del host cambió")
+            .setMessage(
+                "El servidor $host:$port presentó una clave distinta a la que teníamos.\n\n" +
+                    "Antes: $old\nAhora: $new\n\n" +
+                    "Si reinstalaste el server o lo recreaste, es esperable. Si no, alguien " +
+                    "puede estar interceptando la conexión."
+            )
+            .setNegativeButton("Cancelar") { _, _ -> hostKeyDialogShown = false }
+            .setPositiveButton("Confiar en la nueva") { _, _ ->
+                HostKeys.forget(this, host, port)
+                hostKeyDialogShown = false
+                reconnectActiveTab()
+            }
+            .setCancelable(false)
+            .show()
+    }
 
     private fun openTab(name: String) {
         tabs.add(Tab(buildSession(name)))
@@ -633,7 +663,7 @@ class MainActivity : AppCompatActivity() {
         }
         // sesión de streaming best-effort; se crea ANTES del recorder para que los
         // primeros chunks queden encolados hasta que el túnel/WS abra (no se pierden)
-        val l = LiveDictation(host, port, user, keyPair) { txt ->
+        val l = LiveDictation(this, host, port, user, keyPair) { txt ->
             runOnUiThread {
                 if (dictBubble.visibility == View.VISIBLE) dictBubble.text = txt.takeLast(220)
             }

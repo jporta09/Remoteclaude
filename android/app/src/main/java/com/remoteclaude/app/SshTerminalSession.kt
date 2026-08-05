@@ -1,5 +1,6 @@
 package com.remoteclaude.app
 
+import android.content.Context
 import com.termux.terminal.TerminalSession
 import com.termux.terminal.TerminalSessionClient
 import com.trilead.ssh2.Connection
@@ -19,6 +20,7 @@ import kotlin.concurrent.thread
  * ConnectivityManager (desde la Activity) avisa caída/vuelta de red para reaccionar rápido.
  */
 class SshTerminalSession(
+    ctx: Context,
     private val host: String,
     private val port: Int,
     private val user: String,
@@ -26,7 +28,13 @@ class SshTerminalSession(
     @Volatile var tmuxSession: String,   // mutable: renombrar lo actualiza (lo lee el reconnect)
     client: TerminalSessionClient,
     private val onAuthFailed: (() -> Unit)? = null,   // clave no autorizada -> avisar a la UI
+    private val onHostKeyChanged: ((old: String, new: String) -> Unit)? = null,
 ) : TerminalSession(5000, client) {
+
+    private val appCtx = ctx.applicationContext
+
+    /** Si la clave del host cambió, guarda (vieja, nueva) para cortar y avisar. */
+    @Volatile private var keyChanged: Pair<String, String>? = null
 
     @Volatile private var userClosed = false
     @Volatile private var cols = 80
@@ -59,7 +67,14 @@ class SshTerminalSession(
                 // (127.0.0.1:xxxx -> host:port por la tailnet); si no, directo.
                 val (h, p) = TailscaleBridge.endpoint(host, port)
                 val c = Connection(h, p)
-                c.connect({ _, _, _, _ -> true }, 15000, 15000)
+                c.connect(
+                    HostKeys.verifier(
+                        appCtx, host, port,
+                        onNew = { fp -> status("\r\n[clave del host fijada — $fp]\r\n") },
+                        onMismatch = { old, new -> keyChanged = old to new },
+                    ),
+                    15000, 15000,
+                )
                 conn = c
                 // Cerrar la pestaña mientras conectábamos dejaba el hilo colgado para
                 // siempre: closeCurrent() corría ANTES de que conn existiera, así que no
@@ -116,6 +131,15 @@ class SshTerminalSession(
                 closeCurrent()
             }
 
+            keyChanged?.let { (old, new) ->
+                status(
+                    "\r\n[LA CLAVE DEL HOST CAMBIÓ — conexión bloqueada]\r\n" +
+                        "  antes: $old\r\n  ahora: $new\r\n" +
+                        "  Puede ser una reinstalación del server… o alguien interceptando.\r\n"
+                )
+                userClosed = true
+                onHostKeyChanged?.invoke(old, new)
+            }
             if (userClosed) break
             attempt++
             val waitMs = minOf(1000L * attempt, 8000L)

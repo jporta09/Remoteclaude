@@ -232,11 +232,17 @@ class HostsActivity : AppCompatActivity() {
     private fun hostMenu(host: Host) {
         AlertDialog.Builder(this)
             .setTitle(host.label)
-            .setItems(arrayOf("Conectar", "Editar", "Borrar")) { _, which ->
+            .setItems(arrayOf("Conectar", "Editar", "Olvidar clave del host", "Borrar")) { _, which ->
                 when (which) {
                     0 -> connect(host)
                     1 -> showEditDialog(host)
-                    2 -> { HostStore.delete(this, host.id); refresh() }
+                    // Salida de emergencia del pinning: para reinstalaciones legítimas del
+                    // server, sin tener que borrar y recrear el host.
+                    2 -> {
+                        HostKeys.forget(this, host.hostname, host.port)
+                        Toast.makeText(this, "Clave olvidada: se fijará de nuevo al conectar", Toast.LENGTH_LONG).show()
+                    }
+                    3 -> { HostStore.delete(this, host.id); refresh() }
                 }
             }.show()
     }
@@ -265,7 +271,7 @@ class HostsActivity : AppCompatActivity() {
         if (existing != null) {
             thread {
                 val st = try {
-                    RemoteControl(existing.hostname, existing.port, existing.user,
+                    RemoteControl(this, existing.hostname, existing.port, existing.user,
                         KeyStoreSsh.getOrCreateKeyPair()).sttMode("status")
                 } catch (_: Exception) { "" }
                 runOnUiThread {
@@ -308,7 +314,7 @@ class HostsActivity : AppCompatActivity() {
                     val action = if (stt.isChecked) "always" else "ondemand"
                     thread {
                         val msg = try {
-                            RemoteControl(host.hostname, host.port, host.user,
+                            RemoteControl(this, host.hostname, host.port, host.user,
                                 KeyStoreSsh.getOrCreateKeyPair()).sttMode(action)
                         } catch (_: Exception) { "" }
                         runOnUiThread {

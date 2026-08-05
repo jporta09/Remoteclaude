@@ -1,5 +1,6 @@
 package com.remoteclaude.app
 
+import android.content.Context
 import com.trilead.ssh2.Connection
 import com.trilead.ssh2.LocalPortForwarder
 import java.net.InetAddress
@@ -19,11 +20,13 @@ import java.security.KeyPair
  * el túnel accesible a cualquiera en la red del celular.
  */
 class PortTunnel(
+    ctx: Context,
     private val host: String,
     private val sshPort: Int,
     private val user: String,
     private val key: KeyPair,
 ) {
+    private val appCtx = ctx.applicationContext
     private var conn: Connection? = null
     private var fwd: LocalPortForwarder? = null
 
@@ -31,7 +34,7 @@ class PortTunnel(
     fun open(remotePort: Int): Int? = try {
         val (h, p) = TailscaleBridge.endpoint(host, sshPort)
         val c = Connection(h, p).also { conn = it }
-        c.connect({ _, _, _, _ -> true }, 8000, 8000)
+        c.connect(HostKeys.verifier(appCtx, host, sshPort), 8000, 8000)
         if (!c.authenticateWithPublicKey(user, key)) {
             close(); null
         } else {

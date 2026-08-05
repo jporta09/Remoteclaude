@@ -40,7 +40,7 @@ class DocsActivity : AppCompatActivity() {
         host = intent.getStringExtra("hostname") ?: "remoteclaude"
         port = intent.getIntExtra("port", 22)
         user = intent.getStringExtra("user") ?: "root"
-        control = RemoteControl(host, port, user, KeyStoreSsh.getOrCreateKeyPair())
+        control = RemoteControl(this, host, port, user, KeyStoreSsh.getOrCreateKeyPair())
 
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
