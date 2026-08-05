@@ -1,0 +1,14 @@
+# Fixture de los tests E2E. Dos instancias de la MISMA imagen pero con host keys
+# distintas: apuntando la app de una a la otra se prueba el bloqueo por cambio de clave.
+services:
+  fixture:
+    build: ./fixture
+    container_name: marvin-e2e-fixture
+    ports: ["127.0.0.1:2222:22"]
+
+  fixture-rotated:
+    build: ./fixture
+    container_name: marvin-e2e-fixture-rotated
+    ports: ["127.0.0.1:2223:22"]
+    # las host keys se generan solas en el primer arranque de cada contenedor, así que
+    # son distintas entre sí: justo lo que necesita el test de mismatch.

@@ -175,6 +175,15 @@ class MainActivity : AppCompatActivity() {
         super.onDestroy()
     }
 
+    /** Sesión activa. La usan los tests instrumentados para escribir en la terminal. */
+    @androidx.annotation.VisibleForTesting
+    fun currentSessionForTest(): SshTerminalSession? = tabs.getOrNull(activeIndex)?.session
+
+    /** Contenido visible de la terminal. Lo usan los tests instrumentados. */
+    @androidx.annotation.VisibleForTesting
+    fun screenText(): String =
+        tabs.getOrNull(activeIndex)?.session?.emulator?.screen?.transcriptText.orEmpty()
+
     private fun showKeyboard() {
         terminalView.requestFocus()
         val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager

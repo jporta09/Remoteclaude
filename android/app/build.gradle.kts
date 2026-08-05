@@ -39,6 +39,15 @@ android {
     }
 
     buildTypes {
+        debug {
+            // Se firma con la MISMA clave que release: así el APK de debug (y el de
+            // instrumentación) entran como actualización sobre la app instalada, sin
+            // desinstalar. Desinstalar borraría la clave del Keystore y la auth key de
+            // Tailscale del usuario.
+            if (keystorePropsFile.exists()) {
+                signingConfig = signingConfigs.getByName("release")
+            }
+        }
         release {
             isMinifyEnabled = false
             if (keystorePropsFile.exists()) {

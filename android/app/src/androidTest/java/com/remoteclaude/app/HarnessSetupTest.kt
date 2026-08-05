@@ -2,7 +2,6 @@ package com.remoteclaude.app
 
 import android.content.Context
 import androidx.test.platform.app.InstrumentationRegistry
-import org.json.JSONArray
 import org.junit.Test
 import java.io.File
 
@@ -44,9 +43,9 @@ class HarnessSetupTest {
             port = (args.getString("fixturePort") ?: "22").toInt(),
             user = args.getString("fixtureUser") ?: "tester",
         )
-        val arr = JSONArray().put(host.toJson())
-        ctx.getSharedPreferences("remotemarvin", Context.MODE_PRIVATE)
-            .edit().putString("hosts", arr.toString()).commit()
+        // upsert, NO reemplazo: en un teléfono real acá vive la lista de hosts del
+        // usuario y no hay por qué pisarla para correr un test.
+        HostStore.upsert(ctx, host)
         println("MARVIN_SEEDED=${host.hostname}:${host.port} ${host.user}")
     }
 }
