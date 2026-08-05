@@ -41,8 +41,16 @@ class DisplayActivity : AppCompatActivity() {
     private var zoomOn = false
     private var drawerOpen = false
 
-    private var novncHost = "remoteclaude"   // resuelto por TailscaleBridge (forward local o directo)
+    // Host al que pertenece el display (viene por Intent, igual que en DocsActivity).
+    // Antes estaba hardcodeado a remoteclaude/22/root: con más de un host el visor
+    // apuntaba SIEMPRE a la misma máquina y el modo Escritorio fallaba en silencio.
+    private lateinit var sshHost: String
+    private var sshPort = 22
+    private lateinit var sshUser: String
+
+    private var novncHost = "127.0.0.1"   // túnel SSH local; si falla, el endpoint directo
     private var novncPort = 6080
+    private var tunnel: PortTunnel? = null
     private var curScale = 0.2f   // noVNC display.scale (CSS px por px del framebuffer)
     private var fitScale = 0.2f
     private var lastX = 0f
@@ -51,10 +59,13 @@ class DisplayActivity : AppCompatActivity() {
 
     private val density get() = resources.displayMetrics.density
     private val monoFont by lazy { resources.getFont(R.font.mononoki) }
-    private val control by lazy { RemoteControl("remoteclaude", 22, "root", KeyStoreSsh.getOrCreateKeyPair()) }
+    private val control by lazy { RemoteControl(sshHost, sshPort, sshUser, KeyStoreSsh.getOrCreateKeyPair()) }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        sshHost = intent.getStringExtra("hostname") ?: "remoteclaude"
+        sshPort = intent.getIntExtra("port", 22)
+        sshUser = intent.getStringExtra("user") ?: "root"
         window.statusBarColor = PETROL
 
         web = WebView(this).apply {
@@ -85,9 +96,23 @@ class DisplayActivity : AppCompatActivity() {
         // Resolver el endpoint del noVNC (forward local del Tailscale embebido, o directo)
         // fuera del hilo principal, y recién ahí cargar la URL.
         thread {
-            val (h, p) = TailscaleBridge.endpoint("remoteclaude", 6080)
-            novncHost = h; novncPort = p
-            runOnUiThread { web.loadUrl(url()) }
+            // Preferimos tunelizar el noVNC por SSH: así el host puede publicarlo sólo en
+            // su loopback y deja de estar expuesto a la red local. Si el túnel no se puede
+            // tender (host viejo, sin sshd), caemos al endpoint directo de siempre.
+            val t = PortTunnel(sshHost, sshPort, sshUser, KeyStoreSsh.getOrCreateKeyPair())
+            val localPort = t.open(6080)
+            if (localPort != null) {
+                tunnel = t
+                novncHost = "127.0.0.1"; novncPort = localPort
+            } else {
+                t.close()
+                val (h, p) = TailscaleBridge.endpoint(sshHost, 6080)
+                novncHost = h; novncPort = p
+            }
+            runOnUiThread {
+                if (isFinishing || isDestroyed) return@runOnUiThread
+                web.loadUrl(url())
+            }
         }
     }
 
@@ -114,7 +139,7 @@ class DisplayActivity : AppCompatActivity() {
     private inner class ScaleListener : ScaleGestureDetector.SimpleOnScaleGestureListener() {
         override fun onScale(d: ScaleGestureDetector): Boolean {
             // límite superior 1.0 = 1 px de framebuffer por px CSS (nítido); abajo, el fit.
-            curScale = (curScale * d.scaleFactor).coerceIn(fitScale, 1.0f)
+            curScale = (curScale * d.scaleFactor).coerceIn(minOf(fitScale, 1.0f), 1.0f)
             setNovncZoom()
             return true
         }
@@ -234,7 +259,7 @@ class DisplayActivity : AppCompatActivity() {
         zoomOn = !zoomOn
         if (zoomOn) {
             fitScale = (web.width / density) / FB_W
-            curScale = curScale.coerceIn(fitScale, 1.0f)
+            curScale = curScale.coerceIn(minOf(fitScale, 1.0f), 1.0f)
             zoomLayer.visibility = View.VISIBLE
             setNovncZoom(reapplyDelays = true)   // pasa a clip + escala
         } else {
@@ -265,6 +290,9 @@ class DisplayActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
+        tunnel?.close(); tunnel = null
+        // sacarla de la jerarquía antes de destruirla (requisito de WebView)
+        (web.parent as? android.view.ViewGroup)?.removeView(web)
         web.destroy()
         super.onDestroy()
     }

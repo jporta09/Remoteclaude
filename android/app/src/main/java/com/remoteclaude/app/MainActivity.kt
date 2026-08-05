@@ -530,9 +530,13 @@ class MainActivity : AppCompatActivity() {
         saveTabs()  // persistir el estado de las pestañas
     }
 
-    /** Abre el visor noVNC del navegador headed (M6). */
+    /** Abre el visor noVNC del navegador headed (M6), para ESTE host. */
     private fun openDisplay() {
-        startActivity(android.content.Intent(this, DisplayActivity::class.java))
+        startActivity(android.content.Intent(this, DisplayActivity::class.java).apply {
+            putExtra("hostname", host)
+            putExtra("port", port)
+            putExtra("user", user)
+        })
     }
 
     /** Abre el visor de documentos compartidos (host:~/RemoteMarvinDocs). */
