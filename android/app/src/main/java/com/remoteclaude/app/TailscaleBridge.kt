@@ -36,8 +36,10 @@ object TailscaleBridge {
     fun init(ctx: Context) {
         if (initialized) return
         val prefs = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-        val key = prefs.getString("ts_authkey", null)
-        if (key.isNullOrBlank()) { enabled = false; initialized = true; return }
+        // La auth key vivía en claro en el XML de prefs (y salía del dispositivo en los
+        // backups). Ahora va cifrada con una clave del Keystore; esto migra la vieja.
+        val key = SecretStore.migrate(ctx, "ts_authkey", "ts_authkey")
+        if (key.isBlank()) { enabled = false; initialized = true; return }
         enabled = true
         initialized = true
         val hostname = prefs.getString("ts_hostname", null)
@@ -94,8 +96,10 @@ object TailscaleBridge {
 
     /** Reconfigura la auth key (la guarda) y reinicia el nodo. */
     fun configure(ctx: Context, authKey: String) {
+        SecretStore.put(ctx, "ts_authkey", authKey.trim())
+        // por las dudas: si quedaba una copia en claro de una versión anterior, fuera
         ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
-            .putString("ts_authkey", authKey.trim()).apply()
+            .remove("ts_authkey").apply()
         synchronized(this) {
             // Siempre cerrar el nodo anterior (aunque aún esté conectando con una key
             // consumida) para liberar el stateDir antes de reiniciar con la nueva.

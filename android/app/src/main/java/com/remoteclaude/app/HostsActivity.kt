@@ -135,12 +135,14 @@ class HostsActivity : AppCompatActivity() {
     }
 
     private fun showVpnDialog() {
-        val current = getSharedPreferences("remotemarvin", Context.MODE_PRIVATE)
-            .getString("ts_authkey", "").orEmpty()
+        // No se precarga la key: mostrarla entera en pantalla (y dejarla en la jerarquía
+        // de vistas) es innecesario. Se indica si hay una configurada y listo.
+        val current = SecretStore.get(this, "ts_authkey")
         val input = EditText(this).apply {
-            hint = "tskey-auth-…"
-            setText(current)
+            hint = if (current.isBlank()) "tskey-auth-…"
+                   else "configurada (…${current.takeLast(6)}) — pegá otra para reemplazar"
             setSingleLine()
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
             setPadding(dp(16), dp(12), dp(16), dp(12))
         }
         AlertDialog.Builder(this)
@@ -153,7 +155,9 @@ class HostsActivity : AppCompatActivity() {
             )
             .setView(input)
             .setPositiveButton("Guardar y conectar") { _, _ ->
-                applyTailscaleKey(input.text.toString())
+                val typed = input.text.toString().trim()
+                // vacío = no tocar la que ya está (antes la borraba sin querer)
+                if (typed.isNotEmpty() || current.isBlank()) applyTailscaleKey(typed)
             }
             .setNeutralButton("Escanear QR") { _, _ ->
                 qrScanner.launch(

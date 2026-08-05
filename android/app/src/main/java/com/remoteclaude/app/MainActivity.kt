@@ -282,58 +282,34 @@ class MainActivity : AppCompatActivity() {
     // La auth SSH falló (clave no autorizada): AUTO-ENROLAMIENTO. Pedir la contraseña de
     // enrolamiento una vez; la app sube sola su clave y reconecta (estilo ssh-copy-id).
     @Volatile private var authDialogShown = false
+    /**
+     * La clave de la app no está autorizada en el host.
+     *
+     * Antes esto pedía una "contraseña de enrolamiento" y la mandaba por SSH: la mitad
+     * server de ese flujo se borró del repo hace rato, así que no podía funcionar — y
+     * encima entrenaba a tipear una contraseña contra un host que ni verificábamos.
+     * Ahora se muestra la clave pública y qué hacer con ella.
+     */
     private fun onSessionAuthFailed() {
         if (authDialogShown) return   // varias pestañas fallan a la vez: un solo diálogo
         authDialogShown = true
         val pub = KeyStoreSsh.openSshPublicKey("remoteclaude-app")
-        val input = EditText(this).apply {
-            hint = "Contraseña de enrolamiento"
-            inputType = android.text.InputType.TYPE_CLASS_TEXT or
-                android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
-            setPadding(dp(20), dp(8), dp(20), dp(8))
-        }
-        val dialog = AlertDialog.Builder(this)
-            .setTitle("Autorizar este dispositivo")
+        AlertDialog.Builder(this)
+            .setTitle("Falta autorizar este dispositivo")
             .setMessage(
-                "Esta app todavía no está autorizada en el gateway. Ingresá la contraseña " +
-                    "de enrolamiento (una sola vez) y se autoriza sola."
+                "El host $user@$host:$port rechazó la clave de la app.\n\n" +
+                    "Agregala a ~/.ssh/authorized_keys en el host:\n\n$pub"
             )
-            .setView(input)
-            .setPositiveButton("Autorizar", null)    // sobrescrito abajo: validar sin cerrar
-            .setNeutralButton("Copiar clave", null)  // fallback manual; tampoco cierra
-            .setNegativeButton("Cancelar") { _, _ -> authDialogShown = false }
+            .setNeutralButton("Copiar clave") { _, _ ->
+                copyToClipboard(pub)
+            }
+            .setPositiveButton("Reintentar") { _, _ ->
+                authDialogShown = false
+                reconnectActiveTab()
+            }
+            .setNegativeButton("Cerrar") { _, _ -> authDialogShown = false }
             .setOnCancelListener { authDialogShown = false }
-            .create()
-        dialog.show()
-        dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener {
-            val cb = getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
-            cb.setPrimaryClip(android.content.ClipData.newPlainText("clave pública", pub))
-            Toast.makeText(this, "Clave copiada", Toast.LENGTH_SHORT).show()
-        }
-        dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
-            val pass = input.text.toString()
-            if (pass.isEmpty()) {
-                Toast.makeText(this, "Ingresá la contraseña", Toast.LENGTH_SHORT).show()
-                return@setOnClickListener
-            }
-            Toast.makeText(this, "Autorizando…", Toast.LENGTH_SHORT).show()
-            thread {
-                val res = control.enrollThisDevice(pass)
-                runOnUiThread {
-                    if (res != null && res.startsWith("OK")) {
-                        Toast.makeText(this, "Dispositivo autorizado ✓", Toast.LENGTH_SHORT).show()
-                        authDialogShown = false
-                        dialog.dismiss()
-                        reconnectActiveTab()
-                    } else {
-                        Toast.makeText(
-                            this, "No se pudo autorizar (¿contraseña incorrecta?)",
-                            Toast.LENGTH_LONG
-                        ).show()
-                    }
-                }
-            }
-        }
+            .show()
     }
 
     /** Nuevo tab con el "term N" libre más bajo (mira abiertas + detacheadas). */
@@ -734,6 +710,12 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun copyToClipboard(text: String) {
+        val cb = getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+        cb.setPrimaryClip(android.content.ClipData.newPlainText("terminal", text))
+        Toast.makeText(this, "Copiado", Toast.LENGTH_SHORT).show()
+    }
+
     private fun hideDictBubble() {
         dictBubble.visibility = View.GONE
         dictBubble.text = ""
@@ -891,9 +873,23 @@ class MainActivity : AppCompatActivity() {
         override fun onSessionFinished(finishedSession: TerminalSession) {}
         override fun onCopyTextToClipboard(session: TerminalSession, text: String?) {
             if (text.isNullOrEmpty()) return
-            val cb = getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
-            cb.setPrimaryClip(android.content.ClipData.newPlainText("terminal", text))
-            Toast.makeText(this@MainActivity, "Copiado", Toast.LENGTH_SHORT).show()
+            // OSC 52: lo dispara el HOST, no vos. Para una selección de tmux es lo
+            // esperado, pero el buffer admite 1 MB, así que un proceso remoto podría
+            // escribirte el portapapeles del teléfono en silencio. Arriba de cierto
+            // tamaño se pide confirmación.
+            if (text.length > OSC52_CONFIRM_OVER) {
+                AlertDialog.Builder(this@MainActivity)
+                    .setTitle("¿Copiar al portapapeles?")
+                    .setMessage(
+                        "El host quiere copiar ${text.length / 1024} KB al portapapeles " +
+                            "del teléfono."
+                    )
+                    .setNegativeButton("Descartar", null)
+                    .setPositiveButton("Copiar") { _, _ -> copyToClipboard(text) }
+                    .show()
+                return
+            }
+            copyToClipboard(text)
         }
         override fun onPasteTextFromClipboard(session: TerminalSession?) {
             val cb = getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
@@ -987,6 +983,7 @@ class MainActivity : AppCompatActivity() {
         private val ACCENT = Color.parseColor("#71BF44")        // verde CTR
         private val KEY_FG = Color.parseColor("#F2F2F2")        // gris claro
         private const val REQ_MIC = 71                          // permiso RECORD_AUDIO
+        private const val OSC52_CONFIRM_OVER = 100_000          // OSC 52: pedir confirmación
         private val KEYPAD_BG = Color.parseColor("#0F232D")     // verde petróleo
         private val CHEV_FG = Color.parseColor("#5E8B7E")       // verde alt apagado
         private val CHEV_BG = Color.parseColor("#0A1A20")       // petróleo más oscuro

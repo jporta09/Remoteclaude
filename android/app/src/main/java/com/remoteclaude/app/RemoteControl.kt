@@ -60,31 +60,6 @@ class RemoteControl(
     private fun exec(command: String): String = execResult(command).out
 
     /**
-     * Auto-enrolamiento (estilo ssh-copy-id): se conecta como 'enroll' con contraseña
-     * y sube la clave pública de esta app al gateway. Del lado server, ese usuario sólo
-     * puede agregar una clave (ForceCommand), nunca abrir shell. Devuelve la respuesta
-     * del server (empieza con "OK:") si funcionó, o null si falló. BLOQUEA.
-     */
-    fun enrollThisDevice(password: String): String? {
-        val pub = KeyStoreSsh.openSshPublicKey("remoteclaude-app")
-        val (h, p) = TailscaleBridge.endpoint(host, port)
-        val c = Connection(h, p)
-        return try {
-            c.connect(verifier(), 10000, 10000)
-            if (!c.authenticateWithPassword("enroll", password)) return null
-            val s = c.openSession()
-            s.execCommand(pub)   // el ForceCommand lo recibe como SSH_ORIGINAL_COMMAND
-            val out = String(s.stdout.readBytes(), Charsets.UTF_8).trim()
-            s.close()
-            out
-        } catch (_: Exception) {
-            null
-        } finally {
-            try { c.close() } catch (_: Exception) {}
-        }
-    }
-
-    /**
      * Fija el modo del display virtual (Xvnc :99) — p.ej. "1280x720" para el modo
      * "Escritorio" del visor. Corre en el gateway, que llega al X del display por
      * localhost:6099 (network_mode host). BLOQUEA.
