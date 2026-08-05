@@ -53,6 +53,10 @@ android {
     kotlinOptions {
         jvmTarget = "17"
     }
+
+    testOptions {
+        unitTests.isIncludeAndroidResources = true
+    }
 }
 
 dependencies {
@@ -64,4 +68,10 @@ dependencies {
     implementation("com.squareup.okhttp3:okhttp:4.12.0")   // WebSocket del dictado en vivo
     implementation(":marvints@aar")   // Tailscale embebido (tsnet vía gomobile)
     implementation("com.journeyapps:zxing-android-embedded:4.3.0")   // scanner QR (vincular Tailscale)
+
+    // Tests unitarios JVM (sin device). org.json real: el del android.jar es un stub que
+    // lanza "Method not mocked", y varios parseos nuestros lo usan.
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("org.json:json:20240303")
+    testImplementation("com.google.truth:truth:1.4.2")
 }
