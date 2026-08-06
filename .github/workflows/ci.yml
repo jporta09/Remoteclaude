@@ -53,3 +53,21 @@ jobs:
             plugins/remotemarvin/skills/*/scripts/*.sh
       - name: Tests de los daemons
         run: uv run --with pytest pytest test/host/ -q
+
+  go-bridge:
+    name: Bridge de Tailscale (Go)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: tailscale-bridge/go.mod
+      - name: Formato
+        working-directory: tailscale-bridge
+        run: test -z "$(gofmt -l .)" || { gofmt -d .; exit 1; }
+      - name: go vet
+        working-directory: tailscale-bridge
+        run: go vet ./...
+      - name: Tests (con detector de carreras)
+        working-directory: tailscale-bridge
+        run: go test -race ./...

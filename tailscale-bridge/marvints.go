@@ -1,9 +1,10 @@
 // Package marvints embebe un nodo Tailscale (tsnet) dentro de la app RemoteMarvin y
 // expone forwards TCP locales hacia la tailnet. gomobile lo bindea como clase Java
 // `Marvints`. La app:
-//   1. Start(authKey, stateDir, hostname)  -> levanta el nodo y espera a estar conectado.
-//   2. Forward(2222, "remoteclaude", 22)   -> 127.0.0.1:2222 tuneliza a remoteclaude:22.
-//   3. Forward(6080, "remoteclaude", 6080) -> idem para noVNC.
+//  1. Start(authKey, stateDir, hostname)  -> levanta el nodo y espera a estar conectado.
+//  2. Forward(2222, "remoteclaude", 22)   -> 127.0.0.1:2222 tuneliza a remoteclaude:22.
+//  3. Forward(6080, "remoteclaude", 6080) -> idem para noVNC.
+//
 // Luego el SSH y el WebView se conectan a localhost; Tailscale hace el resto (NAT
 // traversal, roaming, MagicDNS) sin depender de la app de Tailscale aparte.
 package marvints
@@ -27,6 +28,15 @@ import (
 var (
 	mu  sync.Mutex
 	srv *tsnet.Server
+	// Listeners abiertos por Forward. Hay que cerrarlos en Stop: si no, su goroutine de
+	// accept sigue viva contra un server ya cerrado y encima retiene el puerto local, así
+	// que después de re-escanear el QR los túneles quedaban aceptando conexiones que no
+	// podían dialear a ningún lado.
+	lns []net.Listener
+	// Start en curso: un segundo Start no debe devolver "ok" mientras el nodo todavía
+	// está levantando (la app daría por buenos forwards que aún no pueden dialear).
+	upDone chan struct{}
+	upErr  error
 )
 
 // Android (API 30+) bloquea net.Interfaces() de Go (lee la tabla de rutas por netlink y
@@ -96,6 +106,15 @@ func SetInterfaces(data string) {
 func Start(authKey, stateDir, hostname string) error {
 	mu.Lock()
 	if srv != nil {
+		// Si hay un Start en vuelo, esperar su resultado en vez de mentir un nil.
+		if ch := upDone; ch != nil {
+			mu.Unlock()
+			<-ch
+			mu.Lock()
+			err := upErr
+			mu.Unlock()
+			return err
+		}
 		mu.Unlock()
 		return nil
 	}
@@ -113,7 +132,19 @@ func Start(authKey, stateDir, hostname string) error {
 	// Asignar antes de Up: si la key está vencida/consumida, Up bloquea esperando login;
 	// así Stop() puede cerrar el nodo y liberar el stateDir (un re-escaneo arranca limpio).
 	srv = s
+	done := make(chan struct{})
+	upDone, upErr = done, nil
 	mu.Unlock()
+
+	// Al salir, publicar el resultado y despertar a quien esté esperando.
+	finish := func(err error) error {
+		mu.Lock()
+		upErr = err
+		upDone = nil
+		mu.Unlock()
+		close(done)
+		return err
+	}
 
 	// Timeout: con una key válida pre-autorizada conecta en segundos; si es inválida no
 	// queremos colgar para siempre, devolvemos error y limpiamos.
@@ -121,14 +152,19 @@ func Start(authKey, stateDir, hostname string) error {
 	defer cancel()
 	if _, err := s.Up(ctx); err != nil {
 		mu.Lock()
-		if srv == s {
+		mine := srv == s
+		if mine {
 			srv = nil
 		}
 		mu.Unlock()
-		s.Close()
-		return err
+		// Sólo cerramos si seguimos siendo el server vigente: si Stop() se adelantó, ya lo
+		// cerró él y volver a cerrarlo es una doble liberación.
+		if mine {
+			s.Close()
+		}
+		return finish(err)
 	}
-	return nil
+	return finish(nil)
 }
 
 // Running indica si el nodo está levantado.
@@ -151,11 +187,25 @@ func Forward(localPort int, remoteHost string, remotePort int) error {
 	if err != nil {
 		return err
 	}
+	mu.Lock()
+	lns = append(lns, ln)
+	mu.Unlock()
+
 	remote := fmt.Sprintf("%s:%d", remoteHost, remotePort)
 	go func() {
+		defer ln.Close()
 		for {
 			c, err := ln.Accept()
 			if err != nil {
+				return
+			}
+			// Si el nodo cambió (re-escaneo del QR), este listener es de un server
+			// muerto: se corta acá en vez de aceptar conexiones que no van a ningún lado.
+			mu.Lock()
+			current := srv
+			mu.Unlock()
+			if current != s {
+				c.Close()
 				return
 			}
 			go pipe(s, c, remote)
@@ -166,7 +216,11 @@ func Forward(localPort int, remoteHost string, remotePort int) error {
 
 func pipe(s *tsnet.Server, local net.Conn, remote string) {
 	defer local.Close()
-	rc, err := s.Dial(context.Background(), "tcp", remote)
+	// Con timeout: sin él, durante una caída de red cada reintento del cliente dejaba una
+	// goroutine y una conexión colgadas indefinidamente dentro de Dial.
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	rc, err := s.Dial(ctx, "tcp", remote)
 	if err != nil {
 		return
 	}
@@ -177,12 +231,20 @@ func pipe(s *tsnet.Server, local net.Conn, remote string) {
 	<-done
 }
 
-// Stop apaga el nodo.
+// Stop apaga el nodo y cierra los forwards abiertos.
 func Stop() {
 	mu.Lock()
-	defer mu.Unlock()
-	if srv != nil {
-		srv.Close()
-		srv = nil
+	old := srv
+	srv = nil
+	listeners := lns
+	lns = nil
+	mu.Unlock()
+
+	// Cerrar los listeners despierta a sus goroutines de accept, que terminan solas.
+	for _, ln := range listeners {
+		ln.Close()
+	}
+	if old != nil {
+		old.Close()
 	}
 }
