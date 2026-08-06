@@ -331,11 +331,10 @@ class MainActivity : AppCompatActivity() {
     /** Nuevo tab con el "term N" libre más bajo (mira abiertas + detacheadas). */
     private fun newTab() {
         thread {
-            val used = tabs.map { it.session.tmuxSession }.toMutableSet()
-            used.addAll(control.listSessions())
-            var k = 1
-            while ("term $k" in used) k++
-            runOnUiThread { openTab("term $k") }
+            val usados = tabs.map { it.session.tmuxSession }.toMutableSet()
+            usados.addAll(control.listSessions())
+            val nombre = TabPlan.nextFreeName(usados)
+            runOnUiThread { openTab(nombre) }
         }
     }
 
@@ -343,7 +342,7 @@ class MainActivity : AppCompatActivity() {
 
     /** Al abrir la app: reengancha las pestañas que estaban abiertas, o crea una nueva. */
     private fun restoreTabsOrNew() {
-        val saved = prefs.getString(tabsKey, "").orEmpty().split("\n").filter { it.isNotBlank() }
+        val saved = TabPlan.parseSaved(prefs.getString(tabsKey, ""))
         if (saved.isEmpty()) {
             newTab()
         } else {
@@ -398,12 +397,7 @@ class MainActivity : AppCompatActivity() {
             newTab()
             return
         }
-        // mantener la pestaña en la que estabas: si cerraste una anterior, su índice bajó.
-        val newActive = when {
-            index < activeIndex -> activeIndex - 1
-            else -> activeIndex.coerceAtMost(tabs.size - 1)
-        }
-        switchTo(newActive)
+        switchTo(TabPlan.activeAfterClose(cerrada = index, activa = activeIndex, quedan = tabs.size))
     }
 
     /** Long-press en una pestaña: renombrarla (renombra también la sesión tmux). */
@@ -862,7 +856,7 @@ class MainActivity : AppCompatActivity() {
 
     /** Shift+Tab = back-tab (CSI Z): la secuencia que Claude lee para cambiar de modo. */
     private fun sendShiftTab() =
-        session?.write(byteArrayOf(0x1b, '['.code.toByte(), 'Z'.code.toByte()), 0, 3)
+        TerminalKeys.SHIFT_TAB.let { session?.write(it, 0, it.size) }
 
     private fun toggleCtrl() {
         ctrlActive = !ctrlActive
@@ -955,23 +949,15 @@ class MainActivity : AppCompatActivity() {
         override fun onCodePoint(codePoint: Int, ctrlDown: Boolean, session: TerminalSession?): Boolean {
             if (ctrlActive) {
                 resetModifiers()
-                val b = when (codePoint) {
-                    in 'a'.code..'z'.code -> codePoint - 'a'.code + 1
-                    in 'A'.code..'Z'.code -> codePoint - 'A'.code + 1
-                    ' '.code, '@'.code -> 0
-                    '['.code -> 27
-                    '\\'.code -> 28
-                    ']'.code -> 29
-                    else -> -1
-                }
-                if (b >= 0) {
+                val b = TerminalKeys.ctrlByte(codePoint)
+                if (b != TerminalKeys.NINGUNO) {
                     this@MainActivity.session?.write(byteArrayOf(b.toByte()), 0, 1)
                     return true
                 }
             }
             if (altActive) {
                 resetModifiers()
-                this@MainActivity.session?.write(byteArrayOf(27), 0, 1)
+                this@MainActivity.session?.write(TerminalKeys.ESC, 0, TerminalKeys.ESC.size)
             }
             return false
         }
