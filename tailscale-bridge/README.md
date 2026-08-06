@@ -1,25 +1,28 @@
 # tailscale-bridge
 
-Wrapper Go sobre [`tsnet`](https://pkg.go.dev/tailscale.com/tsnet) que embebe un nodo
-Tailscale en userspace dentro de la app RemoteMarvin y expone forwards TCP locales hacia
-la tailnet (SSH + noVNC se conectan a `127.0.0.1`, sin depender de la app de Tailscale).
-
-Se bindea con **gomobile** a un `.aar` (`marvints.aar`), que se copia a `android/app/libs/`.
+Nodo Tailscale embebido (tsnet) que la app usa para llegar a la tailnet sin depender
+de la app de Tailscale. gomobile lo bindea como `marvints.aar`.
 
 ## Reconstruir el AAR
 
-Requisitos: Go 1.23+, Android NDK, gomobile.
-
 ```bash
-export GOROOT=/home/jporta/toolchain/go GOPATH=/home/jporta/go
-export PATH=$GOROOT/bin:$GOPATH/bin:$PATH
-export ANDROID_HOME=/home/jporta/.buildozer/android/platform/android-sdk
-export ANDROID_NDK_HOME=$ANDROID_HOME/ndk/26.3.11579264
-
-gomobile bind -target=android/arm64 -androidapi 26 -o marvints.aar .
-cp marvints.aar ../android/app/libs/
+make aar                      # arm64 + x86_64
+tailscale-bridge/build-aar.sh --arm-only   # sólo arm64 (la mitad de tamaño)
 ```
 
-> Sólo se compila `android/arm64` (el celular de prueba). Para distribuir a más
-> dispositivos: `-target=android/arm64,android/arm,android/amd64` y sacar el
-> `abiFilters` de `app/build.gradle.kts`.
+El script **descubre la toolchain solo** (Go, gomobile, NDK y SDK) en vez de depender de
+rutas de una máquina puntual, corre `gofmt`/`go vet`/`go test` antes de compilar y deja el
+checksum en `marvints.aar.sha256` para detectar drift entre el binario versionado y el
+fuente.
+
+## Por qué el AAR está versionado
+
+Para que un clone limpio y el CI puedan compilar la app sin la toolchain de Go ni el NDK.
+El costo es el tamaño (~29 MB con las dos ABIs). Si el repo se vuelve pesado, la
+alternativa es moverlo a git-lfs o publicarlo como release.
+
+## ABIs
+
+- **arm64-v8a**: el teléfono. Es lo único que entra en el APK de release.
+- **x86_64**: sólo para el emulador de los E2E (se incluye únicamente en la build de
+  debug), así los tests corren nativos en vez de bajo traducción ARM.

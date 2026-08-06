@@ -1,5 +1,5 @@
 # Atajos de verificación. El detalle de los E2E está en test/e2e/README.md.
-.PHONY: unit host lint e2e e2e-device all
+.PHONY: unit host lint e2e e2e-device aar all
 
 unit:            ## tests unitarios JVM de la app (sin dispositivo)
 	cd android && ./gradlew :app:testDebugUnitTest
@@ -19,5 +19,8 @@ e2e:             ## suite instrumentada en un AVD liviano (forma recomendada)
 
 e2e-device:      ## idem contra un dispositivo ya conectado (no repetible)
 	scripts/e2e.sh --device
+
+aar:             ## reconstruye marvints.aar (Tailscale embebido) con gomobile
+	tailscale-bridge/build-aar.sh
 
 all: unit host lint

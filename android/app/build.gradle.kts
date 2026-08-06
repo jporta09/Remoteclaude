@@ -23,7 +23,9 @@ android {
         versionCode = 10
         versionName = "1.6.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        // marvints.aar (Tailscale embebido) trae sólo el .so de arm64-v8a.
+        // Producción: sólo arm64 (es lo que corre en el teléfono). El AAR además trae
+        // x86_64, que se incluye únicamente en debug para que el emulador corra NATIVO
+        // en vez de bajo traducción ARM — ver test/e2e/README.md.
         ndk { abiFilters += "arm64-v8a" }
     }
 
@@ -40,6 +42,9 @@ android {
 
     buildTypes {
         debug {
+            // x86_64 además de arm64: el emulador de los E2E es x86_64 y así no depende
+            // de la traducción ARM (más rápido y más fiel).
+            ndk { abiFilters += "x86_64" }
             // Se firma con la MISMA clave que release: así el APK de debug (y el de
             // instrumentación) entran como actualización sobre la app instalada, sin
             // desinstalar. Desinstalar borraría la clave del Keystore y la auth key de

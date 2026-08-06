@@ -76,7 +76,13 @@ else
     for s in window_animation_scale transition_animation_scale animator_duration_scale; do
         "$ADB" -s "$ANDROID_SERIAL" shell settings put global "$s" 0
     done
-    "$ADB" -s "$ANDROID_SERIAL" shell input keyevent 82 || true   # sacar el keyguard
+    # Despertar la pantalla y sacar el keyguard: headless, el emulador arranca con la
+    # pantalla apagada y las ventanas nunca toman foco — Espresso se queda esperando
+    # "window focus" y falla aunque el diálogo esté visible.
+    "$ADB" -s "$ANDROID_SERIAL" shell input keyevent 224 || true          # WAKEUP
+    "$ADB" -s "$ANDROID_SERIAL" shell wm dismiss-keyguard || true
+    "$ADB" -s "$ANDROID_SERIAL" shell input keyevent 82 || true
+    "$ADB" -s "$ANDROID_SERIAL" shell settings put secure lockscreen.disabled 1 || true
     # desde el emulador, el host es 10.0.2.2 (no hace falta adb reverse)
     : "${FIXTURE_HOST:=10.0.2.2}"
 fi
