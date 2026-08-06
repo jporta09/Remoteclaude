@@ -9,22 +9,44 @@ de trabajo.
 > máquina** al arrancar junto con Gradle y los daemons de STT. Para las próximas
 > corridas usar un AVD chico y con aceleración:
 >
+> El AVD `marvin-e2e` ya está creado. Para recrearlo desde cero:
+>
 > ```bash
 > avdmanager create avd -n marvin-e2e -k "system-images;android-34;google_apis;x86_64" \
 >     -d pixel_2        # pantalla chica = menos memoria de framebuffer
->
-> emulator -avd marvin-e2e -no-window -no-audio -no-boot-anim -no-snapshot -wipe-data \
->     -memory 2048 -cores 2 -gpu host &
 > ```
 >
-> `-gpu host` es importante acá: esta máquina tiene una **NVIDIA GTX 1660 Ti que el
-> escritorio no usa** (el escritorio va con la Intel integrada), así que está libre para
-> el emulador. Con `swiftshader_indirect` el render va por CPU y compite con Gradle, que
-> es justo lo que tiró la máquina abajo. Si el STT está en modo ⚡ conviene pasarlo a
-> 🌙 antes de correr la suite, para no disputarle la VRAM.
+> ⚠️ **Con el SDK de buildozer hay que corregir el `config.ini` del AVD**: `avdmanager`
+> escribe `image.sysdir.1=android-sdk/system-images/…` (relativo a una raíz distinta) y el
+> emulador aborta con *"Broken AVD system path"*. Tiene que quedar:
+>
+> ```
+> image.sysdir.1=system-images/android-34/google_apis/x86_64/
+> ```
+>
+> Después, `make e2e` hace todo lo demás. Detalles de por qué está así:
+>
+> - **`-gpu host` + PRIME offload** (`__NV_PRIME_RENDER_OFFLOAD=1`,
+>   `__GLX_VENDOR_LIBRARY_NAME=nvidia`): la **NVIDIA GTX 1660 Ti está libre** porque el
+>   escritorio va con la Intel. Con `swiftshader_indirect` el render va por CPU y compite
+>   con Gradle — eso fue lo que tiró la máquina abajo. Medido con `-gpu host`: **boot en
+>   ~80 s**, 171 MiB de VRAM, 1 % de GPU.
+> - Si el STT está en modo ⚡, pasalo a 🌙 (`marvin-stt mode ondemand`) antes de correr:
+>   libera ~2 GB de VRAM.
+> - Desde el emulador el fixture se alcanza en **`10.0.2.2`** — no hace falta `adb
+>   reverse` (eso es sólo para el camino `--device`).
 
 **Excepción: el teléfono.** Sirve para verificar algo puntual, pero **no es repetible**
-ni desatendido, y tiene dos condiciones no negociables:
+ni desatendido, y tiene tres condiciones no negociables:
+
+0. **AGP DESINSTALA la app al terminar `connectedAndroidTest`** (se ve en su log:
+   `DeviceConnector: uninstalling …`). En un teléfono de uso real eso **borra todos los
+   datos**: lista de hosts, clave del Keystore (hay que re-autorizarla en el host) y auth
+   key de Tailscale (hay que re-escanear el QR). Ya pasó una vez. Por eso `e2e.sh
+   --device` exige `E2E_DEVICE_OK=1` y pasa
+   `-Pandroid.injected.androidTest.leaveApksInstalledAfterRun=true`. Firmar el debug con
+   la clave de release **no alcanza**: eso arregla la instalación, no el desinstalado
+   posterior.
 
 1. **La build de debug tiene que firmarse con el keystore de release.** Si no, instalarla
    exige desinstalar la release y eso **borra la clave del Keystore y la auth key de
