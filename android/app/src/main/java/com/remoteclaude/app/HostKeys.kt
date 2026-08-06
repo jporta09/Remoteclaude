@@ -57,7 +57,9 @@ object HostKeys {
         p.edit().apply { p.all.keys.filter { it.startsWith(pref) }.forEach { remove(it) } }.apply()
     }
 
-    /** ¿Hay al menos una clave fijada para este host? */
+    /** ¿Hay al menos una clave fijada para este host? Sólo lo usan los tests: R8 lo delató
+     *  al eliminarlo por no tener ningún llamador en producción. */
+    @androidx.annotation.VisibleForTesting
     fun hasPinned(ctx: Context, host: String, port: Int): Boolean {
         val pref = "hostkey_${host}_${port}_"
         return prefs(ctx).all.keys.any { it.startsWith(pref) }

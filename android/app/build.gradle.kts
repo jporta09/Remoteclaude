@@ -54,7 +54,19 @@ android {
             }
         }
         release {
-            isMinifyEnabled = false
+            // R8 activado: además de achicar, ofusca. Las reglas de proguard-rules.pro
+            // conservan el binding de gomobile (JNI lo busca por nombre) y trilead.
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            if (project.hasProperty("marvinTestRelease")) {
+                // Sólo al validar R8 con la suite: keeps que necesita el runner de
+                // instrumentación y que el APK publicado NO lleva (ver el archivo).
+                proguardFile("proguard-rules-e2e.pro")
+                // x86_64 para que la validación corra nativa en el emulador. R8 opera sobre
+                // bytecode Java: la ABI no cambia en nada lo que se está probando.
+                ndk { abiFilters += "x86_64" }
+            }
             if (keystorePropsFile.exists()) {
                 signingConfig = signingConfigs.getByName("release")
             }
@@ -74,6 +86,11 @@ android {
         abortOnError = true
         warningsAsErrors = false
     }
+
+    // R8 sólo se puede validar EJECUTANDO el artefacto minificado: si una regla keep falta,
+    // compila igual y explota en runtime. Con -PmarvinTestRelease la suite instrumentada
+    // corre contra la variante release (ver E2E_RELEASE=1 en scripts/e2e.sh).
+    testBuildType = if (project.hasProperty("marvinTestRelease")) "release" else "debug"
 
     testOptions {
         unitTests.isIncludeAndroidResources = true

@@ -15,6 +15,39 @@ AVD="${AVD:-marvin-e2e}"
 MODE="${1:-}"
 KEEP="${E2E_KEEP:-0}"
 
+# AGP necesita un JDK 17 CON jlink (transforma core-for-system-modules.jar). El java por
+# defecto acá es un 21 sin jlink, y el fallo aparecía recién al compilar una variante no
+# cacheada — o sea, en el momento menos obvio. Se busca uno servible salvo que ya haya
+# JAVA_HOME válido.
+if [ ! -x "${JAVA_HOME:-/nonexistent}/bin/jlink" ]; then
+    for j in /usr/lib/jvm/java-17-openjdk-* /usr/lib/jvm/openjdk-17 /usr/lib/jvm/*17*; do
+        [ -x "$j/bin/jlink" ] && { export JAVA_HOME="$j"; break; }
+    done
+fi
+[ -x "${JAVA_HOME:-/nonexistent}/bin/jlink" ] || {
+    echo "!! falta un JDK 17 con jlink (probá: apt install openjdk-17-jdk)" >&2; exit 1; }
+
+# Despertar la pantalla y sacar el keyguard. Headless, el emulador arranca con la pantalla
+# apagada y las ventanas nunca toman foco: Espresso espera "window focus" y falla aunque lo
+# que busca esté visible.
+despertar() {
+    for _ in $(seq 1 30); do
+        "$ADB" -s "$ANDROID_SERIAL" shell input keyevent 224 >/dev/null 2>&1 || true   # WAKEUP
+        "$ADB" -s "$ANDROID_SERIAL" shell wm dismiss-keyguard >/dev/null 2>&1 || true
+        "$ADB" -s "$ANDROID_SERIAL" shell svc power stayon true >/dev/null 2>&1 || true
+        # No alcanza con mandar el WAKEUP: hay que CONFIRMAR que el window manager quedó con
+        # alguna ventana enfocada. Recién booteado responde "mCurrentFocus=null", y si la
+        # suite arranca en ese estado ninguna activity toma foco en toda la corrida: Espresso
+        # falla esperando "window focus" con el diálogo visible en pantalla, y el síntoma
+        # aparece lejos de la causa (parece un bug de la app, o de R8).
+        case "$("$ADB" -s "$ANDROID_SERIAL" shell dumpsys window 2>/dev/null | grep -m1 mCurrentFocus)" in
+            *"Window{"*) return 0 ;;
+        esac
+        sleep 2
+    done
+    echo "!! el emulador no llegó a tener ventana con foco; los tests de UI van a fallar" >&2
+}
+
 cleanup() {
     [ "$KEEP" = "1" ] && { echo "== fixture y emulador quedan arriba (E2E_KEEP=1)"; return; }
     echo "== bajando el fixture"
@@ -79,18 +112,30 @@ else
     # Despertar la pantalla y sacar el keyguard: headless, el emulador arranca con la
     # pantalla apagada y las ventanas nunca toman foco — Espresso se queda esperando
     # "window focus" y falla aunque el diálogo esté visible.
-    "$ADB" -s "$ANDROID_SERIAL" shell input keyevent 224 || true          # WAKEUP
-    "$ADB" -s "$ANDROID_SERIAL" shell wm dismiss-keyguard || true
-    "$ADB" -s "$ANDROID_SERIAL" shell input keyevent 82 || true
     "$ADB" -s "$ANDROID_SERIAL" shell settings put secure lockscreen.disabled 1 || true
+    despertar
     # desde el emulador, el host es 10.0.2.2 (no hace falta adb reverse)
     : "${FIXTURE_HOST:=10.0.2.2}"
 fi
 
+# Repetir antes de la suite: con E2E_KEEP=1 el emulador se reusa entre corridas y llega
+# dormido o con el foco en el launcher, y Espresso falla esperando "window focus" aunque el
+# diálogo esté visible. Sale gratis y evita perseguir un fantasma.
+[ "$MODE" = "--device" ] || despertar
+
 echo "== suite"
 cd "$REPO/android"
+# E2E_RELEASE=1: corre contra la variante MINIFICADA, que es la única forma de validar que
+# las reglas de R8 no rompieron nada (una keep faltante compila bien y falla en runtime).
+# Es más lenta en el emulador x86_64: el release es sólo arm64 y va bajo traducción.
+if [ "${E2E_RELEASE:-0}" = "1" ]; then
+    TASK=:app:connectedReleaseAndroidTest; EXTRA=-PmarvinTestRelease
+    echo "   (variante release/R8)"
+else
+    TASK=:app:connectedDebugAndroidTest; EXTRA=
+fi
 # leaveApksInstalledAfterRun: evita el desinstalado automático de AGP al terminar.
-./gradlew :app:connectedDebugAndroidTest \
+./gradlew "$TASK" ${EXTRA:+"$EXTRA"} \
     -Pandroid.injected.androidTest.leaveApksInstalledAfterRun=true \
     -Pandroid.testInstrumentationRunnerArguments.package=com.remoteclaude.app \
     -Pandroid.testInstrumentationRunnerArguments.notClass=com.remoteclaude.app.HarnessSetupTest \

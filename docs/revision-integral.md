@@ -127,10 +127,10 @@ Lo que sigue abierto, con su destino:
 ### P3 — refactor y build
 | Pendiente | Por qué ahí |
 |---|---|
-| **R8 / `isMinifyEnabled`** en release | Es el único cambio que puede romper el AAR de gomobile por reflexión. Va junto al trabajo del AAR y necesita una pasada E2E + humo manual para validarlo; hacerlo suelto es pedir un bug silencioso en release. |
-| **`marvints.aar` multi-ABI y reproducible** | Hoy son 14 MB commiteados, construidos a mano con rutas absolutas y sólo arm64 (por eso el E2E depende de la traducción del emulador). |
+| ✅ **R8 / `isMinifyEnabled`** en release | Resuelto: 34,4 → 31,1 MB. Las keeps de producción cubren lo que el `.so` busca por nombre vía JNI (`go.**`, `marvints.**`) y trilead, que no trae reglas propias. Validado ejecutando: `make e2e-release` corre la suite contra el APK minificado (6/6) y el humo en el teléfono confirmó lo que la suite no puede tocar — el nodo tsnet aparece **online** en el tailnet con la build ofuscada. |
+| ✅ **`marvints.aar` multi-ABI y reproducible** | Resuelto: `tailscale-bridge/build-aar.sh` descubre la toolchain, corre `gofmt`/`vet`/`test` antes de compilar y deja un `.sha256` para detectar drift. El AAR trae arm64 + x86_64, pero el x86_64 entra **sólo en debug** (`abiFilters` por variante): el emulador corre nativo y el release no engorda. |
 | Partir `MainActivity` (918 líneas) | El objetivo original de P3, ahora con la red de tests debajo. |
-| `marvints.go`: listeners que `Stop()` nunca cierra; `pipe()` sin timeout de dial; `Start` que devuelve OK mientras todavía está levantando | Es código Go del bridge: mismo módulo, mismo build, misma verificación. |
+| ✅ `marvints.go`: listeners que `Stop()` nunca cierra; `pipe()` sin timeout de dial; `Start` que devuelve OK mientras todavía está levantando | Resuelto, con 7 tests Go corridos con `-race` (incluido uno que verifica que tras `Stop()` el puerto queda **libre**, no sólo el listener cerrado). |
 
 ### P4 — infraestructura del host y documentación
 | Pendiente | Nota |

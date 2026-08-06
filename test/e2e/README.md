@@ -78,3 +78,37 @@ de la tailnet o de la LAN.
 | Tailscale embebido (tsnet) | requiere una tailnet real y una auth key (secreto en el harness); además el AAR es sólo arm64. Los E2E corren con Tailscale deshabilitado, que es el default sin key |
 | Fidelidad de render (PDF/imagen/noVNC) | se asserta "hay bitmap / hay páginas / cargó", no pixels: un diff de pixels sería intermitente por densidad y fuentes |
 | Calidad de transcripción | corre en el host con GPU; se valida a mano |
+
+
+## Validar R8 (`make e2e-release`)
+
+R8 no se puede validar leyendo: si falta una regla keep, el APK compila igual y explota en
+runtime. Por eso la misma suite puede correr contra la variante **minificada**:
+
+```bash
+make e2e-release        # = E2E_RELEASE=1 scripts/e2e.sh
+```
+
+El artefacto probado difiere del publicado sólo en `app/proguard-rules-e2e.pro`, que existe
+porque instrumentar una build minificada tiene problemas propios: el APK de tests no
+reempaqueta las dependencias de la app, así que cuando R8 elimina algo que la app no usa
+—`androidx.tracing.Trace`, media biblioteca estándar de Kotlin— el runner muere al arrancar.
+Y el optimizador inlinea métodos con call sites sólo internos (`KeyStoreSsh` desaparecía
+entero), que los tests llaman desde afuera. **Nada de eso es un problema del producto**: en
+producción no hay runner de tests.
+
+Lo que este modo NO cubre: **tsnet**, porque el fixture no tiene tailnet. El puente de
+gomobile es justo lo más expuesto a R8 (JNI busca las clases por nombre), así que esa parte
+se verifica instalando el release en un teléfono y confirmando que el nodo aparece en
+`tailscale status` del host.
+
+### Si un test de UI falla con `RootViewWithoutFocusException`
+
+Casi seguro no es la app. Recién booteado, el emulador responde `mCurrentFocus=null`, y si la
+suite arranca en ese estado **ninguna** activity toma foco en toda la corrida — ni siquiera
+Settings con `am start`. `scripts/e2e.sh` ahora espera confirmación de que el window manager
+tiene una ventana enfocada antes de seguir. Para comprobarlo a mano:
+
+```bash
+adb shell dumpsys window | grep mCurrentFocus
+```

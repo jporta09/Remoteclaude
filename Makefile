@@ -20,6 +20,9 @@ e2e:             ## suite instrumentada en un AVD liviano (forma recomendada)
 e2e-device:      ## idem contra un dispositivo ya conectado (no repetible)
 	scripts/e2e.sh --device
 
+e2e-release:     ## la misma suite contra el APK minificado (valida las reglas de R8)
+	E2E_RELEASE=1 scripts/e2e.sh
+
 aar:             ## reconstruye marvints.aar (Tailscale embebido) con gomobile
 	tailscale-bridge/build-aar.sh
 
