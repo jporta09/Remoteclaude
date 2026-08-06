@@ -127,7 +127,7 @@ Lo que sigue abierto, con su destino:
 ### P3 — refactor y build
 | Pendiente | Por qué ahí |
 |---|---|
-| ✅ **R8 / `isMinifyEnabled`** en release | Resuelto: 34,4 → 31,1 MB. Las keeps de producción cubren lo que el `.so` busca por nombre vía JNI (`go.**`, `marvints.**`) y trilead, que no trae reglas propias. Validado ejecutando: `make e2e-release` corre la suite contra el APK minificado (6/6) y el humo en el teléfono confirmó lo que la suite no puede tocar — el nodo tsnet aparece **online** en el tailnet con la build ofuscada. |
+| ✅ **R8 / `isMinifyEnabled`** en release | Resuelto: 34,4 → 31,1 MB. Las keeps de producción cubren lo que el `.so` busca por nombre vía JNI (`go.**`, `marvints.**`) y trilead, que no trae reglas propias. Validado ejecutando: `make e2e-release` corre la suite contra el APK minificado (6/6) y el humo en el teléfono confirmó lo que la suite no puede tocar — el nodo tsnet aparece **online** en el tailnet con la build ofuscada. Además, `verifyReleaseKeepRules` verifica en cada build de release (y en CI, sin dispositivo) que el mapping conserve lo que se busca por nombre en runtime. |
 | ✅ **`marvints.aar` multi-ABI y reproducible** | Resuelto: `tailscale-bridge/build-aar.sh` descubre la toolchain, corre `gofmt`/`vet`/`test` antes de compilar y deja un `.sha256` para detectar drift. El AAR trae arm64 + x86_64, pero el x86_64 entra **sólo en debug** (`abiFilters` por variante): el emulador corre nativo y el release no engorda. |
 | Partir `MainActivity` (918 líneas) | El objetivo original de P3, ahora con la red de tests debajo. |
 | ✅ `marvints.go`: listeners que `Stop()` nunca cierra; `pipe()` sin timeout de dial; `Start` que devuelve OK mientras todavía está levantando | Resuelto, con 7 tests Go corridos con `-race` (incluido uno que verifica que tras `Stop()` el puerto queda **libre**, no sólo el listener cerrado). |
@@ -141,6 +141,26 @@ Lo que sigue abierto, con su destino:
 | `marvin-stt.py`: el watchdog puede matar una transcripción en curso; fuga de temporales; `ensure_cuda_ld` sin sentinela de re-exec | Robustez del daemon. |
 | S9/S10: hardening de units, `mktemp` en el prewarm, `ts-link-qr` sin imprimir la key ni pasar el secreto por argv | Ya estaban asignados a P4. |
 | Docs (`README`, `android/README`, `DESIGN.md`) y `LICENSE` GPL-3.0 | Los tres describen el gateway con `nsenter` que no existe más; falta el LICENSE pese a vendorizar Termux. |
+
+### Brecha conocida: el APK que valida `make e2e-release` no es el publicado
+
+La instrumentación es caja blanca por construcción — el APK de tests se carga en el proceso
+de la app y enlaza contra sus clases — y R8 minifica sin saber que los tests existen (la
+configuración que AGP le pasa no tiene una sola línea consciente de tests). De ahí que el
+artefacto probado necesite `proguard-rules-e2e.pro`.
+
+Mover esas keeps a producción **no** es la salida: medido, el dex pasa de 1,9 a 4,5 MB, o sea
+tirar la mayor parte de lo que R8 da.
+
+Lo que cierra la brecha, pendiente: verificar el release en **caja negra** con UI Automator
+(corre en otro proceso, no referencia ninguna clase de la app → cero keeps → APK idéntico al
+publicado), con `tmux` en el host como oráculo y logcat como canario — `GoLog: tsnet starting`
+detecta que R8 rompió el binding JNI sin necesidad de tailnet. Se pierde `screenText()`, que
+prueba que la salida volvió a la app; se recuperaría exponiendo el texto de la terminal por
+accesibilidad, que además hoy TalkBack no puede leer.
+
+Mientras tanto, la detección está cubierta por `verifyReleaseKeepRules` (invariantes sobre el
+mapping, en cada release y en CI) más el humo manual en el teléfono.
 
 ### Cobertura de tests que falta
 Los daemons del host tienen suite (`test/host/`) sólo para `marvin-render`. Los arreglos

@@ -97,6 +97,107 @@ android {
     }
 }
 
+// Portero de las reglas de R8, sobre el mapping del APK que se publica.
+//
+// mapping.txt es el testigo de lo que R8 hizo REALMENTE, no de lo que las reglas pretendían.
+// Si alguien edita proguard-rules.pro y el binding de gomobile deja de conservarse, la app
+// compila igual y explota al iniciar Tailscale — en el teléfono, sin ningún test que lo
+// agarre. Esto corre sin emulador, en cada build de release, y falla en el acto.
+//
+// Va como tarea del build y no como test suelto para que no se pueda saltear: si se produjo
+// un APK, se verificó.
+val verifyReleaseKeepRules = tasks.register("verifyReleaseKeepRules") {
+    description = "Verifica sobre mapping.txt que R8 conservó lo que se busca por nombre en runtime"
+    dependsOn("minifyReleaseWithR8")
+    // Con -PmarvinTestRelease el APK lleva a propósito las keeps de validación, que este
+    // portero justamente rechaza. Ese artefacto no se publica.
+    onlyIf { !project.hasProperty("marvinTestRelease") }
+
+    val mappingFile = layout.buildDirectory.file("outputs/mapping/release/mapping.txt")
+    inputs.files(mappingFile)
+
+    doLast {
+        // Las cuatro invariantes, sobre el CONTENIDO del mapping. Se verifica el resultado y
+        // no qué regla lo produjo: hoy el binding lo protegen tanto proguard-rules.pro como
+        // el proguard.txt que el propio AAR de gomobile trae adentro, y mañana puede ser otra.
+        fun revisar(map: List<String>): List<String> {
+            val fallas = mutableListOf<String>()
+
+            // 1. Lo que libgojni.so busca por nombre vía JNI tiene que seguir existiendo y
+            //    sin renombrar. Es la falla que nada detecta hasta que la app arranca.
+            for (c in listOf("marvints.Marvints", "go.Seq", "go.Universe")) {
+                if (map.none { it == "$c -> $c:" }) {
+                    fallas += "$c no sobrevivió intacto: el puente con Tailscale va a fallar al arrancar"
+                }
+            }
+
+            // 2. trilead elige algoritmos por nombre de clase y no trae reglas propias.
+            val trilead = map.count { it.startsWith("com.trilead.ssh2.") && it.endsWith(":") &&
+                it.substringAfter(" -> ").startsWith("com.trilead.ssh2.") }
+            if (trilead < 100) fallas += "sólo $trilead clases de trilead conservadas (se esperaban >100): SSH en riesgo"
+
+            // 3. Chequeo inverso, para que lo de arriba no pase por trivialidad: si alguien
+            //    "arregla" un problema apagando la minificación o keepeando todo, las
+            //    invariantes de JNI pasarían igual y esto cantaría victoria sin proteger nada.
+            val ofuscadas = map.count { l ->
+                l.startsWith("com.remoteclaude.app.") && l.endsWith(":") &&
+                    !l.substringAfter(" -> ").startsWith("com.remoteclaude.app")
+            }
+            if (ofuscadas < 10) fallas += "sólo $ofuscadas clases propias ofuscadas: R8 no está haciendo su trabajo"
+
+            // 4. Que no se hayan colado las keeps de validación (proguard-rules-e2e.pro), que
+            //    duplican el dex y sólo tienen sentido al instrumentar.
+            if (map.any { it == "kotlin.LazyKt -> kotlin.LazyKt:" }) {
+                fallas += "el stdlib de Kotlin quedó sin recortar: se filtraron las reglas de e2e al APK publicable"
+            }
+            return fallas
+        }
+
+        // Autoprueba, de los dos lados. Un portero que nunca disparó no está probado, y acá
+        // el riesgo es concreto: el binding hoy lo protegen a la vez proguard-rules.pro y el
+        // proguard.txt que trae el AAR, así que no hay forma de romperlo a mano para
+        // comprobar que esto discrimina. Se verifica que NO reporte nada sobre un mapping
+        // sano y que SÍ señale a marvints cuando está renombrado — específicamente a
+        // marvints: pedir "algún hallazgo" alcanzaría con que se queje de otra cosa, y el
+        // "✓" de abajo volvería a no significar nada.
+        val sano = buildList {
+            add("go.Seq -> go.Seq:"); add("go.Universe -> go.Universe:")
+            add("marvints.Marvints -> marvints.Marvints:")
+            repeat(120) { add("com.trilead.ssh2.C$it -> com.trilead.ssh2.C$it:") }
+            repeat(20) { add("com.remoteclaude.app.C$it -> z.a$it:") }
+        }
+        check(revisar(sano).isEmpty()) { "el portero reporta fallas sobre un mapping sano: ${revisar(sano)}" }
+        val roto = sano.map { if (it.startsWith("marvints.Marvints")) "marvints.Marvints -> a.b:" else it }
+        check(revisar(roto).any { "marvints" in it }) {
+            "el portero NO detecta el binding de JNI renombrado; el resto de sus chequeos no cubre eso"
+        }
+
+        val f = mappingFile.get().asFile
+        if (!f.exists()) throw GradleException("no se generó $f: ¿se apagó isMinifyEnabled?")
+        val map = f.readLines()
+        val fallas = revisar(map)
+        val trilead = map.count { it.startsWith("com.trilead.ssh2.") && it.endsWith(":") &&
+            it.substringAfter(" -> ").startsWith("com.trilead.ssh2.") }
+        val ofuscadas = map.count { l ->
+            l.startsWith("com.remoteclaude.app.") && l.endsWith(":") &&
+                !l.substringAfter(" -> ").startsWith("com.remoteclaude.app")
+        }
+
+        if (fallas.isNotEmpty()) {
+            throw GradleException(
+                "Las reglas de R8 no protegen lo que deberían:\n" +
+                    fallas.joinToString("\n") { "  - $it" } +
+                    "\n\nRevisá app/proguard-rules.pro. Validación completa: make e2e-release",
+            )
+        }
+        logger.lifecycle(
+            "✓ reglas de R8 verificadas: binding JNI intacto, $trilead clases de trilead, " +
+                "$ofuscadas clases propias ofuscadas",
+        )
+    }
+}
+tasks.matching { it.name == "assembleRelease" }.configureEach { finalizedBy(verifyReleaseKeepRules) }
+
 dependencies {
     implementation("androidx.core:core-ktx:1.13.1")
     implementation("androidx.appcompat:appcompat:1.7.0")

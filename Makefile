@@ -1,5 +1,5 @@
 # Atajos de verificación. El detalle de los E2E está en test/e2e/README.md.
-.PHONY: unit host lint e2e e2e-device aar all
+.PHONY: unit host lint e2e e2e-device e2e-release release-check aar all
 
 unit:            ## tests unitarios JVM de la app (sin dispositivo)
 	cd android && ./gradlew :app:testDebugUnitTest
@@ -23,7 +23,10 @@ e2e-device:      ## idem contra un dispositivo ya conectado (no repetible)
 e2e-release:     ## la misma suite contra el APK minificado (valida las reglas de R8)
 	E2E_RELEASE=1 scripts/e2e.sh
 
+release-check:   ## build de release + verificación de las reglas de R8 (sin dispositivo)
+	cd android && ./gradlew :app:assembleRelease
+
 aar:             ## reconstruye marvints.aar (Tailscale embebido) con gomobile
 	tailscale-bridge/build-aar.sh
 
-all: unit host lint
+all: unit host lint release-check

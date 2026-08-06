@@ -30,6 +30,14 @@ jobs:
       - name: Build debug
         working-directory: android
         run: ./gradlew :app:assembleDebug
+      # Build de release: corre R8 y, con él, verifyReleaseKeepRules, que verifica sobre
+      # mapping.txt que se conserve lo que se busca por nombre en runtime (el binding de
+      # gomobile, trilead). Sin esto, romper una regla keep no se nota hasta que la app
+      # arranca en un teléfono. Sin keystore.properties el APK sale sin firmar, que para
+      # verificar alcanza.
+      - name: Build release + reglas de R8
+        working-directory: android
+        run: ./gradlew :app:assembleRelease
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
