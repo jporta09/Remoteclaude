@@ -10,6 +10,16 @@
 set -euo pipefail
 
 SCRIPTS="$(cd "$(dirname "$0")" && pwd)"
+# shellcheck source=scripts/setup-host-lib.sh
+. "$SCRIPTS/setup-host-lib.sh"
+
+# Endurecimiento común de las units. No se usa ProtectHome: el render-daemon sirve
+# ~/RemoteMarvinDocs y los de STT guardan el modelo en ~/.cache.
+HARDENING="NoNewPrivileges=yes
+ProtectSystem=full
+ProtectKernelTunables=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes"
 
 echo "==> Docker"
 if ! command -v docker >/dev/null 2>&1; then
@@ -35,11 +45,24 @@ sudo systemctl restart ssh
 
 echo "==> tmux.conf (persistencia + portapapeles del celu vía OSC 52)"
 if [ ! -f "$HOME/.tmux.conf" ]; then
-    cp "$(dirname "$0")/marvin.tmux.conf" "$HOME/.tmux.conf"
+    cp "$SCRIPTS/marvin.tmux.conf" "$HOME/.tmux.conf"
     echo "    instalado en ~/.tmux.conf"
 else
-    echo "    ya existe ~/.tmux.conf — revisá que tenga: set -g mouse on / set -g set-clipboard on"
-    echo "    (referencia: scripts/marvin.tmux.conf)"
+    # Antes acá sólo se imprimía "revisá que tenga…", así que quien ya tenía su tmux.conf se
+    # quedaba sin OSC 52 (el portapapeles del celu no funcionaba) y sin el hook que arranca
+    # el render-daemon, sin ninguna señal de por qué. Se agrega SÓLO lo que la app necesita,
+    # en un bloque con sentinelas que se puede reescribir en cada corrida, respetando el
+    # resto de la config. La referencia completa sigue en scripts/marvin.tmux.conf.
+    bloque_sentinelas "$HOME/.tmux.conf" "# >>> RemoteMarvin >>>" "# <<< RemoteMarvin <<<" <<TMUX
+# Lo mínimo que RemoteMarvin necesita (tu config previa queda intacta arriba).
+set -g destroy-unattached off
+set -g mouse on
+set -g set-clipboard on
+set -as terminal-features ',*:clipboard'
+set -ga update-environment MARVIN_DISPLAY
+set-hook -g client-attached 'run-shell -b "tmux show-environment MARVIN_DISPLAY >/dev/null 2>&1 && XDG_RUNTIME_DIR=/run/user/\$(id -u) systemctl --user start marvin-render.service 2>/dev/null || true"'
+TMUX
+    echo "    ~/.tmux.conf actualizado (bloque RemoteMarvin; tu config previa intacta)"
 fi
 
 echo "==> ssh/config: el display sigue a tu SSH (solo desde sesiones de la app)"
@@ -58,16 +81,12 @@ install -m755 "$SCRIPTS/marvin-allow-display" "$HOME/.local/bin/marvin-allow-dis
 BEGIN="# >>> RemoteMarvin >>>"
 END="# <<< RemoteMarvin <<<"
 touch "$SSHCFG"; chmod 600 "$SSHCFG"
-if grep -qF "$BEGIN" "$SSHCFG"; then
-    sed -i "/$BEGIN/,/$END/d" "$SSHCFG"
-fi
 # Migración del bloque viejo (sin sentinelas) para no dejarlo duplicado y activo.
 if grep -q "Match exec \"env | grep -q '\^MARVIN_DISPLAY='\"" "$SSHCFG" 2>/dev/null; then
     sed -i "/Match exec \"env | grep -q '\^MARVIN_DISPLAY='\"/,+3d" "$SSHCFG"
     echo "    (migrado el bloque viejo, que reenviaba a CUALQUIER server)"
 fi
-cat >> "$SSHCFG" <<CFG
-$BEGIN
+bloque_sentinelas "$SSHCFG" "$BEGIN" "$END" <<CFG
 # A los servers HABILITADOS a los que SSH-ees DESDE la app, llevarles el display (6099,
 # headed-browser remoto) y el render-daemon (6090, mostrar HTML/documentos).
 # Habilitar uno:  marvin-allow-display <host>
@@ -75,7 +94,6 @@ Match exec "\$HOME/.local/bin/marvin-display-allowed %h"
     RemoteForward 6099 127.0.0.1:6099
     RemoteForward 6090 127.0.0.1:6090
     ExitOnForwardFailure no
-$END
 CFG
 echo "    ~/.ssh/config actualizado (ahora sólo a servers habilitados)"
 
@@ -101,7 +119,11 @@ echo "==> render-daemon (mostrar HTML/URL + recibir docs de servers a los que SS
 # sesión SSH de la app.
 DAEMON="$(cd "$(dirname "$0")" && pwd)/marvin-render.py"
 install -d "$HOME/.config/systemd/user"
-cat > "$HOME/.config/systemd/user/marvin-render.service" <<EOF
+# Sin PrivateTmp a propósito: este daemon deja archivos en /tmp/marvin-render y le pasa
+# rutas file:// al browser. Con /tmp privado, un browser lanzado por fuera de la unit
+# (MARVIN_BROWSER_CMD) no las vería y el render fallaría en silencio. Ese directorio ya
+# está en 0700, que es lo que protege en una máquina multiusuario.
+escribir_unidad marvin-render.service <<EOF
 [Unit]
 Description=RemoteMarvin render/docs daemon (127.0.0.1:6090)
 
@@ -109,8 +131,8 @@ Description=RemoteMarvin render/docs daemon (127.0.0.1:6090)
 ExecStart=$DAEMON
 Restart=on-failure
 RestartSec=2
+$HARDENING
 EOF
-systemctl --user daemon-reload
 loginctl enable-linger "$USER" >/dev/null 2>&1 || true
 echo "    instalado (lo arranca tmux al conectar la app; no autostart en boot)"
 
@@ -118,12 +140,24 @@ echo "==> stt-daemon (dictado por voz de la app: WAV -> texto con faster-whisper
 # Bajo demanda: lo arranca el cliente `marvin-stt` en el primer dictado y se apaga solo
 # tras 10 min sin uso (idle-exit = salida limpia; por eso sin Restart= ni autostart).
 # GPU (CUDA float16) si hay driver NVIDIA; si no, CPU int8 — el daemon decide solo.
-UV_BIN="$(command -v uv || echo "$HOME/.local/bin/uv")"
+# uv es lo que ejecuta los daemons de dictado. Antes, si faltaba, igual se escribían las
+# units apuntando a una ruta inexistente y el dictado fallaba recién al usarlo, con un error
+# de systemd que no explica nada. Ahora se avisa acá y se saltea instalarlas.
+UV_BIN="$(command -v uv || true)"
+if [ -z "$UV_BIN" ] && [ -x "$HOME/.local/bin/uv" ]; then UV_BIN="$HOME/.local/bin/uv"; fi
+SALTAR_STT=0
+if [ -z "$UV_BIN" ]; then
+    SALTAR_STT=1
+    echo "    !! falta uv: NO se instalan los daemons de dictado."
+    echo "       Instalalo con:  curl -LsSf https://astral.sh/uv/install.sh | sh"
+    echo "       y volvé a correr este script."
+fi
+if [ "$SALTAR_STT" != "1" ]; then
 STT_PY="$(cd "$(dirname "$0")" && pwd)/marvin-stt.py"
 # Restart=on-failure: revive crashes pero respeta el idle-exit (salida limpia).
 # [Install]: permite `marvin-stt mode always` (enable = arranca en boot); por default
 # queda disabled (bajo demanda).
-cat > "$HOME/.config/systemd/user/marvin-stt.service" <<EOF
+escribir_unidad marvin-stt.service <<EOF
 [Unit]
 Description=RemoteMarvin STT daemon (dictado, 127.0.0.1:6091)
 
@@ -131,11 +165,12 @@ Description=RemoteMarvin STT daemon (dictado, 127.0.0.1:6091)
 ExecStart=$UV_BIN run --with faster-whisper --with nvidia-cublas-cu12 --with nvidia-cudnn-cu12 $STT_PY
 Restart=on-failure
 RestartSec=2
+$HARDENING
+PrivateTmp=yes
 
 [Install]
 WantedBy=default.target
 EOF
-systemctl --user daemon-reload
 install -d "$HOME/.local/bin"
 ln -sf "$(cd "$(dirname "$0")" && pwd)/marvin-stt" "$HOME/.local/bin/marvin-stt"
 echo "    instalado (cliente: marvin-stt; daemon bajo demanda en :6091)"
@@ -145,7 +180,7 @@ echo "==> stt-live (dictado EN VIVO: parciales por WebSocket mientras hablás)"
 # app lo arranca fire-and-forget al primer dictado; `marvin-stt mode always` lo deja
 # resident junto al batch (VRAM: ~2GB batch + ~2GB live, entra en una placa de 6GB).
 STT_LIVE_PY="$(cd "$(dirname "$0")" && pwd)/marvin-stt-live.py"
-cat > "$HOME/.config/systemd/user/marvin-stt-live.service" <<EOF
+escribir_unidad marvin-stt-live.service <<EOF
 [Unit]
 Description=RemoteMarvin STT live daemon (dictado en vivo, 127.0.0.1:6092)
 
@@ -153,26 +188,33 @@ Description=RemoteMarvin STT live daemon (dictado en vivo, 127.0.0.1:6092)
 ExecStart=$UV_BIN run --with whisperlivekit --with nvidia-cublas-cu12 --with nvidia-cudnn-cu12 $STT_LIVE_PY
 Restart=on-failure
 RestartSec=2
+$HARDENING
+PrivateTmp=yes
 
 [Install]
 WantedBy=default.target
 EOF
-systemctl --user daemon-reload
 echo "    instalado (se activa con: marvin-stt mode always, o al primer dictado)"
 # Prewarm en background: fuerza la descarga del modelo (~1.6GB) AHORA y no en el primer
 # dictado. Manda 1s de silencio; resultado en /tmp/marvin-stt-prewarm.log.
+# mktemp en vez de rutas fijas: con un nombre predecible, en una máquina multiusuario
+# cualquiera podía dejar el archivo creado de antemano.
+PREWARM_WAV="$(mktemp -t marvin-stt-prewarm.XXXXXX.wav)"
+PREWARM_LOG="$(mktemp -t marvin-stt-prewarm.XXXXXX.log)"
 (
-  python3 - <<'PY'
-import wave
-w = wave.open("/tmp/marvin-stt-prewarm.wav", "wb")
+  python3 - "$PREWARM_WAV" <<'PY'
+import sys, wave
+w = wave.open(sys.argv[1], "wb")
 w.setnchannels(1); w.setsampwidth(2); w.setframerate(16000)
 w.writeframes(b"\x00\x00" * 16000)
 w.close()
 PY
-  "$HOME/.local/bin/marvin-stt" < /tmp/marvin-stt-prewarm.wav >/dev/null \
+  "$HOME/.local/bin/marvin-stt" < "$PREWARM_WAV" >/dev/null \
     && echo "prewarm STT OK" || echo "prewarm STT falló (se reintenta al primer uso)"
-) >/tmp/marvin-stt-prewarm.log 2>&1 &
-echo "    prewarm del modelo en background (log: /tmp/marvin-stt-prewarm.log)"
+  rm -f "$PREWARM_WAV"
+) >"$PREWARM_LOG" 2>&1 &
+echo "    prewarm del modelo en background (log: $PREWARM_LOG)"
+fi
 
 cat <<'EOF'
 
