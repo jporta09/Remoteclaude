@@ -263,7 +263,7 @@ class TabsController(
                 setOnLongClickListener { preguntarNombre(i); true }
             })
             chip.addView(TextView(act).apply {
-                text = "  ✕"
+                text = Iconos.conIconos(act, "  ${Iconos.CERRAR}")
                 contentDescription = "Cerrar ${tab.session.tmuxSession}"
                 setTextColor(Paleta.CHEV_FG)
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
@@ -273,10 +273,10 @@ class TabsController(
             barra.addView(chip)
         }
         barra.addView(boton("  +  ", "Pestaña nueva", 17f, Paleta.KEY_FG, act.dp(10)) { nueva() })
-        barra.addView(boton("⟳", "Reenganchar una sesión", 16f, Paleta.CHEV_FG, act.dp(8)) { menuReenganche() })
-        barra.addView(boton("🖥", "Ver el escritorio del host", 15f, null, act.dp(6)) { acciones.abrirVisor() })
-        barra.addView(boton("📄", "Documentos compartidos", 15f, null, act.dp(6)) { acciones.abrirDocumentos() })
-        barra.addView(boton("🔑", "Clave pública de la app", 15f, null, act.dp(6)) { acciones.mostrarClavePublica() })
+        barra.addView(boton(Iconos.REENGANCHAR, "Reenganchar una sesión", 16f, Paleta.CHEV_FG, act.dp(8)) { menuReenganche() })
+        barra.addView(boton(Iconos.VISOR, "Ver el escritorio del host", 15f, null, act.dp(6)) { acciones.abrirVisor() })
+        barra.addView(boton(Iconos.DOCS, "Documentos compartidos", 15f, null, act.dp(6)) { acciones.abrirDocumentos() })
+        barra.addView(boton(Iconos.CLAVE, "Clave pública de la app", 15f, null, act.dp(6)) { acciones.mostrarClavePublica() })
         guardar()
     }
 
@@ -288,7 +288,7 @@ class TabsController(
         padH: Int,
         alTocar: () -> Unit,
     ) = TextView(act).apply {
-        text = etiqueta
+        text = Iconos.conIconos(act, etiqueta)
         contentDescription = descripcion   // los emoji solos son ilegibles para TalkBack
         color?.let { setTextColor(it) }
         setTextSize(TypedValue.COMPLEX_UNIT_SP, sp)

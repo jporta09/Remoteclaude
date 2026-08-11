@@ -45,12 +45,22 @@ en `.gitignore`. Lo que sí se distribuye, en `android/app/src/main/res/font/`:
 | `ubuntu.ttf` | [Ubuntu](https://design.ubuntu.com/font) | Ubuntu Font Licence 1.0 | cuerpo del manual |
 | `mononoki.ttf` | [Mononoki](https://madmalik.github.io/mononoki/) | SIL Open Font License 1.1 | terminal y código |
 | `mononoki_bold.ttf` | Mononoki | SIL Open Font License 1.1 | destacados del manual |
+| `marvin_icons.ttf` | Noto Emoji + Noto Sans Math + Noto Sans Symbols 2 | SIL Open Font License 1.1 | los 8 íconos de la interfaz |
+
+`marvin_icons.ttf` son 3 KB con exactamente los ocho glifos de los botones (🖥 📄 🔑 🎤 ⧉ ⇧
+⟳ ✕). Se arma con `scripts/build-icon-font.py`; ninguna fuente libre sola los cubre a los
+ocho. Antes los dibujaba la fuente del sistema, así que se veían distintos en cada teléfono
+y ⧉ (U+29C9) es tan poco frecuente que ni DejaVu lo tiene.
 
 Y fuera del APK, sólo para generar el manual en PDF:
 
 | Archivo | Fuente | Licencia | Dónde se usa |
 |---|---|---|---|
 | `scripts/manual-fonts/NotoEmoji-subset.ttf` | [Noto Emoji](https://fonts.google.com/noto/specimen/Noto+Emoji) | SIL Open Font License 1.1 (copia en `scripts/manual-fonts/OFL.txt`) | los íconos 🎤 🖥 📄 🔑 del manual |
+
+Las tres fuentes de origen (Noto Emoji, Noto Sans Math, Noto Sans Symbols 2) son de Google
+bajo SIL OFL 1.1 y ninguna declara *Reserved Font Name*, así que los subsets pueden
+redistribuirse. La copia de la licencia está en `scripts/manual-fonts/OFL.txt`.
 
 Es un **subset** de los cuatro glifos que el manual usa: 2 KB en vez de los 1,9 MB del
 original. La OFL permite modificar y redistribuir, y esta fuente no declara *Reserved Font

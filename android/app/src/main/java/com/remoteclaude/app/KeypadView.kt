@@ -93,7 +93,7 @@ class KeypadView(ctx: Context, private val io: Io) : LinearLayout(ctx) {
 
     /** Estado visible del botón de dictado (lo maneja [DictationController]). */
     fun estadoMicrofono(texto: String, color: Int) {
-        botonMic?.let { it.text = texto; it.setTextColor(color) }
+        botonMic?.let { it.text = Iconos.conIconos(context, texto); it.setTextColor(color) }
     }
 
     /** Tab, o Shift+Tab si el modificador está activo (y en ese caso lo suelta). */
@@ -158,13 +158,13 @@ class KeypadView(ctx: Context, private val io: Io) : LinearLayout(ctx) {
     private fun poblarFilaShift() {
         filaShift.removeAllViews()
         if (tecladoArriba) return
-        botonShift = teclaAncha("⇧ Shift") { alternarShift() }
+        botonShift = teclaAncha("${Iconos.SHIFT} Shift") { alternarShift() }
             .also { it.setTextColor(if (shiftActivo) Paleta.ACCENT else Paleta.KEY_FG) }
         filaShift.addView(botonShift)
-        botonSel = teclaAncha("⧉ Sel") { alternarSeleccion() }
+        botonSel = teclaAncha("${Iconos.SELECCION} Sel") { alternarSeleccion() }
             .also { it.setTextColor(if (modoSel) Paleta.ACCENT else Paleta.KEY_FG) }
         filaShift.addView(botonSel)
-        botonMic = teclaAncha("🎤 Dictar") {}.also {
+        botonMic = teclaAncha("${Iconos.MICROFONO} Dictar") {}.also {
             it.contentDescription = "Dictar: mantené apretado para hablar"
             it.setOnTouchListener { _, ev -> io.tocaronMicrofono(ev) }
         }
@@ -186,7 +186,8 @@ class KeypadView(ctx: Context, private val io: Io) : LinearLayout(ctx) {
     }
 
     private fun tecla(etiqueta: String, alTocar: () -> Unit) = Button(context).apply {
-        text = etiqueta
+        // conIconos: la fuente de íconos se aplica sólo al glifo, el texto queda en mono.
+        text = Iconos.conIconos(context, etiqueta)
         isAllCaps = false
         typeface = mono
         setTextColor(Paleta.KEY_FG)

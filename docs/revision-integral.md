@@ -170,6 +170,15 @@ mapping, en cada release y en CI) más el humo manual en el teléfono.
 | El APK que valida `make e2e-release` no es byte-idéntico al publicado | Detallado más arriba. Mitigado por `verifyReleaseKeepRules` (cada release y en CI) más el humo manual. |
 | ✅ El manual de uso (`scripts/gen-manual.py`) describía la arquitectura vieja | Reescrito. Además del gateway con `nsenter` y `HOST_USER`, prometía el auto-enrolamiento por contraseña (eliminado en P0.8), apuntaba a un `scripts/marvin-share.sh` que se mudó al plugin, y **no mencionaba el dictado por voz**. |
 
+### Próxima iteración: íconos vectoriales propios
+
+Los 8 íconos de la interfaz ya no dependen de la fuente del sistema (`marvin_icons.ttf`, 3 KB,
+armada con `scripts/build-icon-font.py`), así que se ven igual en todo teléfono y desaparece
+el riesgo de que ⧉ salga como un cuadrito. Lo que queda pendiente para una próxima vuelta es
+reemplazarlos por **`VectorDrawable` dibujados con la identidad de Marvin**: control total del
+trazo, nítidos a cualquier tamaño y sin depender de ninguna tipografía. Hoy los glifos son de
+Noto, o sea correctos y consistentes, pero no propios.
+
 ### Cobertura de tests que falta
 Los arreglos de P4 entraron con tests propios: `test/host/` pasó de 16 a 31 (bloques
 idempotentes de `setup-host`, escritura de units, señal de actividad del dictado en vivo).

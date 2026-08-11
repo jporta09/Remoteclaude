@@ -78,7 +78,7 @@ class DictationController(
             Toast.makeText(act, "No pude abrir el micrófono", Toast.LENGTH_SHORT).show()
             return
         }
-        teclado()?.estadoMicrofono("🎤 Grabando", Paleta.REC_FG)
+        teclado()?.estadoMicrofono("${Iconos.MICROFONO} Grabando", Paleta.REC_FG)
         thread {
             if (l.start()) {
                 act.runOnUiThread {
@@ -103,7 +103,7 @@ class DictationController(
         // mientras tanto cambiás de pestaña, el texto se escribía en la equivocada.
         val destino = sesionActiva() ?: run { l?.cancel(); ocultarBurbuja(); micEnReposo(); return }
         transcribiendo = true
-        teclado()?.estadoMicrofono("🎤 …", Paleta.ACCENT)
+        teclado()?.estadoMicrofono("${Iconos.MICROFONO} …", Paleta.ACCENT)
         thread {
             var texto: String? = null
             if (l != null && l.available) {
@@ -141,7 +141,7 @@ class DictationController(
         burbuja.text = ""
     }
 
-    private fun micEnReposo() = teclado()?.estadoMicrofono("🎤 Dictar", Paleta.KEY_FG)
+    private fun micEnReposo() = teclado()?.estadoMicrofono("${Iconos.MICROFONO} Dictar", Paleta.KEY_FG)
 
     companion object {
         /** Código del pedido de permiso RECORD_AUDIO. */
