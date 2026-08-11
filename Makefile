@@ -7,8 +7,9 @@ unit:            ## tests unitarios JVM de la app (sin dispositivo)
 host:            ## tests de los daemons del host
 	uv run --with pytest pytest test/host/ -q
 
-lint:            ## lint de Android + shellcheck de los scripts
+lint:            ## lint de Android + shellcheck de los scripts + ruff de los daemons
 	cd android && ./gradlew :app:lintDebug
+	uv run --with ruff ruff check scripts/*.py test/host/*.py
 	uv run --with shellcheck-py shellcheck --severity=warning \
 		scripts/*.sh scripts/marvin-stt scripts/marvin-display-allowed \
 		scripts/marvin-allow-display \

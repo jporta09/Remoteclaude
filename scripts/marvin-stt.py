@@ -18,6 +18,7 @@ Endpoints:
   GET  /      estado (no carga el modelo)
 """
 import os
+import pathlib
 import sys
 import tempfile
 import threading
@@ -44,11 +45,22 @@ _lock = threading.Lock()
 _model = None
 _mode = "sin cargar"
 _last_use = time.time()
+# Transcripciones en curso. El watchdog no puede apagar el daemon en el medio de una:
+# matarla deja al usuario sin su dictado justo cuando el audio ya viajo por SSH. Pasa de
+# verdad la primera vez, cuando cargar el modelo tarda minutos y el reloj de idle ya
+# venia corriendo.
+_en_curso = 0
+_curso_lock = threading.Lock()
 
 
 def ensure_cuda_ld():
     """ctranslate2 dlopen-ea cublas/cudnn; si vinieron por pip (nvidia-*-cu12), sus dirs
     tienen que estar en LD_LIBRARY_PATH ANTES de arrancar el proceso -> re-exec una vez."""
+    # Sentinela: el re-exec es por una sola vez. Sin esto, si tras reponer
+    # LD_LIBRARY_PATH el loader igual no encuentra las libs, el proceso se re-ejecuta a
+    # si mismo para siempre — un bucle que come CPU y no deja ni un error claro.
+    if os.environ.get("MARVIN_STT_REEXEC") == "1":
+        return
     try:
         import nvidia
     except ImportError:
@@ -66,6 +78,7 @@ def ensure_cuda_ld():
     missing = [d for d in dirs if d not in cur.split(":")]
     if missing:
         os.environ["LD_LIBRARY_PATH"] = ":".join(missing + ([cur] if cur else []))
+        os.environ["MARVIN_STT_REEXEC"] = "1"
         os.execv(sys.executable, [sys.executable] + sys.argv)
 
 
@@ -91,9 +104,12 @@ def get_model():
 
 
 def transcribe(wav_bytes: bytes) -> str:
+    global _en_curso
     with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
         f.write(wav_bytes)
         path = f.name
+    with _curso_lock:
+        _en_curso += 1
     try:
         t0 = time.time()
         segments, info = get_model().transcribe(
@@ -104,13 +120,19 @@ def transcribe(wav_bytes: bytes) -> str:
               f"({len(text)} chars)", flush=True)
         return text
     finally:
-        os.unlink(path)
+        with _curso_lock:
+            _en_curso -= 1
+        # missing_ok: si algo ya lo borro, que la limpieza no se convierta en el error
+        # que ve el usuario en lugar de su transcripcion.
+        pathlib.Path(path).unlink(missing_ok=True)
 
 
 def watchdog():
     while True:
         time.sleep(30)
         if power_mode() == "always":
+            continue
+        if _en_curso > 0:
             continue
         if time.time() - _last_use > IDLE:
             print(f"[marvin-stt] {IDLE}s sin uso, me apago (el cliente me relanza)", flush=True)

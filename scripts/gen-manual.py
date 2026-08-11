@@ -4,17 +4,16 @@
 
 import sys
 
-from reportlab.lib.enums import TA_CENTER, TA_LEFT
+from reportlab.lib import colors
+from reportlab.lib.enums import TA_LEFT
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle
-from reportlab.lib.units import cm, mm
+from reportlab.lib.units import cm
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
-from reportlab.lib import colors
 from reportlab.platypus import (
     BaseDocTemplate,
     Frame,
-    Image,
     NextPageTemplate,
     PageBreak,
     PageTemplate,
@@ -95,8 +94,8 @@ def cover(canvas, doc):
         h = w * ih / iw
         canvas.drawImage(img, (A4[0] - w) / 2, A4[1] - 8 * cm - h, w, h,
                          mask="auto", preserveAspectRatio=True)
-    except Exception:
-        pass
+    except Exception as e:  # noqa: BLE001 - el logo es decorativo, no vale abortar el PDF
+        print(f"[gen-manual] sin logo en la portada: {e}")
     canvas.setFillColor(GREEN)
     canvas.setFont("Title", 46)
     canvas.drawCentredString(A4[0] / 2, A4[1] - 13.5 * cm, "RemoteMarvin")

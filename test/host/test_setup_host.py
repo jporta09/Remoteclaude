@@ -20,6 +20,7 @@ def correr(script, cwd, env=None):
     return subprocess.run(
         ["bash", "-euo", "pipefail", "-c", f'. "{LIB}"\n{script}'],
         cwd=cwd, env=entorno, capture_output=True, text=True,
+        check=False,   # los tests asertan sobre returncode
     )
 
 
