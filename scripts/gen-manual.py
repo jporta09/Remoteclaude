@@ -162,22 +162,24 @@ S.append(P("Abrís la app, tocás tu PC, y tenés una terminal real del host (no
 
 # --- 2. Arquitectura --------------------------------------------------------
 S.append(P("Cómo está armado", h1))
-S.append(B("<b>Gateway (Docker en la PC)</b>: provee SSH y, al entrar, salta al "
-           "<b>host</b> con <font name='Mono' size='9'>nsenter</font>. La ejecución pasa "
-           "en tu máquina real (filesystem, proyectos, <font name='Mono' size='9'>claude</font>), "
-           "no en el contenedor. No instala nada en el host."))
-S.append(B("<b>Tailscale embebido</b>: la app trae su propio nodo Tailscale (userspace, "
-           "vía <font name='Mono' size='9'>tsnet</font>) y enruta su SSH y su visor por "
-           "túneles locales. Conserva NAT traversal, roaming y MagicDNS."))
+S.append(B("<b>SSH directo a tu PC</b>: la app entra al "
+           "<font name='Mono' size='9'>sshd</font> del host como <b>tu usuario</b>, solo "
+           "con clave. No hay contenedor de por medio ni nada corriendo como root: la "
+           "terminal es tu shell de siempre, con tus proyectos y tu "
+           "<font name='Mono' size='9'>claude</font>."))
+S.append(B("<b>tmux</b> del lado del host: es lo que hace que las sesiones sobrevivan a que "
+           "bloquees el celu, se corte la red o cierres la app."))
+S.append(B("<b>Tailscale embebido</b>: la app trae su propio nodo (userspace, vía "
+           "<font name='Mono' size='9'>tsnet</font>) y enruta su SSH y sus túneles por ahí. "
+           "No necesitás instalar la app de Tailscale."))
 S.append(B("<b>Contenedor de display</b>: una pantalla virtual aislada donde corre el "
            "navegador <i>headed</i> de la PC, que ves por <b>noVNC</b> en el celu."))
-S.append(B("<b>App (Kotlin nativa)</b>: Splash → Hosts → Terminal, con visor noVNC y "
-           "visor de documentos integrados."))
 
 # --- 3. Setup ---------------------------------------------------------------
 S.append(P("Puesta en marcha (en la PC)", h1))
-S.append(P("Una sola vez, en el repo del gateway:"))
-S.append(C("cp .env.example .env      # completá HOST_USER, etc.\n"
+S.append(P("Una sola vez, en el repo:"))
+S.append(C("bash scripts/setup-host.sh   # sshd solo-clave, tmux y daemons\n"
+           "cp .env.example .env         # completá TS_AUTHKEY\n"
            "docker compose up -d --build"))
 S.append(P("Para vincular el celu por QR necesitás un <b>OAuth client</b> de Tailscale "
            "(no vence) cargado en el <font name='Mono' size='9'>.env</font> "
@@ -200,9 +202,12 @@ S.append(P("La terminal", h1))
 S.append(B("<b>Sesiones persistentes</b> (tmux): si se corta la red o bloqueás el celu, "
            "al volver seguís donde estabas. La app reconecta sola."))
 S.append(B("<b>Multi-pestaña</b>: varias sesiones a la vez, con “+”. Cada host recuerda "
-           "sus pestañas."))
+           "sus pestañas, y con “⟳” reenganchás las que quedaron vivas."))
 S.append(B("<b>Teclado extra</b>: Ctrl / Alt / Shift, flechas, Tab y ⇧Tab — las teclas "
-           "que un teclado de celu no tiene. Copiar/pegar desde la terminal."))
+           "que un teclado de celu no tiene. Ctrl, Alt y Shift quedan <i>pegados</i>: los "
+           "tocás y modifican la tecla siguiente."))
+S.append(B("<b>Portapapeles</b>: con “Sel” arrastrás el dedo para marcar texto y al soltar "
+           "queda en el portapapeles del teléfono."))
 S.append(P("Barra de la terminal", h2))
 S.append(P("De izquierda a derecha (los últimos tres son íconos):", small))
 row = Table([
@@ -228,41 +233,62 @@ row.setStyle(TableStyle([
 S.append(row)
 S.append(Spacer(1, 6))
 
-# --- 6. Hosts ---------------------------------------------------------------
-S.append(P("Hosts y enrolamiento", h1))
+# --- 6. Dictado -------------------------------------------------------------
+S.append(P("Dictado por voz", h1))
+S.append(P("Mantené apretado el botón del <b>micrófono</b> (“Dictar”) y hablá: al soltar, el texto aparece en la "
+           "terminal como si lo hubieras tipeado. <b>Sin Enter</b>, así lo revisás antes de "
+           "mandarlo."))
+S.append(B("Si la PC tiene GPU, vas viendo el texto <b>en vivo</b> mientras hablás."))
+S.append(B("El audio se transcribe <b>en tu PC</b> (faster-whisper), no en un servicio de "
+           "terceros, y viaja por tu propia conexión."))
+S.append(B("El motor se apaga solo tras un rato sin uso para liberar la memoria de la "
+           "placa; se enciende de nuevo al dictar."))
+
+# --- 7. Hosts ---------------------------------------------------------------
+S.append(P("Hosts y autorización", h1))
 S.append(P("La pantalla de inicio lista tus PCs. “+ Agregar host” da de alta uno "
            "(nombre, host/IP, puerto, usuario). Mantené apretado para editar o borrar."))
-S.append(P("Auto-enrolamiento de la clave", h2))
+S.append(P("Autorizar el teléfono", h2))
 S.append(P("La app genera su propia clave SSH en el <b>Android Keystore</b> (la privada "
-           "nunca sale del teléfono). La primera vez que conectás a un host, la app sube "
-           "sola su clave pública al gateway (estilo "
-           "<font name='Mono' size='9'>ssh-copy-id</font>), usando una contraseña de "
-           "enrolamiento que solo permite agregar claves — nunca da shell."))
+           "nunca sale del teléfono). Para habilitarla, tocá el ícono de la <b>llave</b>, "
+           "copiá el texto y pegalo en el host:"))
+S.append(C("~/.ssh/authorized_keys"))
+S.append(P("La identidad del host", h2))
+S.append(P("La primera vez que conectás, la app <b>memoriza la clave del host</b>. Si más "
+           "adelante cambia, la conexión se <b>rechaza</b> y te muestra las dos huellas "
+           "para que decidas: si reinstalaste el server es esperable, y si no, alguien "
+           "puede estar interceptando. Solo la terminal pregunta — el visor, los documentos "
+           "y el dictado fallan sin ofrecer confiar."))
 
-# --- 7. Navegador -----------------------------------------------------------
+# --- 8. Navegador -----------------------------------------------------------
 S.append(P("Visor de navegador (noVNC)", h1))
 S.append(P("El botón del <b>monitor</b> abre el navegador <i>headed</i> que corre en la PC, "
            "renderizado en vivo en el celu. Sirve para flujos que no pueden ser "
            "<i>headless</i> (anti-bot) o cuando querés <i>ver</i> el navegador. Tiene "
            "modos Ajustar/Escritorio y <b>zoom nítido</b> (pinch) sobre la imagen real."))
+S.append(P("No está publicado en la red: viaja tunelizado por tu propia conexión SSH.",
+           small))
 
-# --- 8. Documentos ----------------------------------------------------------
+# --- 9. Documentos ----------------------------------------------------------
 S.append(P("Visor de documentos", h1))
-S.append(P("El botón de la <b>hoja</b> muestra los documentos que se comparten desde la PC. "
-           "En la PC, compartís con:"))
-S.append(C("scripts/marvin-share.sh informe.pdf grafico.png datos.csv"))
-S.append(P("y aparecen en la app. El visor es <b>nativo</b>:"))
+S.append(P("El botón de la <b>hoja</b> muestra los documentos que se comparten desde la PC "
+           "(<font name='Mono' size='9'>~/RemoteMarvinDocs</font>). Se comparten con:"))
+S.append(C("marvin-share informe.pdf grafico.png datos.csv"))
+S.append(P("que viene con el plugin de Claude. Funciona también desde un server remoto al "
+           "que hayas entrado por SSH <i>desde la app</i>: el documento igual aterriza en la "
+           "PC que estás mirando."))
+S.append(P("El visor es <b>nativo</b>:"))
 S.append(B("<b>Imágenes</b> (png/jpg/webp…): con pinch-zoom y arrastre."))
 S.append(B("<b>PDF</b>: renderizado página por página."))
 S.append(B("<b>Texto</b> (txt/csv/md/json/…): monospace, scrolleable."))
 S.append(P("<i>Este mismo manual se generó y se compartió así.</i>", small))
 
-# --- 9. Marca ---------------------------------------------------------------
+# --- 10. Marca --------------------------------------------------------------
 S.append(P("Identidad", h1))
 S.append(P("RemoteMarvin viste la identidad de <b>Marvin Software Solutions</b>: paleta "
-           "CTR (verde, petróleo, ámbar) inspirada en monitores CRT, tipografías ISOCPEUR "
-           "y Mononoki, e isologo de corchetes y triángulos. El nombre guiña a Marvin, el "
-           "androide de la Guía del Autoestopista Galáctico."))
+           "CTR (verde, petróleo, ámbar) inspirada en monitores CRT, tipografías de "
+           "rotulación técnica y Mononoki, e isologo de corchetes y triángulos. El nombre "
+           "guiña a Marvin, el androide de la Guía del Autoestopista Galáctico."))
 
 doc.build(S)
 print(OUT)
