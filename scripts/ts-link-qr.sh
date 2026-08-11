@@ -5,8 +5,12 @@
 # tocar la consola web ni la app de Tailscale.
 #
 # Uso (en la PC, desde el repo):  ./scripts/ts-link-qr.sh
+#                                 ./scripts/ts-link-qr.sh --mostrar-key   (ver texto)
 # Requiere curl, jq y qrencode instalados en el host.
 set -euo pipefail
+
+MOSTRAR_KEY=0
+[ "${1:-}" = "--mostrar-key" ] && MOSTRAR_KEY=1
 
 # Tomar las credenciales OAuth del .env del repo si no vienen ya del entorno.
 if [ -z "${TS_OAUTH_CLIENT_ID:-}" ] || [ -z "${TS_OAUTH_CLIENT_SECRET:-}" ]; then
@@ -21,17 +25,24 @@ fi
 TAG="${TS_TAG:-tag:remotemarvin}"
 
 # 1) Token de acceso (OAuth client_credentials).
-token=$(curl -sf https://api.tailscale.com/api/v2/oauth/token \
-    -d "client_id=${TS_OAUTH_CLIENT_ID}" \
-    -d "client_secret=${TS_OAUTH_CLIENT_SECRET}" \
-    | jq -r '.access_token // empty')
+# Los secretos van por --config (stdin) y no como argumentos: todo lo que se pasa por argv
+# queda visible en /proc/<pid>/cmdline para CUALQUIER usuario de la maquina mientras dura
+# el curl, y `ps` alcanza para leerlo.
+token=$(curl -sf https://api.tailscale.com/api/v2/oauth/token --config - <<CFG | jq -r '.access_token // empty'
+data = "client_id=${TS_OAUTH_CLIENT_ID}"
+data = "client_secret=${TS_OAUTH_CLIENT_SECRET}"
+CFG
+)
 [ -n "$token" ] || { echo "✗ No pude obtener el token OAuth (revisá client id/secret en .env)"; exit 1; }
 
 # 2) Auth key fresca: un solo uso, no efímera (nodo estable), pre-autorizada, tag obligatorio.
-key=$(curl -sf -H "Authorization: Bearer ${token}" -H "Content-Type: application/json" \
-    "https://api.tailscale.com/api/v2/tailnet/-/keys" \
-    -d "{\"capabilities\":{\"devices\":{\"create\":{\"reusable\":false,\"ephemeral\":false,\"preauthorized\":true,\"tags\":[\"${TAG}\"]}}},\"expirySeconds\":600,\"description\":\"RemoteMarvin enroll\"}" \
-    | jq -r '.key // empty')
+BODY="{\"capabilities\":{\"devices\":{\"create\":{\"reusable\":false,\"ephemeral\":false,\"preauthorized\":true,\"tags\":[\"${TAG}\"]}}},\"expirySeconds\":600,\"description\":\"RemoteMarvin enroll\"}"
+# El token tambien es un secreto: mismo tratamiento (el cuerpo JSON no lo es).
+key=$(curl -sf "https://api.tailscale.com/api/v2/tailnet/-/keys" \
+    -H "Content-Type: application/json" -d "$BODY" --config - <<CFG | jq -r '.key // empty'
+header = "Authorization: Bearer ${token}"
+CFG
+)
 [ -n "$key" ] || { echo "✗ No pude crear la auth key (¿el tag '${TAG}' está en tagOwners de la ACL?)"; exit 1; }
 
 echo
@@ -45,6 +56,14 @@ echo
 qrencode -t ANSIUTF8 -l L -m 3 "$key"
 echo
 echo "  Tip: si al lector le cuesta, agrandá la fuente de la terminal (Ctrl+'+')."
-echo "  Si no podés escanear, pegá esta key a mano:"
-echo "  $key"
+# La key NO se imprime por defecto: queda en el scrollback de la terminal y, si esto se
+# corre dentro de una sesion de la app, en lo que devuelve `tmux capture-pane` — que es
+# justo lo que lee la app para el preview de sesiones detacheadas. El QR ya la lleva; que
+# ademas quede en texto plano es regalarla.
+if [ "$MOSTRAR_KEY" = "1" ]; then
+    echo
+    echo "  key (no la dejes en el scrollback): $key"
+else
+    echo "  Si no podés escanear:  ./scripts/ts-link-qr.sh --mostrar-key"
+fi
 echo
