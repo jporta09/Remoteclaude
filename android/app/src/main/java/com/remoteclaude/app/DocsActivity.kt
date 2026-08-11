@@ -77,7 +77,7 @@ class DocsActivity : AppCompatActivity() {
         root.addView(header)
 
         status = TextView(this).apply {
-            typeface = monoFont
+            typeface = fuenteDetalle()
             setTextColor(getColor(R.color.marvin_muted))
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
             setPadding(dp(20), 0, dp(20), dp(10))
@@ -107,7 +107,7 @@ class DocsActivity : AppCompatActivity() {
                     list.addView(TextView(this).apply {
                         text = "Compartí algo con  marvin-share <archivo>  en la PC\n" +
                             "y va a aparecer acá."
-                        typeface = bodyFont
+                        typeface = fuenteDetalle()
                         setTextColor(getColor(R.color.marvin_muted))
                         setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
                         setPadding(dp(24), dp(24), dp(24), dp(24))

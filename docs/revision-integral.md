@@ -170,6 +170,24 @@ mapping, en cada release y en CI) más el humo manual en el teléfono.
 | El APK que valida `make e2e-release` no es byte-idéntico al publicado | Detallado más arriba. Mitigado por `verifyReleaseKeepRules` (cada release y en CI) más el humo manual. |
 | ✅ El manual de uso (`scripts/gen-manual.py`) describía la arquitectura vieja | Reescrito. Además del gateway con `nsenter` y `HOST_USER`, prometía el auto-enrolamiento por contraseña (eliminado en P0.8), apuntaba a un `scripts/marvin-share.sh` que se mudó al plugin, y **no mencionaba el dictado por voz**. |
 
+### Tipografías: las cuatro del manual de marca, todas redistribuibles
+
+El manual de identidad define cuatro roles: **títulos** (ISOCPEUR), **subtítulos** (Mononoki),
+**cuerpo** (Ubuntu Sans) y **detalles y comentarios** (Brandon Grotesque). Dos de esas cuatro
+son comerciales, y el proyecto es GPL-3.0, que exige poder redistribuir todo lo que
+distribuye:
+
+| Rol | Manual | En el producto | Por qué |
+|---|---|---|---|
+| Títulos | ISOCPEUR | **osifont** | ISOCPEUR es de Autodesk, `all rights reserved`, y **viajaba dentro del APK**. osifont sigue la misma norma ISO 3098. |
+| Subtítulos | Mononoki | Mononoki | OFL, sin cambios. |
+| Cuerpo | Ubuntu Sans | Ubuntu Sans | Ubuntu Font Licence, sin cambios. |
+| Detalles | Brandon Grotesque | **Jost\*** | Brandon es comercial de HvD Fonts. Nunca estuvo en el repo (vive en `fonts/`, gitignoreado). Jost es del mismo linaje Futura/Erbar y calza en proporciones (0.657 vs 0.660). |
+
+El rol de "detalles" además **no estaba implementado**: en el PDF lo cubría la mono —que el
+manual reserva para subtítulos, o sea dos roles pisándose— y en la app lo dibujaba la fuente
+del sistema.
+
 ### Próxima iteración: íconos vectoriales propios
 
 Los 8 íconos de la interfaz ya no dependen de la fuente del sistema (`marvin_icons.ttf`, 3 KB,

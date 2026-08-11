@@ -41,6 +41,13 @@ pdfmetrics.registerFont(TTFont("Title", f"{FONTS}/osifont.ttf"))
 pdfmetrics.registerFont(TTFont("Body", f"{FONTS}/ubuntu.ttf"))
 pdfmetrics.registerFont(TTFont("Mono", f"{FONTS}/mononoki.ttf"))
 pdfmetrics.registerFont(TTFont("MonoB", f"{FONTS}/mononoki_bold.ttf"))
+# "Detalles y comentarios" del manual de marca: iba en Brandon Grotesque, que es comercial
+# y no se puede embeber en un PDF que se distribuye. Jost es del mismo linaje geométrico
+# (revival de Futura/Erbar, como Brandon) y sus proporciones calzan: x-height/cap 0.657
+# contra 0.660. Bold para los titulares de esos bloques y Light para el texto, como manda
+# la especificación.
+pdfmetrics.registerFont(TTFont("Detail", "scripts/manual-fonts/Jost-Light.ttf"))
+pdfmetrics.registerFont(TTFont("DetailB", "scripts/manual-fonts/Jost-Bold.ttf"))
 # Las fuentes de marca no tienen flechas/checks/bullets; DejaVu sí.
 pdfmetrics.registerFont(TTFont("Sym", "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"))
 # Y DejaVu tampoco tiene los emoji de los botones de la app. Subset de Noto Emoji
@@ -58,7 +65,10 @@ bullet = ParagraphStyle("bullet", parent=body, leftIndent=14, bulletIndent=2, sp
 code = ParagraphStyle("code", fontName="Mono", fontSize=9, textColor=PETROL,
                       backColor=SURFACE, leading=13, leftIndent=8, rightIndent=8,
                       spaceBefore=4, spaceAfter=8, borderPadding=(6, 6, 6, 6))
-small = ParagraphStyle("small", fontName="Mono", fontSize=8, textColor=MUTED, leading=11)
+# Detalles y comentarios: viñetas, recuadros, texto flotante y epígrafes. Antes usaba la
+# mono, que el manual de marca reserva para los SUBTÍTULOS: dos roles pisándose.
+small = ParagraphStyle("small", fontName="Detail", fontSize=9, textColor=MUTED, leading=12)
+smallB = ParagraphStyle("smallB", parent=small, fontName="DetailB", textColor=INK)
 icon = ParagraphStyle("icon", fontName="Sym", fontSize=13, textColor=GREEN, leading=16)
 
 

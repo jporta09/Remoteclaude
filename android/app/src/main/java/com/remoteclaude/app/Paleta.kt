@@ -2,6 +2,7 @@ package com.remoteclaude.app
 
 import android.content.Context
 import android.graphics.Color
+import android.graphics.Typeface
 import android.util.TypedValue
 import android.view.ViewGroup
 
@@ -23,6 +24,23 @@ object Paleta {
 
     const val MATCH = ViewGroup.LayoutParams.MATCH_PARENT
     const val WRAP = ViewGroup.LayoutParams.WRAP_CONTENT
+}
+
+/**
+ * Tipografía de "detalles y comentarios" del manual de marca: texto complementario en
+ * recuadros, epígrafes y estados, "para facilitar la lectura y/o desambiguar".
+ *
+ * El manual especifica Brandon Grotesque, que es comercial y no se puede embeber en el APK.
+ * Jost es del mismo linaje (revival de Futura/Erbar, como Brandon) y sus proporciones
+ * coinciden: x-height/cap 0.657 contra 0.660.
+ */
+private var fuenteDetalleCache: Typeface? = null
+
+fun Context.fuenteDetalle(): Typeface? {
+    if (fuenteDetalleCache == null) {
+        fuenteDetalleCache = runCatching { resources.getFont(R.font.jost) }.getOrNull()
+    }
+    return fuenteDetalleCache
 }
 
 fun Context.dp(v: Int): Int =

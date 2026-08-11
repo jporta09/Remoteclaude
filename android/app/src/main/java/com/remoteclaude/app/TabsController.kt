@@ -228,6 +228,7 @@ class TabsController(
                             })
                             if (ultima.isNotEmpty()) addView(TextView(act).apply {
                                 text = ultima
+                                typeface = act.fuenteDetalle()
                                 setTextColor(Paleta.CHEV_FG)
                                 setTextSize(TypedValue.COMPLEX_UNIT_SP, 11f)
                                 maxLines = 1

@@ -80,7 +80,7 @@ class HostsActivity : AppCompatActivity() {
         })
         // Estado de la VPN (Tailscale embebido) — tocar para configurar el auth key
         vpnStatus = TextView(this).apply {
-            typeface = monoFont
+            typeface = fuenteDetalle()
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
             setPadding(dp(20), 0, dp(20), dp(14))
             setOnClickListener { showVpnDialog() }
@@ -188,7 +188,7 @@ class HostsActivity : AppCompatActivity() {
         if (hosts.isEmpty()) {
             list.addView(TextView(this).apply {
                 text = "Todavía no hay hosts.\nAgregá tu PC o un server con \"+\"."
-                typeface = bodyFont
+                typeface = fuenteDetalle()
                 setTextColor(getColor(R.color.marvin_muted))
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
                 setPadding(dp(24), dp(24), dp(24), dp(24))
