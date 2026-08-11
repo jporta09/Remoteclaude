@@ -39,14 +39,15 @@ enlazan con la app.
 Las fuentes de marca comerciales (Brandon Grotesque) **no** están en el repo: `fonts/` está
 en `.gitignore`. Lo que sí se distribuye, en `android/app/src/main/res/font/`:
 
-| Archivo | Fuente | Licencia |
-|---|---|---|
-| `mononoki.ttf` | [Mononoki](https://madmalik.github.io/mononoki/) | SIL Open Font License 1.1 |
-| `ubuntu.ttf` | [Ubuntu](https://design.ubuntu.com/font) | Ubuntu Font Licence 1.0 |
-| `isocpeur.ttf` | ISOCPEUR | **sin verificar** |
+| Archivo | Fuente | Licencia | Dónde se usa |
+|---|---|---|---|
+| `osifont.ttf` | [osifont](https://github.com/hikikomori82/osifont) | GPL-3.0 con *font exception* | títulos de la app y del manual |
+| `ubuntu.ttf` | [Ubuntu](https://design.ubuntu.com/font) | Ubuntu Font Licence 1.0 | cuerpo del manual |
+| `mononoki.ttf` | [Mononoki](https://madmalik.github.io/mononoki/) | SIL Open Font License 1.1 | terminal y código |
+| `mononoki_bold.ttf` | Mononoki | SIL Open Font License 1.1 | destacados del manual |
 
-⚠️ **`isocpeur.ttf` es una deuda abierta.** Es una fuente de estilo técnico (CAD) que
-circula como freeware, pero no encontramos una licencia clara que la ampare para
-redistribuirla dentro de un APK. Antes de publicar la app en cualquier lado hay que
-confirmarla o reemplazarla. `mononoki_bold.ttf` está commiteada pero no la referencia
-ningún código: se puede borrar.
+`osifont` reemplazó a `isocpeur.ttf`, que llevaba `Copyright 1997, 1998 Autodesk Inc. All
+rights reserved.` — una fuente de AutoCAD, sin ninguna concesión de redistribución. Para un
+proyecto GPL-3.0 eso es directamente incompatible: la licencia exige poder redistribuir todo
+lo que se distribuye. osifont persigue la **misma norma ISO 3098**, así que conserva el aire
+de rotulación técnica, y su licencia es compatible.

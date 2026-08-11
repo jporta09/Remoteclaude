@@ -25,7 +25,7 @@ class DocsActivity : AppCompatActivity() {
     private lateinit var list: LinearLayout
     private lateinit var status: TextView
     private lateinit var control: RemoteControl
-    private val titleFont by lazy { resources.getFont(R.font.isocpeur) }
+    private val titleFont by lazy { resources.getFont(R.font.osifont) }
     private val monoFont by lazy { resources.getFont(R.font.mononoki) }
     private val bodyFont by lazy { resources.getFont(R.font.ubuntu) }
 

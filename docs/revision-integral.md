@@ -168,7 +168,7 @@ mapping, en cada release y en CI) más el humo manual en el teléfono.
 |---|---|
 | Password de VNC y sacar `-ac` del `Xvnc` | Defensa en profundidad: la **exposición ya está cerrada** (el 6080 sólo escucha en loopback y se llega por túnel SSH). Sumar `VncAuth` toca también la app, que tendría que leer el password por SSH, así que pide su propia pasada con verificación en el teléfono. |
 | El APK que valida `make e2e-release` no es byte-idéntico al publicado | Detallado más arriba. Mitigado por `verifyReleaseKeepRules` (cada release y en CI) más el humo manual. |
-| `isocpeur.ttf` sin licencia verificada | Se distribuye en el APK y no encontramos con qué se ampara. Hay que confirmarla o reemplazarla antes de publicar. Ver `NOTICE.md`. |
+| ⚠️ El manual de uso (`scripts/gen-manual.py`) describe la arquitectura vieja | Genera un PDF de cara al usuario y quedó fuera de la reescritura de docs de P4: habla del gateway con `nsenter` y de `HOST_USER`, que no existen. |
 
 ### Cobertura de tests que falta
 Los arreglos de P4 entraron con tests propios: `test/host/` pasó de 16 a 31 (bloques

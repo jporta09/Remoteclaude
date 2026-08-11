@@ -37,7 +37,7 @@ INK = colors.HexColor("#15242B")
 SURFACE = colors.HexColor("#EAF0EC")
 
 # --- Fuentes ----------------------------------------------------------------
-pdfmetrics.registerFont(TTFont("Title", f"{FONTS}/isocpeur.ttf"))
+pdfmetrics.registerFont(TTFont("Title", f"{FONTS}/osifont.ttf"))
 pdfmetrics.registerFont(TTFont("Body", f"{FONTS}/ubuntu.ttf"))
 pdfmetrics.registerFont(TTFont("Mono", f"{FONTS}/mononoki.ttf"))
 pdfmetrics.registerFont(TTFont("MonoB", f"{FONTS}/mononoki_bold.ttf"))

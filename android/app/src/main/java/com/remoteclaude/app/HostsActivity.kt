@@ -30,7 +30,7 @@ class HostsActivity : AppCompatActivity() {
 
     private lateinit var list: LinearLayout
     private lateinit var vpnStatus: TextView
-    private val titleFont by lazy { resources.getFont(R.font.isocpeur) }     // títulos (marca)
+    private val titleFont by lazy { resources.getFont(R.font.osifont) }     // títulos (marca)
     private val monoFont by lazy { resources.getFont(R.font.mononoki) }      // code / técnico
     private val bodyFont by lazy { resources.getFont(R.font.ubuntu) }        // cuerpo de texto (marca)
 
