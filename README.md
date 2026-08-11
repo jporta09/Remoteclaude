@@ -1,146 +1,103 @@
-# Remoteclaude — gateway de trabajo remoto desde el celular
+# RemoteMarvin
 
-Conecta tu celular con tu PC (o un server) de forma **estable** y **agnóstica**,
-para programar de verdad: terminal nativa que **ejecuta en el host**, sobreviviendo
-al bloqueo del teléfono.
+Trabajar de verdad en tu PC desde el celular: terminal nativa que **ejecuta en el host**,
+sobrevive al bloqueo del teléfono y a los cambios de red.
 
-## Idea central
-
-El contenedor **NO** es donde trabajás: es solo la **capa de conexión**. La
-ejecución ocurre en el **host**, con sus herramientas, proyectos, `claude` e
-historial de conversaciones — todo nativo, sin instalar ni montar nada del host.
+La app Android trae **su propio nodo Tailscale** embebido (no hace falta instalar la app de
+Tailscale) y hace **SSH directo al sshd del host** como tu usuario, con `tmux` del lado del
+host para persistencia. No hay contenedor privilegiado ni gateway: lo único que corre con
+permisos especiales es lo que vos hagas con `sudo` dentro de tu propia sesión.
 
 ```
-┌─ host (PC o server): solo necesita Docker ───────────────────────┐
-│                                                                   │
-│   ┌─ contenedor tailscale ─┐   ┌─ contenedor gateway ─────────┐   │
-│   │ pone al HOST en tu     │   │ sshd + mosh                  │   │
-│   │ tailnet (network=host) │   │ al loguearte: nsenter -> HOST│   │
-│   └────────────────────────┘   └──────────────┬───────────────┘   │
-│                                                │ nsenter PID 1     │
-│                                  ╔═════════════▼═══════════════╗   │
-│                                  ║  SHELL DEL HOST (jporta)    ║   │
-│                                  ║  uv · node · claude · ~/... ║   │
-│                                  ╚═════════════════════════════╝   │
-└───────────────────────────────────────────────────────────────────┘
+┌─ celular ────────────────┐         ┌─ host (tu PC o un server) ──────────────┐
+│  RemoteMarvin            │         │                                          │
+│   · terminal (Termux     │ tailnet │   sshd del host (solo-clave)             │
+│     vendorizado)         │◄───────►│      └── tmux  →  tu shell, tus proyectos│
+│   · Tailscale embebido   │  (WireGuard)                                       │
+│     (tsnet vía gomobile) │         │   docker: tailscale (red) + display (VNC)│
+│   · dictado por voz      │         │   daemons de usuario: render · stt · live│
+└──────────────────────────┘         └──────────────────────────────────────────┘
 ```
 
-- **Agnóstico**: el contenedor solo asume "Linux con Docker". Lo mismo en tu PC y
-  en el server del amigo; lo único que cambia es `HOST_USER` en `.env`.
-- **Sin duplicar tu stack**: no reinstalás nada. La shell salta al host y usa lo
-  que el host ya tiene (uv, node, claude, libs, configs, conversaciones).
-- **Estable al bloqueo**: `mosh` resume al reconectar; `tmux` (del host) persiste.
+## Qué hace
 
-## Cómo funciona el "salto al host"
+- **Terminal con pestañas.** Cada pestaña es una sesión `tmux` propia en el host, así que
+  sobreviven a que cierres la app; podés reenganchar las que quedaron abiertas.
+- **Teclado para programar.** Esc, Tab, Ctrl, Alt, flechas, Home/End/PgUp/PgDn y **⇧Tab**
+  (la secuencia que Claude Code lee para cambiar de modo).
+- **Dictado por voz.** Mantenés 🎤 y hablás: el texto aparece en la terminal como si lo
+  hubieras tipeado. Con GPU en el host hay parciales en vivo mientras hablás.
+- **Visor de escritorio 🖥.** Un navegador *headed* corre en el host sobre una pantalla
+  virtual aislada y lo mirás desde el celular. Útil para ver tests de Playwright, o para
+  scraping que necesita display real.
+- **Documentos 📄.** Lo que Claude comparte en el host (`~/RemoteMarvinDocs`) se lee desde
+  el celular, incluso si lo generó un server remoto al que SSH-easte desde la app.
+- **Portapapeles compartido.** Seleccionás con el dedo en la terminal y queda en el
+  portapapeles del teléfono (OSC 52).
 
-El gateway corre **privilegiado** con `pid: host`. Al loguearte por SSH/mosh, la
-shell de login es `host-shell`, que hace `nsenter --target 1` a los namespaces de
-`systemd` (PID 1) y abre la sesión como `HOST_USER`. Esa shell **es un proceso del
-host**: ve el filesystem, el `$PATH`, los procesos y los archivos del host.
+## Instalación
 
-> El contenedor privilegiado con acceso a los namespaces del host es inherente a
-> "controlar remotamente la propia máquina". Es tu equipo y tu tailnet privada.
-
-## Instalación (una vez por host)
-
-Requisito del host: **Docker** + `/dev/net/tun` (universal en Linux).
+En el **host** (una vez):
 
 ```bash
-bash scripts/setup-host.sh        # instala Docker si falta
-
-cp .env.example .env              # completá:
-#   TS_AUTHKEY   -> Admin console de Tailscale -> Settings -> Keys (Reusable)
-#   HOST_USER    -> el usuario del host (ej. jporta)
-cp ssh/authorized_keys.example ssh/authorized_keys   # pegá tu clave pública
-
-docker compose up -d --build
+bash scripts/setup-host.sh     # sshd solo-clave, tmux, daemons de usuario, ssh/config
+cp .env.example .env           # completá TS_AUTHKEY (y el OAuth si querés vincular por QR)
+docker compose up -d --build   # contenedores: tailscale (red) + display (visor)
 ```
 
-En el **celular**: app **Tailscale** (mismo login) + **Termux** (desde F-Droid),
-con `pkg install openssh mosh`.
+Después, autorizá el celular: en la app, botón **🔑** → copiás la clave pública → la pegás
+en `~/.ssh/authorized_keys` del host.
 
-## Uso diario (desde el celular)
+En el **celular**: instalás el APK (`android/app/build/outputs/apk/release/`) y vinculás su
+nodo Tailscale escaneando el QR que imprime `./scripts/ts-link-qr.sh`.
 
-```bash
-mosh root@remoteclaude        # 'remoteclaude' = nombre de MagicDNS del host
-# -> caés directo en la shell del host como tu usuario
-tmux new -A -s dev            # sesión persistente (tmux del host)
-cd ~/proyectos/...            # tus proyectos reales
-claude                        # Claude Code con tu historial
-```
+## Uso
 
-- Te conectás como `root` (usuario del *contenedor*); la shell salta solo al
-  `HOST_USER` configurado. El comando es el mismo sin importar el usuario del host.
-- Bloqueás el celular → `mosh` resume al volver. Si mosh muere, reconectás y
-  `tmux attach -t dev`.
-- Cualquier server/dev-server que levantes en el host es alcanzable desde el celu
-  como `http://remoteclaude:<puerto>` (Tailscale carga la red del host).
+Abrís la app, elegís el host y ya estás en tu shell. Los botones de la barra:
 
-## Ver el navegador headed (servicio `display`)
+| | Qué hace |
+|---|---|
+| **+** | pestaña nueva (sesión tmux nueva en el host) |
+| **⟳** | reenganchar una sesión que quedó viva |
+| **🖥** | ver el escritorio virtual del host |
+| **📄** | documentos compartidos |
+| **🔑** | la clave pública de la app |
 
-El servicio `display` levanta una **pantalla virtual aislada** (Xvfb) + noVNC. Tu
-navegador/Playwright corre **en el host** pero dibuja en esa pantalla; vos la mirás
-desde el celular. No expone tu escritorio real y anda igual en un server sin monitor.
-
-En la shell del host (vía mosh), apuntá el navegador a la pantalla con `DISPLAY`:
+Para que el navegador del host dibuje en la pantalla que ves desde el celu:
 
 ```bash
 DISPLAY=localhost:99 npx playwright test --headed
-DISPLAY=localhost:99 google-chrome https://ejemplo.com   # cualquier app X sirve
 ```
 
-Y miralo desde el celular:
+El plugin `plugins/remotemarvin/` le enseña a Claude Code a usar todo esto desde el host
+(compartir documentos, abrir cosas en el visor, correr browsers headed visibles).
 
-```
-http://remoteclaude:6080/vnc.html?autoconnect=1&resize=scale
-```
+## Seguridad
 
-- El puerto X (`6099`) queda **solo en localhost del host** (X es inseguro); el
-  noVNC (`6080`) sí es visible por la tailnet.
-- Resolución: variable `SCREEN_GEOMETRY` (ej. `SCREEN_GEOMETRY=1920x1080x24`).
+El modelo de amenaza está en [`SECURITY.md`](SECURITY.md). En resumen: nada escucha en la
+red salvo el sshd del host; el visor y el dictado viajan **tunelizados por tu propia
+conexión SSH**; la app fija (TOFU) la clave del host y **rechaza** la conexión si cambia; y
+los secretos de la app se guardan cifrados con una clave del AndroidKeyStore.
 
-> **Navegadores sí, OpenGL nativo no.** Chromium/Playwright headed renderizan bien
-> sobre esta pantalla (con `--disable-gpu`, que Playwright headed ya aplica). Las
-> apps OpenGL nativas (p.ej. Kivy) NO dibujan bien sobre X remoto/TCP; para eso
-> habría que correrlas en un contenedor con su propio Xvfb local. Para testing de
-> webs, que es el caso de uso, funciona.
+## Desarrollo
 
-## Skill de Claude: `headed-browser`
-
-El repo trae una skill publicable en `skills/headed-browser/` que le enseña a Claude
-a correr **cualquier** automatización de browser **headed** (Playwright, nodriver,
-Selenium, Chromium) sobre la pantalla virtual `:99`, visible desde el celular. Útil
-para mirar tests en vivo y para scraping que **necesita** display real (anti-bot tipo
-DataDome). Compone con la skill oficial `webapp-testing` (que corre headless para los
-screenshots de Claude); ésta agrega el modo headed+visible.
-
-Helper:
 ```bash
-skills/headed-browser/scripts/run-visible.sh <comando>     # setea DISPLAY=localhost:99
-# ej: run-visible.sh uv run python scraper.py
-#     run-visible.sh npx playwright test --headed
+make unit           # tests JVM de la app (sin dispositivo)
+make host           # tests de los daemons del host
+make lint           # lint de Android + shellcheck + ruff
+make release-check  # build de release + verificación de las reglas de R8
+make e2e            # suite instrumentada en un emulador (ver test/e2e/README.md)
+make all            # todo lo que no necesita dispositivo
 ```
 
-Instalar para usarla en todos tus proyectos (symlink o copia a las skills de usuario):
-```bash
-ln -sfn "$PWD/skills/headed-browser" ~/.claude/skills/headed-browser
-```
+- La app está en [`android/`](android/README.md); su diseño interno, en
+  [`android/DESIGN.md`](android/DESIGN.md).
+- El nodo Tailscale embebido se construye con `make aar` (ver
+  [`tailscale-bridge/README.md`](tailscale-bridge/README.md)).
+- `docs/revision-integral.md` es el registro vivo de la revisión de seguridad,
+  correctitud y tests: qué se cerró, qué falta y por qué.
 
-## Mover al server del amigo
+## Licencia
 
-Idéntico: cloná el repo, `bash scripts/setup-host.sh`, poné `.env`
-(`HOST_USER` el de ese server) + `ssh/authorized_keys`, `docker compose up -d --build`.
-Cambiá `TS_HOSTNAME` si querés otro nombre de MagicDNS.
-
-## Configuración (`.env`)
-
-| Variable | Qué es | Default |
-|---|---|---|
-| `TS_AUTHKEY` | Auth key de Tailscale | (obligatorio) |
-| `HOST_USER` | Usuario del host al que salta la shell | `root` |
-| `TS_HOSTNAME` | Nombre del nodo en la tailnet (MagicDNS) | `remoteclaude` |
-| `SSH_PORT` | Puerto del sshd del gateway | `22` |
-
-## Pendiente
-
-- App Android propia (wrapper de terminal nativa) como proyecto aparte.
+GPL-3.0-only. La app incluye el motor de terminal de Termux (GPLv3), así que la obra
+combinada va bajo la misma licencia — detalle en [`NOTICE.md`](NOTICE.md).

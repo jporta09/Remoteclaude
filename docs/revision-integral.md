@@ -132,15 +132,15 @@ Lo que sigue abierto, con su destino:
 | ✅ Partir `MainActivity` (918 líneas) | Resuelto: 918 → 328, repartido en `TabsController` (pestañas y sesiones tmux), `KeypadView` (teclas extra y modificadores pegajosos), `DictationController` (dictado), `TerminalClients` (callbacks del motor vendorizado) y `Paleta`. La lógica que no necesita Android salió a `TabPlan` y `TerminalKeys`, con 17 tests JVM nuevos. En la activity quedaron el cableado, el ciclo de vida y los diálogos de identidad del host — que son decisiones de seguridad y por eso sólo la terminal las hace en primer plano. Validado con la suite E2E (6/6). |
 | ✅ `marvints.go`: listeners que `Stop()` nunca cierra; `pipe()` sin timeout de dial; `Start` que devuelve OK mientras todavía está levantando | Resuelto, con 7 tests Go corridos con `-race` (incluido uno que verifica que tras `Stop()` el puerto queda **libre**, no sólo el listener cerrado). |
 
-### P4 — infraestructura del host y documentación
+### P4 — infraestructura del host y documentación *(cerrado)*
 | Pendiente | Nota |
 |---|---|
-| **`display-entrypoint.sh` sin supervisión** | Si Xvnc o websockify mueren, el container queda vivo como zombi y `restart: unless-stopped` nunca actúa: el visor queda mudo sin que nada avise. **Es funcional, no cosmético.** |
-| **`setup-host.sh`**: no reinicia las units que reescribe, no verifica `uv`, y nunca actualiza un `~/.tmux.conf` preexistente | El síntoma típico es "actualicé y no cambió nada", o un host donde el render-daemon jamás autoarranca. **También funcional.** |
-| **`marvin-stt-live` sin idle-exit** | La app lo arranca igual en modo *ondemand*, así que ~2 GB de VRAM quedan tomados hasta cerrar sesión. |
-| `marvin-stt.py`: el watchdog puede matar una transcripción en curso; fuga de temporales; `ensure_cuda_ld` sin sentinela de re-exec | Robustez del daemon. |
-| S9/S10: hardening de units, `mktemp` en el prewarm, `ts-link-qr` sin imprimir la key ni pasar el secreto por argv | Ya estaban asignados a P4. |
-| Docs (`README`, `android/README`, `DESIGN.md`) y `LICENSE` GPL-3.0 | Los tres describen el gateway con `nsenter` que no existe más; falta el LICENSE pese a vendorizar Termux. |
+| ✅ **`display-entrypoint.sh` sin supervisión** | Si Xvnc o websockify mueren, el container queda vivo como zombi y `restart: unless-stopped` nunca actúa: el visor queda mudo sin que nada avise. **Es funcional, no cosmético.** |
+| ✅ **`setup-host.sh`**: no reinicia las units que reescribe, no verifica `uv`, y nunca actualiza un `~/.tmux.conf` preexistente | El síntoma típico es "actualicé y no cambió nada", o un host donde el render-daemon jamás autoarranca. **También funcional.** |
+| ✅ **`marvin-stt-live` sin idle-exit** | La app lo arranca igual en modo *ondemand*, así que ~2 GB de VRAM quedan tomados hasta cerrar sesión. |
+| ✅ `marvin-stt.py`: el watchdog puede matar una transcripción en curso; fuga de temporales; `ensure_cuda_ld` sin sentinela de re-exec | Robustez del daemon. |
+| ✅ S9/S10: hardening de units, `mktemp` en el prewarm, `ts-link-qr` sin imprimir la key ni pasar el secreto por argv | Ya estaban asignados a P4. |
+| ✅ Docs (`README`, `android/README`, `DESIGN.md`), `LICENSE` GPL-3.0, `NOTICE.md` y `SECURITY.md` | Los tres describen el gateway con `nsenter` que no existe más; falta el LICENSE pese a vendorizar Termux. |
 
 ### Brecha conocida: el APK que valida `make e2e-release` no es el publicado
 
@@ -162,7 +162,17 @@ accesibilidad, que además hoy TalkBack no puede leer.
 Mientras tanto, la detección está cubierta por `verifyReleaseKeepRules` (invariantes sobre el
 mapping, en cada release y en CI) más el humo manual en el teléfono.
 
+### Lo que queda abierto (a propósito)
+
+| Pendiente | Por qué sigue abierto |
+|---|---|
+| Password de VNC y sacar `-ac` del `Xvnc` | Defensa en profundidad: la **exposición ya está cerrada** (el 6080 sólo escucha en loopback y se llega por túnel SSH). Sumar `VncAuth` toca también la app, que tendría que leer el password por SSH, así que pide su propia pasada con verificación en el teléfono. |
+| El APK que valida `make e2e-release` no es byte-idéntico al publicado | Detallado más arriba. Mitigado por `verifyReleaseKeepRules` (cada release y en CI) más el humo manual. |
+| `isocpeur.ttf` sin licencia verificada | Se distribuye en el APK y no encontramos con qué se ampara. Hay que confirmarla o reemplazarla antes de publicar. Ver `NOTICE.md`. |
+
 ### Cobertura de tests que falta
-Los daemons del host tienen suite (`test/host/`) sólo para `marvin-render`. Los arreglos
-de `setup-host` y `display-entrypoint` de P4 deberían entrar con tests propios — el
+Los arreglos de P4 entraron con tests propios: `test/host/` pasó de 16 a 31 (bloques
+idempotentes de `setup-host`, escritura de units, señal de actividad del dictado en vivo).
+Lo que sigue sin cobertura automática es `display-entrypoint`, que se verificó a mano
+matando cada proceso dentro del contenedor. El
 fixture ya existe y puede hospedarlos.

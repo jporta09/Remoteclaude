@@ -1,61 +1,75 @@
-# Remoteclaude App (Android)
+# RemoteMarvin (app Android)
 
-Cliente Android del setup Remoteclaude: terminales nativas (SSH+tmux) + visualizador
-noVNC. Ver el diseño completo en [DESIGN.md](DESIGN.md).
+Cliente Android: terminal SSH+tmux con pestañas, visor noVNC, visor de documentos y dictado
+por voz, sobre un nodo Tailscale embebido. El diseño interno está en [DESIGN.md](DESIGN.md);
+el modelo de amenaza, en [`../SECURITY.md`](../SECURITY.md).
 
-Estado: **M3** — terminal SSH usable, resiliente y **multi-tab**:
-- **Multi-tab** estilo navegador (`term N`, `✕`, `+`): cada tab es una sesión SSH +
-  tmux independiente (`remoteclaude-N`), corren en paralelo y persisten por separado.
-- **Resiliente** (M5): corre sobre `tmux` en el contenedor gateway (paneles con nsenter
-  al host → el host no necesita tmux); la app reconecta sola y reengancha (scrollback y
-  línea en progreso intactos), con detección rápida vía ConnectivityManager. Toda la I/O
-  de red va fuera del hilo principal (sin ANR).
-- **Usable** (M4): teclado de teclas extra (`Esc Tab Ctrl Alt ›` + flechas, chevron a
-  `Home End PgUp PgDn`), Ctrl/Alt de una pulsación, zoom (pinch), scroll con el dedo
-  (tmux mouse), acentos/UTF-8, y las flechas controlan la app aunque estés scrolleando.
+Versión actual: **1.6.0** (`versionCode` 10), `minSdk` 26, `targetSdk` 34.
 
-Verificado en dispositivo. Falta: visualizador noVNC (M6), generación/guardado de clave
-en la app (M7) y pulido + APK firmado (M8). El motor Termux vendorizado y sus
-modificaciones están en `terminal-emulator/VENDORED.md`.
+## Compilar
 
-> Nota dev: la clave SSH de prueba (`app/src/main/assets/m2_test_key`) está fuera de
-> git; en M7 la app genera su propio par y guarda la privada en el Android Keystore.
-
-## Compilar (línea de comandos, sin Android Studio)
-
-Requiere un JDK 17 y un Android SDK con `platforms;android-34` + `build-tools;34.0.0`.
-En este host se reusa el SDK que dejó buildozer.
+Requiere un **JDK 17 con `jlink`** (AGP lo necesita para transformar
+`core-for-system-modules.jar`) y un Android SDK con `platforms;android-34` y
+`build-tools;34.0.0`. En este host se reusa el SDK que dejó buildozer.
 
 ```bash
 export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
 export ANDROID_HOME=$HOME/.buildozer/android/platform/android-sdk
-# (una sola vez, si faltan componentes)
-"$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" \
-    "platform-tools" "platforms;android-34" "build-tools;34.0.0"
-
-cd android
 echo "sdk.dir=$ANDROID_HOME" > local.properties   # no se commitea
-./gradlew assembleDebug
-# APK -> app/build/outputs/apk/debug/app-debug.apk
+
+./gradlew assembleDebug     # app/build/outputs/apk/debug/
+./gradlew assembleRelease   # app/build/outputs/apk/release/  (minificado con R8)
 ```
 
-## Instalar en el celular
+Para firmar el release, `keystore.properties` en la raíz de `android/` (gitignored) con
+`storeFile`, `storePassword`, `keyAlias`, `keyPassword`.
+
+> **El debug se firma con la MISMA clave que el release, a propósito.** Así el APK de debug
+> entra como actualización sobre la app instalada en vez de exigir desinstalarla — y
+> desinstalar borraría la clave del AndroidKeyStore (habría que re-autorizarla en el host) y
+> la auth key de Tailscale (habría que re-escanear el QR).
+
+### ABIs
+
+El release lleva **sólo `arm64-v8a`**. El debug agrega `x86_64` para que el emulador de los
+E2E corra nativo en vez de bajo traducción ARM. El AAR de Tailscale trae las dos.
+
+## Instalar
 
 ```bash
-adb install -r app/build/outputs/apk/debug/app-debug.apk
-# o copiá el APK al teléfono y abrilo (permitir "fuentes desconocidas")
+adb install -r app/build/outputs/apk/release/app-release.apk
 ```
+
+`-r` (actualización) y **nunca** `adb uninstall`: ver la nota de firma más arriba.
+
+## Verificar
+
+```bash
+make unit           # tests JVM (51): lógica pura, sin dispositivo
+make lint           # lint de Android
+make release-check  # build de release + portero de las reglas de R8
+make e2e            # suite instrumentada (6 tests) contra un fixture SSH desechable
+make e2e-release    # la misma suite contra el APK minificado
+```
+
+El detalle de los E2E —cómo se levanta el emulador, qué cubre el fixture y qué queda fuera—
+está en [`../test/e2e/README.md`](../test/e2e/README.md).
 
 ## Estructura
 
 ```
 android/
-├── settings.gradle.kts · build.gradle.kts · gradle.properties
-├── gradlew + gradle/wrapper/        # Gradle 8.9 por wrapper
-└── app/
-    ├── build.gradle.kts             # AGP 8.5.2, Kotlin 1.9.24, minSdk 26
-    └── src/main/
-        ├── AndroidManifest.xml
-        ├── java/com/remoteclaude/app/MainActivity.kt
-        └── res/values/{strings,themes}.xml
+├── app/                      # la aplicación
+│   └── src/
+│       ├── main/java/com/remoteclaude/app/
+│       ├── test/             # tests JVM (sin dispositivo)
+│       └── androidTest/      # tests instrumentados (necesitan emulador o teléfono)
+├── terminal-emulator/        # motor de terminal de Termux, vendorizado (GPLv3)
+├── terminal-view/            # vista de terminal de Termux, vendorizada (GPLv3)
+└── app/libs/marvints.aar     # nodo Tailscale embebido (tsnet vía gomobile)
 ```
+
+Los cambios sobre el código vendorizado están documentados en
+`terminal-emulator/VENDORED.md`; la idea es mantenerlos al mínimo para poder seguir los
+upstream. El AAR se reconstruye con `make aar` (ver
+[`../tailscale-bridge/README.md`](../tailscale-bridge/README.md)).

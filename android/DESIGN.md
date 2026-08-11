@@ -1,200 +1,90 @@
-# Remoteclaude App (Android) — Diseño completo
+# RemoteMarvin — diseño de la app
 
-Cliente Android nativo del setup Remoteclaude: **terminales nativas** (que ejecutan
-en el host vía el gateway) + **visualizador** del navegador headed (noVNC), pensado
-para programar y mirar scraping/tests desde el celular, sobreviviendo al bloqueo.
+Cómo está armada por dentro y **por qué**. Lo que hace de cara al usuario está en el
+[README de la raíz](../README.md); el modelo de amenaza, en [`SECURITY.md`](../SECURITY.md).
 
-## 1. Objetivo y alcance
+## La decisión de fondo
 
-- Terminal nativa de calidad (no webview): tabs estilo navegador, scroll fluido,
-  teclas extra, zoom de fuente.
-- **Varias terminales** a la vez (cada tab = una sesión).
-- **Sobrevive al bloqueo**: SSH + `tmux` (persistencia server-side) + auto-reconexión.
-- **Visualizador integrado**: ver el navegador headed del host (noVNC) sin salir de
-  la app.
-- Conexión por la tailnet al **gateway** (que hace `nsenter` al host). La app no
-  sabe de Docker; solo habla SSH y abre una URL de noVNC.
-- Open-source (GPLv3 OK por usar el motor de Termux).
+La primera versión usaba un **contenedor privilegiado** con `pid: host` cuyo sshd hacía
+`nsenter --target 1` para saltar a la shell del host, y mosh para sobrevivir a los cortes.
+Eso se eliminó. Hoy la app **SSH-ea al sshd del propio host** como tu usuario, con `tmux`
+del lado del host para persistencia.
 
-Fuera de alcance del MVP: bundlear mosh nativo (ver README/charla: difícil en
-Android), control remoto multi-host avanzado, sync de settings en la nube.
+El cambio compra tres cosas: no hay nada corriendo con privilegios de root sólo para darte
+una terminal; el host no necesita más que `openssh-server` y `tmux`; y la persistencia queda
+en manos de `tmux`, que ya la resolvía mejor que mosh para este caso (la sesión sigue viva
+aunque el teléfono se apague por horas).
 
-## 2. Arquitectura
+## Piezas
 
 ```
-┌── Remoteclaude App (Kotlin / Android) ─────────────────────────┐
-│                                                                 │
-│  UI (Compose o Views)                                           │
-│   ├─ TerminalsScreen  : tab bar + TerminalView + extra-keys     │
-│   ├─ VisualizerScreen : WebView -> noVNC                         │
-│   └─ ConnectionScreen : host/usuario/puerto + llave SSH         │
-│                                                                 │
-│  Dominio                                                        │
-│   ├─ SessionManager   : crea/cierra/lista sesiones (tabs)       │
-│   ├─ ReconnectEngine  : detecta caída, reconecta, reattach tmux │
-│   └─ ConfigStore      : perfil de conexión + llave (Keystore)   │
-│                                                                 │
-│  Capas embebidas                                                │
-│   ├─ Motor terminal : Termux terminal-view + terminal-emulator  │  (GPLv3)
-│   │                   (emulación VT, render, input, scrollback)  │
-│   ├─ Transporte SSH : sshj (JVM puro, sin binario nativo)        │  (Apache-2.0)
-│   └─ Visualizador   : WebView del sistema -> noVNC del display   │
-└─────────────────────────────────────────────────────────────────┘
-            │ SSH (22, por Tailscale)        │ HTTP (6080, por Tailscale)
-            ▼                                ▼
-   gateway(contenedor) --nsenter--> HOST     display(contenedor): noVNC
-            │                                        ▲
-            └─ shell del host -> `tmux` <────────────┘ navegador headed dibuja en :99
+MainActivity ── arma el layout y cablea; ciclo de vida, permisos, red
+   │            y los diálogos de identidad del host
+   ├── TabsController      pestañas = sesiones tmux; barra, persistencia, reenganche
+   ├── KeypadView          teclas extra; Ctrl/Alt/Shift como modificadores pegajosos
+   ├── DictationController dictado por voz (en vivo + por lote)
+   └── TerminalClients     callbacks del motor vendorizado (zoom, modificadores, OSC 52)
+
+SshTerminalSession   una sesión SSH+tmux, con reconexión
+RemoteControl        comandos sueltos por SSH (listar sesiones, renombrar, matar, dictar)
+HostKeys             fijación TOFU de la clave del host
+KeyStoreSsh          par de claves de la app, privada en el AndroidKeyStore
+SecretStore          secretos cifrados (AES-GCM) con una clave del Keystore
+TailscaleBridge      nodo Tailscale embebido (tsnet vía gomobile)
+PortTunnel           port-forward local sobre la conexión SSH (visor, dictado en vivo)
+LiveDictation        WebSocket contra WhisperLiveKit, tunelizado
 ```
 
-**Idea clave del motor**: el `TerminalView` de Termux renderiza **una** terminal y
-maneja toda la parte difícil (secuencias VT, scrollback, selección, IME, teclado).
-Nosotros le damos de comer los bytes que llegan del canal SSH y le mandamos las
-teclas. Todo lo demás (tabs, gestos, reconexión) es **nuestra** capa.
+Y la lógica que no necesita Android, separada para poder probarla en milisegundos:
+`TabPlan` (nombre libre de pestaña, índice activo tras cerrar), `TerminalKeys` (bytes de
+Ctrl, CSI Z), `ShellQuote`, `TmuxName`, `WavHeader`, `WlkSnapshot`, `DocKind`.
 
-## 3. Stack técnico
+## Decisiones que no son obvias
 
-| Pieza | Elección | Licencia | Por qué |
-|---|---|---|---|
-| Lenguaje/UI | Kotlin + Jetpack (Compose para chrome de la app; el TerminalView es una View clásica embebida con `AndroidView`) | Apache-2.0 | nativo, moderno |
-| Motor terminal | `com.termux:terminal-view` + `terminal-emulator` (vía JitPack/source) | GPLv3 | mejor emulador Android |
-| Transporte | **sshj** (fallback: connectbot `sshlib`) | Apache-2.0 | SSH en JVM puro, sin NDK |
-| Visualizador | `WebView` del sistema → noVNC | — | reusa el display container ya andando |
-| Config/secretos | DataStore + **Android Keystore** (clave privada envuelta) | — | guardar perfil y llave seguro |
-| Red | Tailscale app (del usuario) | — | la app asume estar en la tailnet |
+**Las pestañas son sesiones tmux, no conexiones.** El nombre de una pestaña nueva se elige
+mirando las sesiones abiertas **y las que ya existen en el host**: si sólo mirara las
+propias, `tmux new -A` engancharía una sesión de trabajo ajena creyendo que crea una nueva.
+Por lo mismo, `"term N"` tiene que ser punto fijo del saneado de nombres — si el saneado lo
+tocara, al reconectar la app buscaría un nombre distinto del que creó y perderías pestañas.
 
-- **minSdk 26** (Android 8), **target 34**. Sin código nativo propio (sshj y el motor
-  de Termux son JVM; el visualizador es WebView).
+**La clave del host se fija y su cambio se rechaza.** Sólo la terminal ofrece confiar en la
+clave nueva, mostrando las dos huellas. Documentos, dictado y visor fallan sin preguntar: si
+cualquier camino pudiera aceptar una clave nueva, confiar dejaría de ser una decisión.
 
-## 4. Funcionalidades
+**Ctrl/Alt/Shift son modificadores pegajosos.** Se tocan, quedan activos y el siguiente
+carácter sale modificado, como en una terminal de escritorio. Por eso su estado vive en
+`KeypadView`, junto a los botones que lo muestran, y no suelto en la activity.
 
-### 4.1 Terminal
-- Cada tab abre un canal SSH al gateway (`usuario@host:puerto`) → cae en la shell del
-  host (gateway hace `nsenter`) → ejecuta `tmux new -A -s <tab>` para persistir.
-- Render con `TerminalView`; `TerminalSession` alimentado por el stream del canal SSH
-  (in/out/err ↔ pty del lado server).
-- **Teclas extra** (fila): Esc, Ctrl, Alt, Tab, flechas, `|`, `/`, `-`, `~`, Ctrl-C…
-  (clave para vim/nano/claude).
-- **Scroll**: scrollback nativo del TerminalView; botón "ir al fondo"; selección/copia.
-- **Zoom de fuente**: pinch para agrandar/achicar.
+**El visor y el dictado viajan por la conexión SSH.** Nada de ellos escucha en la red: el
+noVNC del host está publicado sólo en loopback y la app lo alcanza tunelizando ese puerto.
+El túnel local bindea `127.0.0.1` explícitamente — el overload por defecto de sshlib bindea
+`0.0.0.0`, que dejaría el dictado abierto a la red del teléfono.
 
-### 4.2 Multi-terminal (tabs, estilo navegador)
-- Tab bar arriba: tabs + botón `+` (nueva) + botón visualizador `▣`.
-- Cada tab = una `TerminalSession` independiente (un `tmux new -A -s tabN`).
-- Cerrar tab: cierra el canal SSH (la sesión tmux queda viva en el host para reatachar).
-- (v2) modo control de tmux (`tmux -CC`) para multiplexar varias en una sola conexión.
+**El dictado fija la sesión destino al soltar el micrófono, no al terminar.** El round-trip
+tarda segundos y, si mientras tanto cambiás de pestaña, el texto aparecía en la equivocada.
 
-### 4.3 Auto-reconexión (lo que reemplaza a mosh)
-- `ReconnectEngine` escucha cambios de red (ConnectivityManager) y errores del canal.
-- Al bloquear/cortar: marca la sesión como "reconectando" (banner sutil).
-- Al volver: reabre SSH y `tmux attach -t tabN` → todo intacto en <~1s.
-- Backoff exponencial; keepalive SSH para detectar caídas rápido.
+**El nodo Tailscale necesita que le pasen las interfaces de red.** En Android, Go no puede
+enumerarlas, así que la app se las alimenta con `netmon.RegisterInterfaceGetter` y las
+refresca en cada cambio de red; sin eso, el nodo no se recupera de un wifi → datos.
 
-### 4.4 Visualizador (noVNC)
-- Pantalla/tab dedicada: `WebView` cargando
-  `http://<host>:6080/vnc.html?autoconnect=1&resize=scale`.
-- Controles: recargar, ajustar (scale/remote), pantalla completa.
-- Pasaje de toques: noVNC ya maneja mouse/teclado; el WebView reenvía gestos.
-- (v2) cliente VNC nativo (mejor rendimiento/gestos) conectando a x11vnc directo.
+## Stack
 
-### 4.5 Conexión y llaves
-- **Perfil**: host (nombre MagicDNS o IP), usuario del gateway (`root`), puerto (22),
-  URL del visualizador (auto: `http://<host>:6080`).
-- **Llave SSH**: la app **genera un par ed25519** en el dispositivo; muestra la
-  **pública** para que el usuario la pegue en `ssh/authorized_keys` del gateway
-  (botón copiar). Privada guardada con Android Keystore.
-- (Opcional) importar una clave existente.
+Kotlin, vistas programáticas (sin XML de layout ni Compose), AGP 8.5.2, Gradle 8.9.
 
-## 5. Pantallas (wireframes)
+| Dependencia | Para qué |
+|---|---|
+| `org.connectbot:sshlib` | cliente SSH (fork de trilead) |
+| motor de terminal de Termux, vendorizado | emulación y vista de terminal |
+| `okhttp` | WebSocket del dictado en vivo |
+| `zxing-android-embedded` | escaneo del QR de vinculación |
+| `marvints.aar` | Tailscale embebido (`tsnet`, vía gomobile) |
 
-**Main (terminales):**
-```
-┌───────────────────────────┐
-│ ●dev  ○logs  ○scrap  +  ▣ │   ▣ = abrir visualizador
-├───────────────────────────┤
-│ jporta@haviland:~$ ...     │
-│   (TerminalView de Termux) │
-│                            │
-├───────────────────────────┤
-│ Esc Ctrl Alt Tab ↑↓←→ |/- │   fila de teclas extra
-└───────────────────────────┘
-```
+R8 está activo en release. Las reglas conservan lo que `libgojni.so` busca **por nombre vía
+JNI** y trilead, que elige algoritmos por nombre de clase; `verifyReleaseKeepRules` lo
+verifica en cada build. Ver [`app/proguard-rules.pro`](app/proguard-rules.pro).
 
-**Visualizador:**
-```
-┌───────────────────────────┐
-│ ‹ Volver   Navegador    ⟳ │
-├───────────────────────────┤
-│  [ WebView -> noVNC ]      │
-│  navegador headed del host │
-│                            │
-└───────────────────────────┘
-```
+## Qué falta
 
-**Conexión (primer arranque):**
-```
-┌───────────────────────────┐
-│ Conexión                   │
-│ Host:    remoteclaude      │
-│ Usuario: root              │
-│ Puerto:  22                │
-│ ── Clave SSH ──            │
-│ [Generar par ed25519]      │
-│ Pública: ssh-ed25519 AAA…  │
-│ [Copiar]  → pegar en       │
-│   ssh/authorized_keys      │
-│ Visualizador: …:6080       │
-│ [Conectar]                 │
-└───────────────────────────┘
-```
-
-## 6. Cómo se conecta al gateway
-
-1. App abre SSH a `root@<host>:22` con la clave del dispositivo.
-2. El gateway (login shell = `host-shell`) hace `nsenter` → `su - <HOST_USER>` → shell
-   real del host.
-3. La app envía `tmux new -A -s <tab>` → sesión persistente.
-4. Bytes del canal ↔ `TerminalView`. Reconexión = reabrir SSH + `tmux attach`.
-
-Nada nuevo del lado server: usa el gateway y el display que ya existen.
-
-## 7. Seguridad
-
-- Clave privada en **Android Keystore** (o `EncryptedSharedPreferences`).
-- Todo viaja por **Tailscale** (WireGuard); noVNC va sin TLS pero cifrado por la tailnet.
-- Host key del gateway: la app fija/verifica la huella (TOFU) y avisa si cambia
-  (ya la persistimos server-side, así que no debería cambiar).
-
-## 8. Roadmap por milestones (build incremental)
-
-- **M0** Esqueleto que compila a APK (Activity vacía) — valida el pipeline de build.
-- **M1** `TerminalView` embebido renderizando una sesión local de eco (sin red).
-- **M2** Transporte SSH (sshj): un tab que conecta al gateway y abre `tmux`.
-- **M3** Multi-tab (varias sesiones) + botón `+` + cerrar.
-- **M4** Fila de teclas extra + scroll + zoom de fuente.
-- **M5** Auto-reconexión (ConnectivityManager + reattach tmux).
-- **M6** Visualizador (WebView → noVNC) como pantalla/tab.
-- **M7** Pantalla de conexión + generación/guardado de llave + perfil.
-- **M8** Pulido (íconos, temas, persistencia de tabs) + APK firmado.
-
-## 9. Build
-
-- Reusar el SDK que ya está en el host (de buildozer):
-  `ANDROID_HOME=~/.buildozer/android/platform/android-sdk` (tiene `android-34`,
-  build-tools, `sdkmanager`). Completar componentes faltantes con `sdkmanager` y
-  aceptar licencias.
-- Gradle por **wrapper** (`./gradlew assembleDebug`) → APK debug.
-- Instalar al celular: por Tailscale/adb o copiando el APK. Firma release en M8.
-
-## 10. Decisiones
-
-- **Motor terminal: Termux (`terminal-view`/`terminal-emulator`, GPLv3).** Elegido por
-  fidelidad (truecolor, Unicode) para TUIs ricas como `claude`/vim. Implica que la app
-  entera es **GPLv3**. Para Play: zona gris GPL aceptada (bajo riesgo real para una app
-  FOSS no comercial; se publica el código y se cumple la licencia). Alternativas
-  descartadas: ConnectBot (Apache pero emulación vieja, sin truecolor) y xterm.js en
-  WebView (MIT y moderno, pero puente nativo↔JS).
-- Integración del motor: ¿JitPack vs vendorizar el source? (decidir en M1).
-- SSH: arrancamos con **sshj**; si da fricción en Android, caemos a connectbot `sshlib`.
-- Visualizador: WebView (MVP) vs VNC nativo (v2).
-- UI: Compose para el chrome + `AndroidView` para el `TerminalView` (híbrido).
+`docs/revision-integral.md` lleva el registro vivo. Lo abierto a hoy: password de VNC y
+sacar `-ac` del `Xvnc` (defensa en profundidad; la exposición ya está cerrada), y que la
+verificación del release sea caja negra sobre el APK byte-idéntico al publicado.
