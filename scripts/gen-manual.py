@@ -43,6 +43,9 @@ pdfmetrics.registerFont(TTFont("Mono", f"{FONTS}/mononoki.ttf"))
 pdfmetrics.registerFont(TTFont("MonoB", f"{FONTS}/mononoki_bold.ttf"))
 # Las fuentes de marca no tienen flechas/checks/bullets; DejaVu sí.
 pdfmetrics.registerFont(TTFont("Sym", "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"))
+# Y DejaVu tampoco tiene los emoji de los botones de la app. Subset de Noto Emoji
+# (SIL OFL 1.1) con los cuatro glifos que usamos: 2 KB en vez de los 1,9 MB del original.
+pdfmetrics.registerFont(TTFont("Emoji", "scripts/manual-fonts/NotoEmoji-subset.ttf"))
 
 # --- Estilos ----------------------------------------------------------------
 h1 = ParagraphStyle("h1", fontName="Title", fontSize=20, textColor=PETROL,
@@ -56,15 +59,21 @@ code = ParagraphStyle("code", fontName="Mono", fontSize=9, textColor=PETROL,
                       backColor=SURFACE, leading=13, leftIndent=8, rightIndent=8,
                       spaceBefore=4, spaceAfter=8, borderPadding=(6, 6, 6, 6))
 small = ParagraphStyle("small", fontName="Mono", fontSize=8, textColor=MUTED, leading=11)
+icon = ParagraphStyle("icon", fontName="Sym", fontSize=13, textColor=GREEN, leading=16)
 
 
 _SYMS = {"→": "&#8594;", "✓": "&#10003;", "⟳": "&#10227;", "▸": "&#9656;",
          "•": "&#8226;", "⇧": "&#8679;"}
+# Emoji de los botones de la app. Van en otra fuente que los símbolos de arriba porque
+# DejaVu no los tiene y Noto Emoji no tiene los otros.
+_EMOJI = {"🎤": "&#127908;", "🖥": "&#128421;", "📄": "&#128196;", "🔑": "&#128273;"}
 
 
 def _sym(t):
     for ch, ent in _SYMS.items():
         t = t.replace(ch, f"<font name='Sym'>{ent}</font>")
+    for ch, ent in _EMOJI.items():
+        t = t.replace(ch, f"<font name='Emoji'>{ent}</font>")
     return t
 
 
@@ -209,19 +218,17 @@ S.append(B("<b>Teclado extra</b>: Ctrl / Alt / Shift, flechas, Tab y ⇧Tab — 
 S.append(B("<b>Portapapeles</b>: con “Sel” arrastrás el dedo para marcar texto y al soltar "
            "queda en el portapapeles del teléfono."))
 S.append(P("Barra de la terminal", h2))
-S.append(P("De izquierda a derecha (los últimos tres son íconos):", small))
+S.append(P("De izquierda a derecha:", small))
 row = Table([
-    ["+", "nueva pestaña"],
-    ["⟳", "reenganchar sesiones tmux sueltas"],
-    ["monitor", "abrir el visor del navegador (noVNC)"],
-    ["hoja", "abrir el visor de documentos"],
-    ["llave", "ver la clave pública de la app"],
+    [P("+", icon), "nueva pestaña"],
+    [P("⟳", icon), "reenganchar sesiones tmux sueltas"],
+    [P("🖥", icon), "abrir el visor del navegador (noVNC)"],
+    [P("📄", icon), "abrir el visor de documentos"],
+    [P("🔑", icon), "ver la clave pública de la app"],
 ], colWidths=[2.2 * cm, 10.2 * cm])
 row.setStyle(TableStyle([
-    ("FONTNAME", (0, 0), (0, -1), "Sym"),
     ("FONTNAME", (1, 0), (1, -1), "Body"),
     ("FONTSIZE", (0, 0), (-1, -1), 10),
-    ("TEXTCOLOR", (0, 0), (0, -1), GREEN),
     ("TEXTCOLOR", (1, 0), (1, -1), INK),
     ("BACKGROUND", (0, 0), (-1, -1), SURFACE),
     ("ROWBACKGROUNDS", (0, 0), (-1, -1), [SURFACE, colors.white]),
@@ -235,7 +242,7 @@ S.append(Spacer(1, 6))
 
 # --- 6. Dictado -------------------------------------------------------------
 S.append(P("Dictado por voz", h1))
-S.append(P("Mantené apretado el botón del <b>micrófono</b> (“Dictar”) y hablá: al soltar, el texto aparece en la "
+S.append(P("Mantené apretado <b>🎤 Dictar</b> y hablá: al soltar, el texto aparece en la "
            "terminal como si lo hubieras tipeado. <b>Sin Enter</b>, así lo revisás antes de "
            "mandarlo."))
 S.append(B("Si la PC tiene GPU, vas viendo el texto <b>en vivo</b> mientras hablás."))

@@ -46,6 +46,16 @@ en `.gitignore`. Lo que sí se distribuye, en `android/app/src/main/res/font/`:
 | `mononoki.ttf` | [Mononoki](https://madmalik.github.io/mononoki/) | SIL Open Font License 1.1 | terminal y código |
 | `mononoki_bold.ttf` | Mononoki | SIL Open Font License 1.1 | destacados del manual |
 
+Y fuera del APK, sólo para generar el manual en PDF:
+
+| Archivo | Fuente | Licencia | Dónde se usa |
+|---|---|---|---|
+| `scripts/manual-fonts/NotoEmoji-subset.ttf` | [Noto Emoji](https://fonts.google.com/noto/specimen/Noto+Emoji) | SIL Open Font License 1.1 (copia en `scripts/manual-fonts/OFL.txt`) | los íconos 🎤 🖥 📄 🔑 del manual |
+
+Es un **subset** de los cuatro glifos que el manual usa: 2 KB en vez de los 1,9 MB del
+original. La OFL permite modificar y redistribuir, y esta fuente no declara *Reserved Font
+Name*. No entra en el APK — ahí los emoji los dibuja el sistema.
+
 `osifont` reemplazó a `isocpeur.ttf`, que llevaba `Copyright 1997, 1998 Autodesk Inc. All
 rights reserved.` — una fuente de AutoCAD, sin ninguna concesión de redistribución. Para un
 proyecto GPL-3.0 eso es directamente incompatible: la licencia exige poder redistribuir todo
