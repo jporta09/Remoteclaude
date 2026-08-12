@@ -73,8 +73,15 @@ def safe_name(raw: str):
 
 # Comando para abrir una URL headed y dejarla abierta. Usa Playwright (vía uv) en el display
 # local. Se puede override con MARVIN_BROWSER_CMD ("%U" se reemplaza por la URL).
+# La version va FIJA: `--with playwright` a secas resuelve la ultima cada vez, y cada
+# release nueva pide un chromium distinto que no esta en ~/.cache/ms-playwright. El sintoma
+# era que el navegador headed dejaba de abrir solo, en silencio (paso: el cache tenia hasta
+# chromium-1228 y playwright 1.62 pedia el 1234). Al subir este pin hay que correr:
+#     uv run --with playwright==<version> playwright install chromium
+PLAYWRIGHT = "playwright==1.62.0"
+
 DEFAULT_CMD = (
-    "uv run --with playwright python -c "
+    f"uv run --with {PLAYWRIGHT} python -c "
     "\"import sys,time;from playwright.sync_api import sync_playwright as S;"
     "b=S().start().chromium.launch(headless=False);"
     "b.new_context(no_viewport=True).new_page().goto(sys.argv[1]);"

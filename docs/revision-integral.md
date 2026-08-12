@@ -189,6 +189,17 @@ El rol de "detalles" además **no estaba implementado**: en el PDF lo cubría la
 manual reserva para subtítulos, o sea dos roles pisándose— y en la app lo dibujaba la fuente
 del sistema.
 
+### El navegador headed no dependía de una versión fija
+
+`marvin-render.py` invocaba `uv run --with playwright`, **sin pin**. Cada release nueva de
+Playwright pide un chromium distinto que no está en `~/.cache/ms-playwright`, así que el visor
+dejaba de abrir el navegador **solo y en silencio** (el caché llegaba a chromium-1228, de
+junio, y la versión resuelta pedía el 1234). Ahora la versión está fija y documentada: al
+subirla hay que correr `playwright install chromium`.
+
+Se descubrió porque `render()` mandaba la salida del browser a `/dev/null` y se cambió por un
+log — sin eso el síntoma era "no pasa nada".
+
 ### Próxima iteración: íconos vectoriales propios
 
 Los 8 íconos de la interfaz ya no dependen de la fuente del sistema (`marvin_icons.ttf`, 3 KB,
