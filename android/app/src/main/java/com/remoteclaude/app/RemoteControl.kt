@@ -68,6 +68,16 @@ class RemoteControl(
         exec("DISPLAY=localhost:99 xrandr --output VNC-0 --mode ${ShellQuote.sq(mode)} 2>/dev/null")
     }
 
+    /**
+     * Password del VNC que el contenedor del visor publica en el host, o null.
+     *
+     * Xvnc pide autenticación (VncAuth) y el password se regenera en cada arranque del
+     * contenedor, así que se lee en cada apertura del visor. Va por la conexión SSH ya
+     * autenticada del usuario, y el archivo es 0600 suyo: nadie más lo lee.
+     */
+    fun vncPassword(): String? =
+        exec("cat ~/.config/marvin/vnc-pass 2>/dev/null").trim().ifEmpty { null }
+
     /** Nombres de las sesiones tmux vivas en el gateway. */
     fun listSessions(): List<String> =
         exec("tmux ls -F '#{session_name}' 2>/dev/null")

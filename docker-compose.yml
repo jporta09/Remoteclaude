@@ -41,6 +41,10 @@ services:
     container_name: remoteclaude-display
     environment:
       - SCREEN_GEOMETRY=${SCREEN_GEOMETRY:-1360x768x24}
+    volumes:
+      # Por acá el contenedor le deja al usuario el password del VNC (0600, de tu usuario).
+      # La app lo lee por SSH y se lo pasa al visor: nunca lo tipeás vos.
+      - ${HOME}/.config/marvin:/marvin
     ports:
       # noVNC SOLO en loopback: la app llega tunelizando este puerto por su conexión SSH
       # (PortTunnel.kt). Antes era "6080:6080" = 0.0.0.0, o sea que cualquiera en la LAN

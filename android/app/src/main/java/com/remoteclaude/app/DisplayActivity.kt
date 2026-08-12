@@ -50,6 +50,8 @@ class DisplayActivity : AppCompatActivity() {
 
     private var novncHost = "127.0.0.1"   // túnel SSH local; si falla, el endpoint directo
     private var novncPort = 6080
+    /** Password del VNC (lo publica el contenedor, se regenera en cada arranque). */
+    private var vncPass: String? = null
     private var tunnel: PortTunnel? = null
     private var curScale = 0.2f   // noVNC display.scale (CSS px por px del framebuffer)
     private var fitScale = 0.2f
@@ -108,6 +110,13 @@ class DisplayActivity : AppCompatActivity() {
             // Preferimos tunelizar el noVNC por SSH: así el host puede publicarlo sólo en
             // su loopback y deja de estar expuesto a la red local. Si el túnel no se puede
             // tender (host viejo, sin sshd), caemos al endpoint directo de siempre.
+            // El password del visor viaja por la conexión SSH del usuario, no por la red:
+            // el archivo es 0600 suyo en el host. Sin esto habría que tipearlo a mano.
+            vncPass = runCatching {
+                RemoteControl(this, sshHost, sshPort, sshUser, KeyStoreSsh.getOrCreateKeyPair())
+                    .vncPassword()
+            }.getOrNull()
+
             val t = PortTunnel(this, sshHost, sshPort, sshUser, KeyStoreSsh.getOrCreateKeyPair())
             val localPort = t.open(6080)
             if (localPort != null) {
@@ -146,9 +155,15 @@ class DisplayActivity : AppCompatActivity() {
         }
     }
 
-    private fun url() =
-        "http://$novncHost:$novncPort/vnc.html?autoconnect=1&reconnect=1&reconnect_delay=2000&resize=" +
-            if (fitMode) "remote" else "scale"
+    private fun url(): String {
+        val base = "http://$novncHost:$novncPort/vnc.html?autoconnect=1&reconnect=1" +
+            "&reconnect_delay=2000&resize=" + if (fitMode) "remote" else "scale"
+        // noVNC toma el password de la query (UI.connect -> WebUtil.getConfigVar). Queda en
+        // una URL local del propio WebView, sobre un túnel SSH, y se vence al reiniciar el
+        // contenedor. Si el host es viejo y no lo publica, se carga sin él: noVNC lo pide.
+        val p = vncPass ?: return base
+        return base + "&password=" + java.net.URLEncoder.encode(p, "UTF-8")
+    }
 
     // --- zoom nítido vía la API interna de noVNC ---
     // El container expone UI en window.__UI (parche en ui.js); usamos su API de zoom.

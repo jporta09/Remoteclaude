@@ -166,7 +166,8 @@ mapping, en cada release y en CI) más el humo manual en el teléfono.
 
 | Pendiente | Por qué sigue abierto |
 |---|---|
-| Password de VNC y sacar `-ac` del `Xvnc` | Defensa en profundidad: la **exposición ya está cerrada** (el 6080 sólo escucha en loopback y se llega por túnel SSH). Sumar `VncAuth` toca también la app, que tendría que leer el password por SSH, así que pide su propia pasada con verificación en el teléfono. |
+| ✅ Password de VNC | Hecho: `Xvnc` corre con `VncAuth`, el password se genera en cada arranque y se publica 0600 para que la app lo lea por SSH. Verificado hablando RFB por el mismo WebSocket que usa la app: el server ya sólo ofrece VncAuth, el password publicado autentica y uno incorrecto es rechazado (4 tests en `test/host/test_vnc_auth.py`). |
+| Sacar `-ac` del `Xvnc` | Lo que queda del hallazgo. El servidor X del `:99` sigue sin control de acceso: un proceso local puede conectarse por el 6099. Sacarlo obliga a repartirle la cookie de X al navegador *headed*, que corre **fuera** del contenedor, así que toca `marvin-show.sh` y la documentación de `DISPLAY=localhost:99`. |
 | El APK que valida `make e2e-release` no es byte-idéntico al publicado | Detallado más arriba. Mitigado por `verifyReleaseKeepRules` (cada release y en CI) más el humo manual. |
 | ✅ El manual de uso (`scripts/gen-manual.py`) describía la arquitectura vieja | Reescrito. Además del gateway con `nsenter` y `HOST_USER`, prometía el auto-enrolamiento por contraseña (eliminado en P0.8), apuntaba a un `scripts/marvin-share.sh` que se mudó al plugin, y **no mencionaba el dictado por voz**. |
 
