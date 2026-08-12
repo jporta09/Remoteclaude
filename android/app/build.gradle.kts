@@ -20,8 +20,8 @@ android {
         applicationId = "com.remoteclaude.app"
         minSdk = 26
         targetSdk = 34
-        versionCode = 10
-        versionName = "1.6.0"
+        versionCode = 11
+        versionName = "1.7.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         // Producción: sólo arm64 (es lo que corre en el teléfono). El AAR además trae
         // x86_64, que se incluye únicamente en debug para que el emulador corra NATIVO
