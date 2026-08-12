@@ -5,7 +5,9 @@ unit:            ## tests unitarios JVM de la app (sin dispositivo)
 	cd android && ./gradlew :app:testDebugUnitTest
 
 host:            ## tests de los daemons del host
-	uv run --with pytest pytest test/host/ -q
+	# websocket-client y pycryptodome son para test_vnc_auth: habla RFB de verdad contra el
+	# visor. Si el contenedor no está arriba esos tests se saltean solos.
+	uv run --with pytest --with websocket-client --with pycryptodome pytest test/host/ -q
 
 lint:            ## lint de Android + shellcheck de los scripts + ruff de los daemons
 	cd android && ./gradlew :app:lintDebug

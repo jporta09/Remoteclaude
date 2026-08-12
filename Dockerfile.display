@@ -36,7 +36,7 @@ RUN chmod +x /usr/local/bin/display-entrypoint.sh
 # pero sin responder. xdpyinfo pregunta al servidor X de verdad y el /dev/tcp verifica que
 # noVNC esté escuchando; ninguno necesita paquetes extra en la imagen.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
-    CMD bash -c 'xdpyinfo -display :99 >/dev/null 2>&1 && exec 3<>/dev/tcp/127.0.0.1/${NOVNC_PORT:-6080}'
+    CMD bash -c 'XAUTHORITY=/root/.Xauthority-marvin xdpyinfo -display :99 >/dev/null 2>&1 && exec 3<>/dev/tcp/127.0.0.1/${NOVNC_PORT:-6080}'
 
 ENTRYPOINT ["/usr/local/bin/display-entrypoint.sh"]
 CMD ["sleep", "infinity"]

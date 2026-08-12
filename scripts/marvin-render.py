@@ -85,11 +85,20 @@ DEFAULT_CMD = (
 def render(url: str) -> None:
     cmd = os.environ.get("MARVIN_BROWSER_CMD", DEFAULT_CMD)
     cmd = cmd.replace("%U", shlex.quote(url))
-    env = dict(os.environ, DISPLAY=f"localhost:{DISPLAY_NUM}")
+    # El display exige cookie (el servidor X ya no corre con -ac): sin XAUTHORITY el
+    # browser abre y muere con "Authorization required" sin dejar rastro visible.
+    env = dict(os.environ, DISPLAY=f"localhost:{DISPLAY_NUM}",
+               XAUTHORITY=os.path.expanduser("~/.config/marvin/Xauthority"))
     # Detached, no bloquea el daemon; queda abierto ~1h o hasta que abras otra cosa.
-    subprocess.Popen(["bash", "-lc", cmd], env=env,
-                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                     start_new_session=True)
+    # La salida NO se descarta: si el browser no abre —cookie de X faltante, chromium sin
+    # instalar, lo que sea— con /dev/null el sintoma era "no pasa nada" y no quedaba rastro
+    # de por que. Ahora hay un archivo al que mirar.
+    log = os.path.join(DROP, "browser.log")
+    with open(log, "ab") as f:
+        f.write(f"\n=== {url} ===\n".encode())
+        subprocess.Popen(["bash", "-lc", cmd], env=env,
+                         stdout=f, stderr=subprocess.STDOUT,
+                         start_new_session=True)
 
 
 class H(BaseHTTPRequestHandler):

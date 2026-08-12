@@ -26,3 +26,18 @@ case "${1:-}" in
         echo "habilitado: $host (vale para los SSH que hagas DESDE la app)"
         ;;
 esac
+
+# La cookie de X: sin esto el server habilitado llega al display por el túnel pero el
+# servidor lo rechaza. Se copia acá para que habilitar un server sea UN paso, no dos.
+XAUTH="$HOME/.config/marvin/Xauthority"
+if [ -r "$XAUTH" ]; then
+    if scp -q "$XAUTH" "$1:.config/marvin/Xauthority" 2>/dev/null; then
+        echo "    cookie de X copiada a $1"
+    else
+        echo "    !! no pude copiar la cookie de X a $1 — copiala a mano:"
+        echo "       ssh $1 'install -d -m700 ~/.config/marvin'"
+        echo "       scp $XAUTH $1:.config/marvin/Xauthority"
+    fi
+else
+    echo "    !! todavía no hay cookie de X (¿el contenedor 'display' está levantado?)"
+fi

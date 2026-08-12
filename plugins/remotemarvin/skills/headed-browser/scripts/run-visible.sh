@@ -65,6 +65,16 @@ EOF
     fi
 fi
 
+# El display ya NO acepta a cualquiera: hace falta la cookie MIT-MAGIC-COOKIE-1 que publica
+# el contenedor. En un server remoto hay que copiarla ahí (ver marvin-allow-display).
+XAUTH="${MARVIN_XAUTHORITY:-$HOME/.config/marvin/Xauthority}"
+if [ ! -r "$XAUTH" ]; then
+    echo ">> !! falta la cookie de X en $XAUTH — el display va a rechazar la conexión." >&2
+    echo "   En esta máquina: la publica el contenedor 'display' al arrancar." >&2
+    echo "   En un server remoto: copiala desde tu PC con" >&2
+    echo "     scp ~/.config/marvin/Xauthority <server>:~/.config/marvin/Xauthority" >&2
+fi
+
 echo ">> Mirá desde el celu: http://${REMOTE_HOST}:${NOVNC_PORT}/vnc.html?autoconnect=1&resize=remote"
 echo ">> (DISPLAY=localhost:${DISPLAY_NUM})"
-exec env DISPLAY="localhost:${DISPLAY_NUM}" "$@"
+exec env DISPLAY="localhost:${DISPLAY_NUM}" XAUTHORITY="$XAUTH" "$@"

@@ -3,7 +3,7 @@
 Correr con el display seteado (el helper lo hace por vos):
     run-visible.sh uv run python playwright_headed.py
 o a mano:
-    DISPLAY=localhost:99 python playwright_headed.py
+    XAUTHORITY=~/.config/marvin/Xauthority DISPLAY=localhost:99 python playwright_headed.py
 
 La clave es headless=False: DISPLAY solo da la pantalla; el browser tiene que
 lanzarse en modo headed para que sea visible (y para evadir anti-bot tipo DataDome).

@@ -13,7 +13,8 @@ headless run is invisible and a naive headed run has no display to draw to.
 
 This skill solves both: the **`display` container** provides an isolated virtual X
 screen at **`:99`** plus a **noVNC** web viewer on **`:6080`**. Point any browser
-automation at `DISPLAY=localhost:99` and it runs headed, drawing to that screen,
+automation at `DISPLAY=localhost:99` (with the X cookie from
+`~/.config/marvin/Xauthority`) and it runs headed, drawing to that screen,
 which the user watches from their phone.
 
 ## When to use this
@@ -112,7 +113,7 @@ scripts/run-local.sh   npx playwright test --headed
 
 Equivalent manual form (if you don't use the helpers):
 ```bash
-DISPLAY=localhost:99 <your command...>   # remoto (noVNC)
+XAUTHORITY=~/.config/marvin/Xauthority DISPLAY=localhost:99 <your command...>   # remoto (noVNC)
 DISPLAY=:0           <your command...>   # local (ajustá el número si no es :0)
 ```
 
@@ -141,7 +142,8 @@ at 1920x1080, recreate the display container with `SCREEN_GEOMETRY=1920x1080x24`
 Let `webapp-testing` own the Playwright mechanics (server lifecycle via
 `with_server.py`, selector discovery, waits). This skill changes only two things when
 the user wants to watch: launch with `headless=False` and wrap the run with
-`run-visible.sh` (or set `DISPLAY=localhost:99`). Don't duplicate its logic.
+`run-visible.sh` (it also sets `XAUTHORITY`: the display needs an X cookie now).
+Don't duplicate its logic.
 
 ## Notes
 

@@ -59,18 +59,48 @@ chmod 600 /marvin/vnc-pass
 chown "$(stat -c %u /marvin)":"$(stat -c %g /marvin)" /marvin/vnc-pass
 echo "[display] password del VNC generado y publicado en ~/.config/marvin/vnc-pass"
 
+# --- cookie de X -----------------------------------------------------------------------
+# Xvnc corria con -ac, o sea SIN control de acceso: cualquier proceso local que llegara al
+# 6099 podia conectarse al display, leer la pantalla e inyectar teclas. El VncAuth de arriba
+# no cubre esto: es la otra puerta, la del servidor X.
+#
+# Ahora hace falta la cookie MIT-MAGIC-COOKIE-1. Se publica en el bind mount para que la
+# usen los que dibujan acá: el navegador headed del host y los servers habilitados.
+COOKIE="$(head -c 16 /dev/urandom | od -An -tx1 | tr -d ' \n')"
+XAUTH_SRV=/root/.Xauthority-marvin
+
+# El archivo se escribe a mano, en su formato binario, con una entrada FamilyWild (0xFFFF):
+# matchea CUALQUIER dirección. `xauth add localhost:99` no sirve acá — resuelve "localhost"
+# como la máquina local y guarda una entrada de familia unix, que no aplica a la conexión
+# TCP que hace el navegador del host desde afuera del contenedor.
+escribir_xauth() {
+    python3 - "$1" "$XNUM" "$COOKIE" <<'PY'
+import struct, sys
+destino, display, cookie = sys.argv[1], sys.argv[2].encode(), bytes.fromhex(sys.argv[3])
+nombre = b"MIT-MAGIC-COOKIE-1"
+def campo(b): return struct.pack(">H", len(b)) + b
+entrada = struct.pack(">H", 0xFFFF) + campo(b"") + campo(display) + campo(nombre) + campo(cookie)
+with open(destino, "wb") as f:
+    f.write(entrada)
+PY
+}
+escribir_xauth "$XAUTH_SRV"
+escribir_xauth /marvin/Xauthority
+chmod 600 "$XAUTH_SRV" /marvin/Xauthority
+chown "$(stat -c %u /marvin)":"$(stat -c %g /marvin)" /marvin/Xauthority
+echo "[display] cookie de X publicada en ~/.config/marvin/Xauthority"
+
 # locks viejos (importante si el contenedor se reinicia)
 rm -f "/tmp/.X${XNUM}-lock" "/tmp/.X11-unix/X${XNUM}" 2>/dev/null || true
 
 echo "[display] Xvnc :${XNUM} (${INIT_SIZE}, resize dinámico) — X11 TCP :60${XNUM} + VNC :${VNC_PORT}"
-# -SecurityTypes VncAuth: pide el password de arriba. La app lo lee por SSH y lo pasa.
-# -listen tcp + -ac: el navegador del HOST dibuja vía DISPLAY=localhost:99 (TCP 6099).
-# (-ac sigue: sacarlo obliga a repartir la cookie de X al browser del host, que corre fuera
-#  del contenedor. Es la parte que queda pendiente de este hallazgo.)
+# -SecurityTypes VncAuth: pide el password. La app lo lee por SSH y lo pasa.
+# -listen tcp: el navegador del HOST dibuja vía DISPLAY=localhost:99 (TCP 6099), pero ahora
+# con cookie (-auth) en vez de -ac. Quien dibuje acá necesita ~/.config/marvin/Xauthority.
 lanzar Xvnc \
     Xvnc ":${XNUM}" -geometry "${INIT_SIZE}" -depth 24 -rfbport "${VNC_PORT}" \
     -SecurityTypes VncAuth -PasswordFile /root/.vnc/passwd \
-    -AlwaysShared -listen tcp -ac -desktop marvin
+    -AlwaysShared -listen tcp -auth "$XAUTH_SRV" -desktop marvin
 
 # Esperar el socket ANTES de seguir: si Xvnc no levanta, xrandr y fluxbox fallan con errores
 # crípticos y el contenedor quedaba igual "arriba". Mejor morir acá, con el motivo claro.
@@ -83,14 +113,14 @@ fi
 # Modo landscape fijo "1920x1080" para el modo "Escritorio" del visor: la app lo
 # selecciona (xrandr --output VNC-0 --mode 1920x1080) cuando NO está ajustado a pantalla.
 # Más resolución = más detalle para el zoom nítido (noVNC re-rasteriza del framebuffer).
-DISPLAY=":${XNUM}" xrandr --newmode 1920x1080 173.00 1920 2048 2248 2576 1080 1083 1088 1120 -hsync +vsync 2>/dev/null || true
-DISPLAY=":${XNUM}" xrandr --addmode VNC-0 1920x1080 2>/dev/null || true
+XAUTHORITY="$XAUTH_SRV" DISPLAY=":${XNUM}" xrandr --newmode 1920x1080 173.00 1920 2048 2248 2576 1080 1083 1088 1120 -hsync +vsync 2>/dev/null || true
+XAUTHORITY="$XAUTH_SRV" DISPLAY=":${XNUM}" xrandr --addmode VNC-0 1920x1080 2>/dev/null || true
 
 echo "[display] window manager (fluxbox) + fondo petróleo"
 # Fondo inicial petróleo. fluxbox llama a fbsetbg (wrapper -> xsetroot petróleo)
 # al arrancar y en cada resize, así el fondo se mantiene y NO aparece ningún warning.
-DISPLAY=":${XNUM}" xsetroot -solid "#0F232D" 2>/dev/null || true
-lanzar fluxbox env DISPLAY=":${XNUM}" fluxbox
+XAUTHORITY="$XAUTH_SRV" DISPLAY=":${XNUM}" xsetroot -solid "#0F232D" 2>/dev/null || true
+lanzar fluxbox env XAUTHORITY="$XAUTH_SRV" DISPLAY=":${XNUM}" fluxbox
 
 echo "[display] noVNC en :${NOVNC_PORT}"
 lanzar websockify websockify --web=/usr/share/novnc "${NOVNC_PORT}" "localhost:${VNC_PORT}"
@@ -105,8 +135,8 @@ cat <<EOF
 
   ============================================================
    Pantalla virtual lista (Xvnc, resize remoto).
-   En el HOST, para que el navegador dibuje aca:
-     DISPLAY=localhost:${XNUM} npx playwright test --headed
+   En el HOST, para que el navegador dibuje aca (el display exige cookie):
+     XAUTHORITY=~/.config/marvin/Xauthority DISPLAY=localhost:${XNUM} <comando>
    Miralo desde el celu: boton 🖥 de la app (tuneliza el ${NOVNC_PORT} por SSH)
   ============================================================
 

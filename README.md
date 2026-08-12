@@ -66,7 +66,14 @@ Abrís la app, elegís el host y ya estás en tu shell. Los botones de la barra:
 Para que el navegador del host dibuje en la pantalla que ves desde el celu:
 
 ```bash
-DISPLAY=localhost:99 npx playwright test --headed
+# El display exige cookie: la publica el contenedor al arrancar.
+XAUTHORITY=~/.config/marvin/Xauthority DISPLAY=localhost:99 npx playwright test --headed
+```
+
+Más simple, el helper del plugin la resuelve solo:
+
+```bash
+plugins/remotemarvin/skills/headed-browser/scripts/run-visible.sh npx playwright test --headed
 ```
 
 El plugin `plugins/remotemarvin/` le enseña a Claude Code a usar todo esto desde el host
