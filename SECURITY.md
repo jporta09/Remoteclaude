@@ -40,6 +40,16 @@ protege y contra qué no**, porque la diferencia importa más que la lista de me
 - **Tráfico fuera de la tailnet.** Todo lo que la app hace va por Tailscale o por SSH; no
   hay canal propio ni telemetría.
 
+## Instalar sin root (`setup-host.sh --sin-sudo`)
+
+En un servidor donde no tenés permisos, el setup instala igual todo lo que es a nivel usuario
+(daemons, `~/.ssh/config`, `~/.tmux.conf`) pero **no puede endurecer el sshd**. Como todo el
+modelo asume solo-clave, ese modo **verifica** en qué estado quedó — preguntándole al propio
+servidor qué métodos de autenticación ofrece — y avisa fuerte si acepta contraseñas, en vez de
+dejarlo librado a un "revisalo a mano". La verificación también cuenta
+`keyboard-interactive`: es la puerta de atrás clásica, con `PasswordAuthentication no` puesto
+pero PAM pidiendo contraseña igual.
+
 ## Reportar un problema
 
 El repo es personal y no tiene programa de bug bounty. Si encontrás algo, abrí un issue

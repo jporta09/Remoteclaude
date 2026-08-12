@@ -121,3 +121,51 @@ def test_no_arranca_un_servicio_que_estaba_apagado(tmp_path):
     llamadas = (tmp_path / "llamadas.log").read_text()
     assert "restart" not in llamadas
     assert "start demo.service" not in llamadas
+
+
+# --- verificación del sshd (modo --sin-sudo) ------------------------------------------
+
+def ssh_falso(tmp_path, respuesta: str):
+    """ssh de mentira que responde como lo haría un servidor con esos métodos."""
+    binn = tmp_path / "bin"
+    binn.mkdir(exist_ok=True)
+    (binn / "ssh").write_text(f"#!/usr/bin/env bash\n>&2 echo '{respuesta}'\nexit 255\n")
+    (binn / "ssh").chmod(0o755)
+    return {"PATH": f"{binn}:{os.environ['PATH']}"}
+
+
+def test_detecta_un_sshd_que_acepta_contraseñas(tmp_path):
+    """El riesgo del modo --sin-sudo: se saltea el endurecimiento de sshd, así que si el
+    host acepta passwords hay que decirlo, no dejarlo en un 'verificá a mano'."""
+    env = ssh_falso(tmp_path, "nadie@127.0.0.1: Permission denied (publickey,password).")
+    r = correr('sshd_acepta_password && echo ACEPTA || echo "rc=$?"', tmp_path, env)
+    assert "ACEPTA" in r.stdout, r.stdout + r.stderr
+
+
+def test_keyboard_interactive_tambien_cuenta_como_password(tmp_path):
+    """Es la puerta de atrás clásica: PasswordAuthentication no, pero PAM sigue pidiendo
+    contraseña por keyboard-interactive."""
+    env = ssh_falso(tmp_path, "Permission denied (publickey,keyboard-interactive).")
+    r = correr('sshd_acepta_password && echo ACEPTA || echo "rc=$?"', tmp_path, env)
+    assert "ACEPTA" in r.stdout, r.stdout + r.stderr
+
+
+def test_un_sshd_solo_clave_no_dispara_la_alerta(tmp_path):
+    env = ssh_falso(tmp_path, "nadie@127.0.0.1: Permission denied (publickey).")
+    r = correr('sshd_acepta_password && echo ACEPTA || echo "rc=$?"', tmp_path, env)
+    assert "rc=1" in r.stdout, r.stdout + r.stderr
+
+
+def test_si_no_se_puede_verificar_se_distingue_de_estar_seguro(tmp_path):
+    """Sin respuesta del servidor NO se puede concluir 'solo-clave': tiene que ser un
+    tercer estado, o el mensaje mentiría."""
+    env = ssh_falso(tmp_path, "ssh: connect to host 127.0.0.1 port 22: Connection refused")
+    r = correr('sshd_acepta_password && echo ACEPTA || echo "rc=$?"', tmp_path, env)
+    assert "rc=2" in r.stdout, r.stdout + r.stderr
+
+
+def test_no_confunde_publickey_con_password_por_substring(tmp_path):
+    """'password' no puede matchear dentro de otra palabra."""
+    env = ssh_falso(tmp_path, "Permission denied (publickey,gssapi-with-mic).")
+    r = correr('sshd_acepta_password && echo ACEPTA || echo "rc=$?"', tmp_path, env)
+    assert "rc=1" in r.stdout, r.stdout + r.stderr

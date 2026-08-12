@@ -53,3 +53,29 @@ escribir_unidad() {
         echo "    reiniciado (estaba corriendo con la versión anterior)"
     fi
 }
+
+# ¿Qué métodos de autenticación ofrece el sshd de este host?
+#
+# Con PreferredAuthentications=none el servidor responde con la lista de métodos que acepta
+# sin que intentemos autenticarnos con ninguno. Es la forma de verificar esto SIN root:
+# `sshd -T` exige privilegios.
+sshd_metodos() {
+    LC_ALL=C ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=5 \
+        -o PreferredAuthentications=none -p "${1:-22}" nadie@127.0.0.1 true 2>&1 |
+        grep -oE "Permission denied \(([^)]*)\)" | head -1 | sed 's/.*(\(.*\)).*/\1/'
+}
+
+# 0 = acepta contraseñas (RIESGO) · 1 = sólo clave · 2 = no se pudo verificar.
+#
+# Importa porque TODO el modelo de RemoteMarvin asume solo-clave: el pinning de la clave del
+# host, la autorización por authorized_keys y el túnel del visor. Con contraseñas habilitadas
+# el servidor queda expuesto a fuerza bruta y esas defensas dejan de significar lo que dicen.
+sshd_acepta_password() {
+    local metodos
+    metodos="$(sshd_metodos "${1:-22}")"
+    [ -n "$metodos" ] || return 2
+    case ",$metodos," in
+        *,password,*|*,keyboard-interactive,*) return 0 ;;
+    esac
+    return 1
+}

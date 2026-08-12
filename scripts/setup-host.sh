@@ -7,7 +7,16 @@
 # La terminal corre como TU usuario; root solo con `sudo` puntual.
 #
 # Uso:  bash scripts/setup-host.sh
+#       bash scripts/setup-host.sh --sin-sudo   (saltea lo que necesita root)
+#
+# --sin-sudo: para hosts donde no tenés permiso de instalar paquetes ni tocar sshd. Todo lo
+# demás (daemons de usuario, ~/.tmux.conf, ~/.ssh/config) es a nivel usuario y se aplica
+# igual. Sin esa opción el script moría en el primer `sudo apt-get`, así que no se podía
+# usar en un servidor ajeno.
 set -euo pipefail
+
+SIN_SUDO=0
+[ "${1:-}" = "--sin-sudo" ] && SIN_SUDO=1
 
 SCRIPTS="$(cd "$(dirname "$0")" && pwd)"
 # shellcheck source=scripts/setup-host-lib.sh
@@ -21,6 +30,22 @@ ProtectKernelTunables=yes
 ProtectControlGroups=yes
 RestrictSUIDSGID=yes"
 
+if [ "$SIN_SUDO" = 1 ]; then
+echo "==> saltando lo que necesita root (--sin-sudo)"
+echo "    Verificá a mano que el host tenga openssh-server, tmux, jq y qrencode."
+# Lo de sshd NO se deja librado a "verificá a mano": es la premisa de todo el modelo.
+sshd_acepta_password && RC=0 || RC=$?
+case $RC in
+    0) echo ""
+       echo "    !! ATENCIÓN: el sshd de este host ACEPTA CONTRASEÑAS."
+       echo "       RemoteMarvin asume solo-clave: con passwords habilitados el servidor"
+       echo "       queda expuesto a fuerza bruta y el pinning de clave no protege de nada."
+       echo "       Pedile al admin:  PasswordAuthentication no  en sshd_config"
+       echo "" ;;
+    1) echo "    sshd: solo-clave ✓ (verificado)" ;;
+    *) echo "    sshd: no pude verificarlo (¿no escucha en 127.0.0.1:22?) — chequealo a mano" ;;
+esac
+else
 echo "==> Docker"
 if ! command -v docker >/dev/null 2>&1; then
     curl -fsSL https://get.docker.com | sh
@@ -42,6 +67,7 @@ PubkeyAuthentication yes
 EOF
 sudo systemctl enable --now ssh
 sudo systemctl restart ssh
+fi
 
 echo "==> tmux.conf (persistencia + portapapeles del celu vía OSC 52)"
 if [ ! -f "$HOME/.tmux.conf" ]; then
