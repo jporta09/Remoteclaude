@@ -65,7 +65,7 @@ archivos del repo, nunca a la configuración de una máquina puntual.
 | El texto dictado se escribía en la pestaña activa al terminar, no en la que dictaste. | ✅ |
 | `renameSession` persistía aunque el host no aplicara el cambio → sesión real huérfana. | ✅ |
 | `transcribe()` ignoraba el exit status: el error del cliente se tipeaba como transcripción. | ✅ |
-| `exec()` devolvía `""` ante cualquier fallo, indistinguible de vacío. | ✅ |
+| `exec()` devolvía `""` ante cualquier fallo, indistinguible de vacío. | ✅ *(el mecanismo entró en P1, pero **sólo lo usaba `renameSession`**: el camino de documentos —el que el hallazgo nombraba— siguió tragándose el error hasta que un E2E lo expuso)* |
 | Doble toque en un host abre dos `MainActivity` que se pelean la misma sesión tmux (`-D` mutuo). | ✅ `launchMode=singleTop` |
 | Tras autorizar la clave, solo la pestaña activa se recupera; las demás quedan muertas. | ⏳ |
 | Las interfaces de red se pasan a tsnet una sola vez: al cambiar de wifi a datos el nodo embebido no se recupera. | ✅ `refreshInterfaces()` desde el callback de red |
@@ -208,6 +208,25 @@ el riesgo de que ⧉ salga como un cuadrito. Lo que queda pendiente para una pr�
 reemplazarlos por **`VectorDrawable` dibujados con la identidad de Marvin**: control total del
 trazo, nítidos a cualquier tamaño y sin depender de ninguna tipografía. Hoy los glifos son de
 Noto, o sea correctos y consistentes, pero no propios.
+
+### Cobertura de tests: documentos y dictado (nuevo)
+
+La suite instrumentada pasó de 6 a 17. Los 11 nuevos cubren las dos funciones que más se
+tocaron y no tenían ninguno:
+
+- **Documentos**: la lista llega con tamaños reales, el contenido se lee, un nombre con
+  comilla no ejecuta nada (canario en `/tmp` que debe seguir sin existir), los nombres
+  inseguros se rechazan de entrada, y **un host caído se distingue de "no hay documentos"**.
+- **Dictado por lote**: el audio viaja y vuelve el texto, el host recibe un WAV válido de
+  verdad, y **un error del host no se tipea como si fuera la transcripción**.
+
+El primero de esos tests **nació fallando** y así destapó que B2 seguía abierto en el camino
+de documentos. Vale como recordatorio de para qué son estos tests: la lectura del código decía
+que estaba arreglado.
+
+**Falta el dictado EN VIVO**: el fixture no tiene stub de WhisperLiveKit (el plan lo preveía y
+nunca se construyó), así que `LiveDictation`, el túnel y el bucle de `feed` no tienen cobertura
+E2E. `WlkSnapshot` sí está cubierto por tests JVM.
 
 ### Cobertura de tests que falta
 Los arreglos de P4 entraron con tests propios: `test/host/` pasó de 16 a 31 (bloques

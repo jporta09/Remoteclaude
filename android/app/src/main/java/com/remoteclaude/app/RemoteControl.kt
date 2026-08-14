@@ -101,12 +101,20 @@ class RemoteControl(
     // exec() corre directamente como el usuario en el host (SSH al sshd del host), así
     // que leemos ~/RemoteMarvinDocs sin saltos: el '~' lo expande el shell de login.
 
-    /** Lista los docs compartidos: (nombre, bytes, mtimeEpoch), más nuevos primero. */
+    /**
+     * Lista los docs compartidos: (nombre, bytes, mtimeEpoch), más nuevos primero.
+     *
+     * LANZA si no se pudo llegar al host. La distinción importa: un `find` que no encuentra
+     * nada sale 0 con salida vacía —eso sí es "no hay documentos"— pero una conexión que
+     * falla devolvía también vacío, y la pantalla lo presentaba como un hecho sobre TUS
+     * archivos ("Sin documentos en ~/RemoteMarvinDocs del host") sin haber llegado a mirar.
+     */
     fun listDocs(): List<Triple<String, Long, Long>> {
-        val out = exec(
+        val r = execResult(
             "find ~/RemoteMarvinDocs -maxdepth 1 -type f -printf '%f\\t%s\\t%T@\\n' 2>/dev/null"
         )
-        return out.lineSequence().mapNotNull {
+        if (r.failed) throw IllegalStateException(r.error ?: "no pude conectarme al host")
+        return r.out.lineSequence().mapNotNull {
             val p = it.split('\t')
             if (p.size >= 3 && p[0].isNotBlank())
                 Triple(
@@ -118,10 +126,16 @@ class RemoteControl(
         }.sortedByDescending { it.third }.toList()
     }
 
-    /** Contenido de un doc en base64 (one-shot). Vacío si el nombre es inseguro. */
+    /**
+     * Contenido de un doc en base64 (one-shot). Vacío si el nombre es inseguro; LANZA si no
+     * se pudo llegar al host, por lo mismo que [listDocs]: un archivo que no se pudo traer
+     * no es un archivo vacío.
+     */
     fun readDocBase64(name: String): String {
         if (name.contains('\'') || name.contains('\n') || name.contains('/')) return ""
-        return exec("base64 ~/RemoteMarvinDocs/${ShellQuote.sq(name)} 2>/dev/null").replace("\n", "").trim()
+        val r = execResult("base64 ~/RemoteMarvinDocs/${ShellQuote.sq(name)} 2>/dev/null")
+        if (r.failed) throw IllegalStateException(r.error ?: "no pude conectarme al host")
+        return r.out.replace("\n", "").trim()
     }
 
     // --- Dictado por voz ---------------------------------------------------------

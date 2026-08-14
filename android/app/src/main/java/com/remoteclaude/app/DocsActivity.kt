@@ -99,9 +99,26 @@ class DocsActivity : AppCompatActivity() {
     private fun loadDocs() {
         status.text = "Cargando…"
         thread {
-            val docs = try { control.listDocs() } catch (_: Exception) { emptyList() }
+            // El motivo se conserva: "no pude conectarme" y "no hay documentos" son cosas
+            // distintas y antes se veían iguales.
+            var motivo: String? = null
+            val docs = try { control.listDocs() } catch (e: Exception) {
+                motivo = e.message ?: "no pude conectarme al host"
+                emptyList()
+            }
             runOnUiThread {
                 list.removeAllViews()
+                if (motivo != null) {
+                    status.text = "No pude leer los documentos: $motivo"
+                    list.addView(TextView(this).apply {
+                        text = "Revisá que el host esté encendido y accesible."
+                        typeface = fuenteDetalle()
+                        setTextColor(getColor(R.color.marvin_muted))
+                        setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+                        setPadding(dp(24), dp(24), dp(24), dp(24))
+                    })
+                    return@runOnUiThread
+                }
                 if (docs.isEmpty()) {
                     status.text = "Sin documentos en ~/RemoteMarvinDocs del host."
                     list.addView(TextView(this).apply {
