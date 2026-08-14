@@ -224,9 +224,19 @@ El primero de esos tests **nació fallando** y así destapó que B2 seguía abie
 de documentos. Vale como recordatorio de para qué son estos tests: la lectura del código decía
 que estaba arreglado.
 
-**Falta el dictado EN VIVO**: el fixture no tiene stub de WhisperLiveKit (el plan lo preveía y
-nunca se construyó), así que `LiveDictation`, el túnel y el bucle de `feed` no tienen cobertura
-E2E. `WlkSnapshot` sí está cubierto por tests JVM.
+El **dictado EN VIVO** también quedó cubierto: el fixture ahora trae un stub de WhisperLiveKit
+(`test/e2e/fixture/wlk-stub.py`) que habla el protocolo relevado. Seis tests sobre el camino con
+más partes móviles de la app: túnel SSH → WebSocket → chunks en orden → parciales → cierre.
+Cubren además los dos casos que sólo se veían usando la app: que **los chunks anteriores a que
+abra el WebSocket no se pierdan** (si no, falta el arranque de cada dictado) y que **si el
+server no está, `start()` avise en vez de colgarse**, que es el contrato del fallback al modo
+por lote.
+
+Ese último se simula con una **bandera** que el stub mira al aceptar, no matando el proceso:
+matarlo y reponerlo entre tests es una carrera —el que arranca mientras el viejo agoniza no
+puede bindear el puerto— y dejaba sin server a los tests siguientes, que fallaban por culpa de
+otro con el motivo lejos de la causa. El stub corre **como el usuario**, igual que en
+producción (systemd `--user`), y loguea al stdout del contenedor.
 
 ### Cobertura de tests que falta
 Los arreglos de P4 entraron con tests propios: `test/host/` pasó de 16 a 31 (bloques

@@ -5,6 +5,7 @@ FROM debian:bookworm-slim
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
         openssh-server tmux ca-certificates procps \
+        python3 python3-websockets \
     && rm -rf /var/lib/apt/lists/*
 
 RUN useradd -m -s /bin/bash tester && echo 'tester:e2e' | chpasswd
@@ -41,8 +42,14 @@ RUN printf '#!/bin/bash\n(sleep 1; pkill -u tester sshd) &\n' > /usr/local/bin/e
 # contenedor, para que fixture y fixture-rotated tengan claves distintas (es lo que
 # hace posible el test de "la clave del host cambió").
 RUN rm -f /etc/ssh/ssh_host_*
-RUN printf '#!/bin/sh\nset -e\n[ -f /etc/ssh/ssh_host_ed25519_key ] || ssh-keygen -A >/dev/null\nexec "$@"\n' \
+RUN printf '#!/bin/sh\nset -e\n[ -f /etc/ssh/ssh_host_ed25519_key ] || ssh-keygen -A >/dev/null\n# el stub del dictado en vivo, como tester (igual que en produccion) y en segundo plano.\n# Su salida va al stdout del contenedor: `docker logs marvin-e2e-fixture`.\nrunuser -u tester -- python3 /usr/local/bin/wlk-stub.py &\nexec "$@"\n' \
         > /usr/local/bin/entrypoint.sh && chmod +x /usr/local/bin/entrypoint.sh
+
+# Stub de WhisperLiveKit (dictado EN VIVO). Escucha en 127.0.0.1:6092 dentro del contenedor:
+# la app llega por el port-forward de SSH, así que no se publica ningún puerto.
+# (el contexto de build es ./fixture, por eso la ruta es relativa a esa carpeta)
+COPY wlk-stub.py /usr/local/bin/wlk-stub.py
+RUN chmod +x /usr/local/bin/wlk-stub.py
 
 EXPOSE 22
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
