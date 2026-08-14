@@ -8,6 +8,9 @@ playwright-report/
 
 # Secretos / config local (no commitear)
 .env
+# Respaldos del .env: tienen los MISMOS secretos y `.env` a secas no los cubre.
+.env.bak*
+.env.*.bak
 ssh/authorized_keys
 
 # Fuentes comerciales (Brandon Grotesque) — NO commitear
