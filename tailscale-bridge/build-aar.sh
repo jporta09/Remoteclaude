@@ -16,12 +16,13 @@ TARGETS="android/arm64,android/amd64"
 need() { command -v "$1" >/dev/null 2>&1; }
 
 # --- Go -----------------------------------------------------------------------------
+# La búsqueda vive en scripts/go-bin.sh porque el Makefile la necesita igual.
 if ! need go; then
-    for c in "$HOME/toolchain/go/bin" /usr/local/go/bin "$HOME/go/bin"; do
-        [ -x "$c/go" ] && { PATH="$c:$PATH"; break; }
-    done
+    PATH="$("$HERE/../scripts/go-bin.sh")":"$PATH" || {
+        echo "falta Go (go.mod pide $(grep -m1 '^go ' "$HERE/go.mod" | awk '{print $2}'))" >&2
+        exit 1
+    }
 fi
-need go || { echo "falta Go (go.mod pide $(grep -m1 '^go ' "$HERE/go.mod" | awk '{print $2}'))" >&2; exit 1; }
 
 # --- gomobile ------------------------------------------------------------------------
 PATH="$(go env GOPATH)/bin:$PATH"

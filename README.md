@@ -91,6 +91,7 @@ los secretos de la app se guardan cifrados con una clave del AndroidKeyStore.
 ```bash
 make unit           # tests JVM de la app (sin dispositivo)
 make host           # tests de los daemons del host
+make go             # bridge de Tailscale: gofmt, vet y tests con -race
 make lint           # lint de Android + shellcheck + ruff
 make release-check  # build de release + verificación de las reglas de R8
 make e2e            # suite instrumentada en un emulador (ver test/e2e/README.md)

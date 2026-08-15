@@ -292,9 +292,17 @@ servicio la mostraba puesta. La plantilla oficial de la unidad tampoco carga nin
 Por eso la ruta del SDK viaja por `MARVIN_ANDROID_SDK`, el mismo mecanismo que ya funciona
 para `MARVIN_RUNNER`, y el workflow sigue sin rutas de ninguna máquina adentro.
 
-Primera corrida verde de punta a punta: 2 min 11 s, los tres jobs. El de Go
-(`gofmt`/`vet`/`-race`) es además el único que **no** se puede correr en esta máquina a mano,
-porque Go no está instalado: durante la ceguera del CI esos tests no los ejecutaba nadie.
+Primera corrida verde de punta a punta: 2 min 11 s, los tres jobs.
+
+Un cuarto hallazgo, y el más incómodo, apareció recién al preguntármelo: **`make all` no
+cubría el bridge de Go**. Yo había concluido que Go no estaba instalado —`command -v go` no
+lo encuentra— y con esa premisa falsa di por hecho que sus chequeos sólo podían correr en
+CI. Está instalado en `~/toolchain/go`, fuera del `PATH`, y `build-aar.sh` ya lo descubría
+ahí desde siempre. O sea que el target existía a medias en otro script y el Makefile no lo
+usaba: `gofmt`, `vet` y los tests con `-race` eran los únicos sin forma de verificarse antes
+de pushear. Ahora hay `make go`, la búsqueda vive en `scripts/go-bin.sh` (misma forma que
+`jdk17.sh`) y `all` la incluye, así que "todo lo que no necesita dispositivo" por fin es
+todo.
 
 Lo que sigue abierto: devolver los **E2E instrumentados a gate de PR** ahora que el runner
 tiene KVM, AVD y Docker — que era el motivo original de querer un runner propio.
