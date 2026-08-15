@@ -8,6 +8,7 @@
 # runner virtualizado tardaban ~30 min por la traducción ARM.
 #
 # Uso:  bash scripts/setup-runner.sh              instala/actualiza y arranca
+#       bash scripts/setup-runner.sh --sin-sudo   idem, sin tocar nada que necesite root
 #       bash scripts/setup-runner.sh --estado     qué hay instalado y si está conectado
 #       bash scripts/setup-runner.sh --borrar     lo desregistra de GitHub y borra todo
 #
@@ -93,11 +94,13 @@ borrar() {
     echo "    listo. El directorio $DIR queda por si querés revisar los logs."
 }
 
+SIN_SUDO=0
 case "${1:-}" in
     --estado) estado; exit 0 ;;
     --borrar) borrar; exit 0 ;;
+    --sin-sudo) SIN_SUDO=1 ;;
     "") ;;
-    *) echo "opción desconocida: $1"; sed -n '4,8p' "$0"; exit 2 ;;
+    *) echo "opción desconocida: $1"; sed -n '4,9p' "$0"; exit 2 ;;
 esac
 
 # ---------------------------------------------------------------- requisitos
@@ -175,6 +178,33 @@ else
     echo "    ⚠ no encontré el SDK de Android en $SDK"
     echo "      los jobs de Gradle van a fallar con 'SDK location not found'."
     echo "      Definí ANDROID_SDK_ROOT y volvé a correr este script."
+fi
+
+# ---------------------------------------------------------------- KVM para los E2E
+# El workflow de E2E levanta un AVD, y sin KVM el emulador no falla: arranca en emulación
+# por software y la suite se va a timeout, con el síntoma lejísimos de la causa.
+#
+# El detalle que importa: en una máquina de escritorio el permiso sobre /dev/kvm suele NO
+# venir del grupo `kvm` sino de una ACL que logind le pone a la SESIÓN ACTIVA (uaccess). El
+# runner corre como servicio con linger, o sea justamente pensado para seguir andando
+# cuando no hay nadie logueado — y ahí la ACL ya no está. El gate pasaría a andar o no
+# según si dejaste la sesión gráfica abierta, que es la misma clase de bug que el JAVA_HOME
+# del Makefile: depender del ambiente.
+echo "==> KVM (para los E2E)"
+if id -nG | tr ' ' '\n' | grep -qx kvm; then
+    echo "    acceso por grupo kvm ✓ (sobrevive al logout)"
+elif [ "$SIN_SUDO" = 1 ]; then
+    echo "    ⚠ no estás en el grupo kvm y no puedo agregarte (--sin-sudo)."
+    echo "      Los E2E van a andar sólo mientras tengas sesión gráfica abierta."
+elif [ -e /dev/kvm ]; then
+    echo "    no estás en el grupo kvm; el acceso de hoy viene de la ACL de tu sesión."
+    echo "    agregándote al grupo para que sea permanente (pide sudo):"
+    sudo usermod -aG kvm "$USER"
+    echo "    ✓ listo — pero NO aplica hasta que cierres sesión y vuelvas a entrar:"
+    echo "      los grupos suplementarios del gestor de servicios de usuario se fijan al"
+    echo "      iniciar sesión, así que reiniciar el runner solo no alcanza."
+else
+    echo "    ⚠ esta máquina no tiene /dev/kvm: los E2E no van a poder correr acá."
 fi
 
 # ---------------------------------------------------------------- servicio
