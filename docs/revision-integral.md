@@ -102,7 +102,7 @@ archivos del repo, nunca a la configuración de una máquina puntual.
 
 | Hallazgo | Estado |
 |---|---|
-| **Cero tests, CI y linters** en todo el proyecto. | ✅ 34 tests JVM + 16 pytest + **6 E2E instrumentados** contra fixture desechable + CI bloqueante + job nocturno de E2E |
+| **Cero tests, CI y linters** en todo el proyecto. | ✅ 51 tests JVM + 40 pytest + **29 E2E instrumentados** contra fixture desechable + CI bloqueante (hoy sobre runner self-hosted, ver más abajo) + job nocturno de E2E |
 | `marvints.aar`: 14 MB commiteados, build manual con rutas absolutas, sin versión ni checksum, solo arm64. | ⏳ P3 |
 | README raíz, README de android y DESIGN.md describen una arquitectura eliminada (gateway privilegiado, `nsenter`, mosh, sshj, Compose). | ⏳ P4 |
 | Sin `LICENSE` en la raíz pese a vendorizar Termux (GPL-3.0). | ⏳ P4 |
@@ -256,6 +256,48 @@ sesión en el host —la activa—; las otras existen recién cuando las tocás.
 conexiones), pero invalidaba la primera versión de los tests, que contaba sesiones. Ahora miran
 cuál quedó **enganchada**, que además detecta el bug original más directamente: su síntoma era
 justamente quedar enganchado a la pestaña equivocada.
+
+### El CI estuvo ciego 8 pushes, y el arreglo destapó tres cosas más
+
+Los jobs no fallaban: **no arrancaban**. Ocho corridas seguidas terminadas en 3 segundos con
+"the job was not started because recent account payments have failed or your spending limit
+needs to be increased" — facturación de GitHub Actions, cero relación con el código. El
+detalle importante es que en la lista se ven como ✗ rojas, indistinguibles de un test roto,
+así que el repo estuvo ocho pushes sin ninguna verificación pareciendo tenerla.
+
+La salida es la que el plan ya preveía: **runner self-hosted en esta misma máquina**
+(`scripts/setup-runner.sh`, servicio de usuario, sin sudo; el `svc.sh` oficial pide una unit
+de sistema). Verifica el sha256 del paquete contra el release antes de extraerlo, y el
+workflow no queda clavado: los tres jobs leen la variable de repo `MARVIN_RUNNER`, así que
+volver a los runners de GitHub cuando se arregle la facturación es borrar una variable desde
+la web. Estar clavado a un lado fue justamente lo que dejó el repo sin gate.
+
+**Modelo de amenaza**, escrito en el encabezado del script: el runner ejecuta el workflow de
+cada push **con tu usuario** y ve `~/.ssh`, el keystore de firma y `.env`. Es aceptable sólo
+porque el repo es privado. El script **se niega a instalar** si deja de serlo, porque ahí
+cualquier PR desde un fork sería ejecución remota de código en la máquina.
+
+Correrlo destapó tres problemas reales, ninguno inventado por el runner:
+
+| Qué apareció | Por qué importa |
+|---|---|
+| `make lint` y `make unit` andaban **según el shell** desde el que los llamaras | El java por defecto de la máquina es un 21 sin `jlink`, que AGP necesita, y el Makefile no fijaba `JAVA_HOME`. Un target de verificación que depende del ambiente es exactamente lo contrario de lo que se le pide. `e2e.sh` ya lo tenía resuelto para sí mismo; ahora la búsqueda vive en `scripts/jdk17.sh` y la usan los dos. |
+| El stub del fixture tenía shebang y **no era ejecutable** | Lo detectó `ruff` (EXE001) recién al correr el lint sobre `test/e2e/fixture/`, que ni el Makefile ni el CI incluían: los stubs no los revisaba nadie. |
+| Tres **daemons de Gradle** vivos sin `ANDROID_HOME` | Gradle reusa un daemon compatible, y adentro de ese proceso `System.getenv()` devuelve lo que había cuando arrancó. Un build del CI reusaba uno levantado por una compilación local mía y moría con "SDK location not found". Es un problema propio del self-hosted: en `ubuntu-latest` la máquina es descartable y nunca hay un daemon ajeno. Se saca al daemon de la ecuación escribiendo `local.properties`, que AGP mira **antes** que la variable. |
+
+Y una cosa que hay que saber si algún día se toca esto: **lo que se le pone al entorno del
+proceso del runner no llega a los steps**. Está medido, no supuesto — el guard del propio
+workflow falló con "ANDROID_HOME no está definido" mientras `/proc/<pid>/environ` del
+servicio la mostraba puesta. La plantilla oficial de la unidad tampoco carga ningún `.env`.
+Por eso la ruta del SDK viaja por `MARVIN_ANDROID_SDK`, el mismo mecanismo que ya funciona
+para `MARVIN_RUNNER`, y el workflow sigue sin rutas de ninguna máquina adentro.
+
+Primera corrida verde de punta a punta: 2 min 11 s, los tres jobs. El de Go
+(`gofmt`/`vet`/`-race`) es además el único que **no** se puede correr en esta máquina a mano,
+porque Go no está instalado: durante la ceguera del CI esos tests no los ejecutaba nadie.
+
+Lo que sigue abierto: devolver los **E2E instrumentados a gate de PR** ahora que el runner
+tiene KVM, AVD y Docker — que era el motivo original de querer un runner propio.
 
 ### Cobertura de tests que falta
 Los arreglos de P4 entraron con tests propios: `test/host/` pasó de 16 a 31 (bloques

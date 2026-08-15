@@ -97,6 +97,12 @@ make e2e            # suite instrumentada en un emulador (ver test/e2e/README.md
 make all            # todo lo que no necesita dispositivo
 ```
 
+Lo mismo corre en cada push desde [`.github/workflows/ci.yml`](.github/workflows/ci.yml).
+Dónde corre lo decide la variable de repo `MARVIN_RUNNER`: sin definir, los runners de
+GitHub; con `self-hosted`, un runner propio que instala `scripts/setup-runner.sh` (leé el
+encabezado del script antes: el runner ejecuta cada workflow con tu usuario, y eso sólo es
+aceptable con el repo privado).
+
 - La app está en [`android/`](android/README.md); su diseño interno, en
   [`android/DESIGN.md`](android/DESIGN.md).
 - El nodo Tailscale embebido se construye con `make aar` (ver
