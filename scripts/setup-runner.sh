@@ -176,8 +176,14 @@ After=network-online.target
 Wants=network-online.target
 
 [Service]
-ExecStart=$DIR/run.sh
+# runsvc.sh y no run.sh: convierte SIGTERM en SIGINT, que es como el runner cancela un job
+# en curso de forma ordenada en vez de dejarlo colgado del lado de GitHub.
+ExecStart=$DIR/bin/runsvc.sh
 WorkingDirectory=$DIR
+# El .env lo carga systemd, no el runner: ni run.sh ni runsvc.sh lo leen (env.sh es solo la
+# herramienta para generarlo). Con el archivo puesto pero sin esta línea, ANDROID_HOME no
+# llegaba a los jobs y Gradle moría con "SDK location not found" igual que sin él.
+EnvironmentFile=-$DIR/.env
 Restart=always
 RestartSec=10
 KillMode=process
