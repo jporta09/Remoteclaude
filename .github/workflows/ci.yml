@@ -27,6 +27,18 @@ jobs:
           java-version: '17'
       - uses: gradle/actions/wrapper-validation@v4
       - uses: gradle/actions/setup-gradle@v4
+      # AGP busca el SDK primero en local.properties y recién después en ANDROID_HOME. Se
+      # escribe el archivo aunque la variable esté puesta, porque el daemon de Gradle es un
+      # proceso de larga vida: si el build reusa uno arrancado antes —cosa habitual en un
+      # runner self-hosted, donde el daemon lo puede haber levantado una compilación local
+      # de la misma máquina— entonces System.getenv("ANDROID_HOME") adentro del daemon
+      # devuelve null y el build muere con "SDK location not found" con la variable puesta
+      # en el job. Por el archivo no hay ambigüedad. local.properties está gitignoreado, así
+      # que en el checkout del runner no existe.
+      - name: Ubicar el SDK de Android
+        run: |
+          test -n "$ANDROID_HOME" || { echo "::error::ANDROID_HOME no está definido"; exit 1; }
+          echo "sdk.dir=$ANDROID_HOME" > android/local.properties
       - name: Tests unitarios
         working-directory: android
         run: ./gradlew :app:testDebugUnitTest
