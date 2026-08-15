@@ -15,17 +15,11 @@ AVD="${AVD:-marvin-e2e}"
 MODE="${1:-}"
 KEEP="${E2E_KEEP:-0}"
 
-# AGP necesita un JDK 17 CON jlink (transforma core-for-system-modules.jar). El java por
-# defecto acá es un 21 sin jlink, y el fallo aparecía recién al compilar una variante no
-# cacheada — o sea, en el momento menos obvio. Se busca uno servible salvo que ya haya
-# JAVA_HOME válido.
-if [ ! -x "${JAVA_HOME:-/nonexistent}/bin/jlink" ]; then
-    for j in /usr/lib/jvm/java-17-openjdk-* /usr/lib/jvm/openjdk-17 /usr/lib/jvm/*17*; do
-        [ -x "$j/bin/jlink" ] && { export JAVA_HOME="$j"; break; }
-    done
-fi
-[ -x "${JAVA_HOME:-/nonexistent}/bin/jlink" ] || {
-    echo "!! falta un JDK 17 con jlink (probá: apt install openjdk-17-jdk)" >&2; exit 1; }
+# AGP necesita un JDK 17 CON jlink (transforma core-for-system-modules.jar), y el fallo
+# aparecía recién al compilar una variante no cacheada — el momento menos obvio. Lo mismo
+# le pasaba al Makefile, así que la búsqueda vive en un solo lado.
+JAVA_HOME="$("$(dirname "$0")/jdk17.sh")" || exit 1
+export JAVA_HOME
 
 # Despertar la pantalla y sacar el keyguard. Headless, el emulador arranca con la pantalla
 # apagada y las ventanas nunca toman foco: Espresso espera "window focus" y falla aunque lo

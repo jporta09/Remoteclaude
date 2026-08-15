@@ -1,6 +1,12 @@
 # Atajos de verificación. El detalle de los E2E está en test/e2e/README.md.
 .PHONY: unit host lint e2e e2e-device e2e-release release-check aar all
 
+# Sin esto, `make unit` y `make lint` fallaban o no según el JAVA_HOME que tuviera el shell
+# de turno (el java por defecto de esta máquina es un 21 sin jlink, que AGP necesita). Que
+# un target de verificación dependa del ambiente es lo contrario de lo que se le pide.
+JAVA_HOME := $(shell scripts/jdk17.sh)
+export JAVA_HOME
+
 unit:            ## tests unitarios JVM de la app (sin dispositivo)
 	cd android && ./gradlew :app:testDebugUnitTest
 
