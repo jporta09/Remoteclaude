@@ -36,9 +36,20 @@ jobs:
       # en el job. Por el archivo no hay ambigüedad. local.properties está gitignoreado, así
       # que en el checkout del runner no existe.
       - name: Ubicar el SDK de Android
+        env:
+          # En los runners de GitHub el SDK viene preinstalado con ANDROID_HOME puesto. En
+          # el self-hosted no alcanza con ponérselo al servicio: está medido que el entorno
+          # del proceso del runner NO llega a los steps. La ruta viaja entonces por una
+          # variable de repo, que sí llega — y así el workflow no tiene rutas de ninguna
+          # máquina adentro. La define scripts/setup-runner.sh al instalar.
+          SDK_DEL_RUNNER: ${{ vars.MARVIN_ANDROID_SDK }}
         run: |
-          test -n "$ANDROID_HOME" || { echo "::error::ANDROID_HOME no está definido"; exit 1; }
-          echo "sdk.dir=$ANDROID_HOME" > android/local.properties
+          SDK="${SDK_DEL_RUNNER:-$ANDROID_HOME}"
+          test -n "$SDK" || {
+            echo "::error::no sé dónde está el SDK de Android: ni ANDROID_HOME ni la variable de repo MARVIN_ANDROID_SDK"
+            exit 1
+          }
+          echo "sdk.dir=$SDK" > android/local.properties
       - name: Tests unitarios
         working-directory: android
         run: ./gradlew :app:testDebugUnitTest

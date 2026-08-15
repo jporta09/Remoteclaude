@@ -34,6 +34,9 @@ ETIQUETAS="self-hosted,linux,x64,marvin"
 # Variable de repo que el workflow lee para decidir dónde corre. Vive en GitHub, no en el
 # repo: así se vuelve al CI hospedado desde la web, sin un commit.
 VAR_REPO="MARVIN_RUNNER"
+# Dónde está el SDK de Android en esta máquina. Va como variable de repo por lo mismo: el
+# workflow no puede tener rutas de una máquina adentro, y el entorno del servicio no llega.
+VAR_SDK="MARVIN_ANDROID_SDK"
 
 REPO="$(gh repo view --json nameWithOwner --jq .nameWithOwner)"
 SVC_DIR="$HOME/.config/systemd/user"
@@ -64,6 +67,9 @@ estado() {
     VALOR="$(gh variable list --repo "$REPO" --json name,value \
         --jq ".[] | select(.name==\"$VAR_REPO\") | .value" 2>/dev/null || true)"
     echo "    $VAR_REPO=${VALOR:-(sin definir -> ubuntu-latest)}"
+    VALOR="$(gh variable list --repo "$REPO" --json name,value \
+        --jq ".[] | select(.name==\"$VAR_SDK\") | .value" 2>/dev/null || true)"
+    echo "    $VAR_SDK=${VALOR:-(sin definir -> se usa ANDROID_HOME del runner)}"
 }
 
 borrar() {
@@ -80,6 +86,10 @@ borrar() {
     fi
     echo "==> devolviendo el workflow a ubuntu-latest"
     gh variable delete "$VAR_REPO" --repo "$REPO" 2>/dev/null || true
+    # También la del SDK: apunta a una ruta de ESTA máquina, y dejarla puesta haría que un
+    # runner de GitHub escriba un sdk.dir inexistente en local.properties, con un error muy
+    # peor de entender que "no encontré el SDK".
+    gh variable delete "$VAR_SDK" --repo "$REPO" 2>/dev/null || true
     echo "    listo. El directorio $DIR queda por si querés revisar los logs."
 }
 
@@ -144,19 +154,23 @@ else
         --work _work
 fi
 
-# ---------------------------------------------------------------- entorno de los jobs
-# En ubuntu-latest el SDK de Android viene preinstalado y con ANDROID_HOME puesto; acá no,
-# y el servicio de systemd no hereda nada del shell. Localmente el build lo saca de
-# android/local.properties, que está gitignoreado y por lo tanto no existe en el checkout
-# del runner: los tres pasos de Gradle morían con "SDK location not found".
+# ---------------------------------------------------------------- SDK de Android
+# En ubuntu-latest el SDK viene preinstalado con ANDROID_HOME puesto; acá no, y el checkout
+# del runner tampoco tiene android/local.properties (está gitignoreado), así que los pasos
+# de Gradle morían con "SDK location not found".
 #
-# Va en el .env del runner (que él lee al arrancar) y no en el workflow, para que el
-# workflow no dependa de rutas de esta máquina y siga sirviendo en los runners de GitHub.
-echo "==> entorno para los jobs"
+# La ruta viaja por una variable de repo y NO por el entorno del servicio: está medido —con
+# el guard del propio workflow— que lo que se le pone al proceso del runner no llega a los
+# steps, por más que /proc/<pid>/environ lo muestre. La plantilla oficial de la unidad
+# tampoco carga ningún .env, así que ese camino era mío, no de ellos.
+echo "==> SDK de Android"
 SDK="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-$HOME/.buildozer/android/platform/android-sdk}}"
 if [ -d "$SDK/platform-tools" ]; then
+    # Igual se lo damos al servicio: sirve para lo que corra FUERA de un step (por ejemplo
+    # scripts/e2e.sh el día que los E2E vuelvan a ser gate).
     printf 'ANDROID_HOME=%s\nANDROID_SDK_ROOT=%s\n' "$SDK" "$SDK" > "$DIR/.env"
-    echo "    SDK de Android: $SDK"
+    gh variable set "$VAR_SDK" --repo "$REPO" --body "$SDK"
+    echo "    $SDK"
 else
     echo "    ⚠ no encontré el SDK de Android en $SDK"
     echo "      los jobs de Gradle van a fallar con 'SDK location not found'."
