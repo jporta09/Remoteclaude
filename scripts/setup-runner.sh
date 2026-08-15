@@ -191,8 +191,24 @@ fi
 # según si dejaste la sesión gráfica abierta, que es la misma clase de bug que el JAVA_HOME
 # del Makefile: depender del ambiente.
 echo "==> KVM (para los E2E)"
-if id -nG | tr ' ' '\n' | grep -qx kvm; then
+# `case` y no `id -nG | grep -qx kvm`: bajo pipefail, grep -q corta al primer match, el `tr`
+# de al lado se come un SIGPIPE y el pipeline devuelve 141 — o sea que la comprobación
+# empezaría a dar FALSO justo cuando el grupo por fin está. Es la tercera vez en este
+# archivo que aparece la misma trampa.
+#
+# Dos preguntas distintas: `id -nG` sin usuario son los grupos de ESTE proceso (lo que el
+# runner realmente va a tener), y con usuario es lo que dice la base de datos (lo que va a
+# tener después de reiniciar).
+EN_PROCESO=0; EN_BASE=0
+case " $(id -nG) " in *" kvm "*) EN_PROCESO=1 ;; esac
+case " $(id -nG "$USER") " in *" kvm "*) EN_BASE=1 ;; esac
+
+if [ "$EN_PROCESO" = 1 ]; then
     echo "    acceso por grupo kvm ✓ (sobrevive al logout)"
+elif [ "$EN_BASE" = 1 ]; then
+    echo "    ya estás en el grupo kvm, pero este proceso todavía no lo tomó."
+    echo "    aplica en el próximo reinicio; hasta entonces el acceso sigue viniendo de la"
+    echo "    ACL de tu sesión, que es lo que ya funciona hoy. No hay nada más que hacer."
 elif [ "$SIN_SUDO" = 1 ]; then
     echo "    ⚠ no estás en el grupo kvm y no puedo agregarte (--sin-sudo)."
     echo "      Los E2E van a andar sólo mientras tengas sesión gráfica abierta."
