@@ -47,11 +47,23 @@ estado() {
     fi
     echo "    servicio: $(systemctl --user is-active "$UNIDAD" 2>/dev/null || echo inactivo)"
     echo "==> lo que ve GitHub"
-    gh api "repos/$REPO/actions/runners" \
-        --jq '.runners[] | "    \(.name): \(.status) (\(.busy | if . then "ocupado" else "libre" end))"' \
-        2>/dev/null || echo "    no pude consultarlo"
+    # Con reintentos: recién arrancado el servicio, el runner tarda unos segundos en
+    # aparecer conectado, y preguntar una sola vez lo mostraba "offline" cuando estaba
+    # perfecto — un estado falso es peor que no informar nada.
+    for _ in 1 2 3 4 5 6 7 8 9 10; do
+        VISTO="$(gh api "repos/$REPO/actions/runners" \
+            --jq '.runners[] | "    \(.name): \(.status) (\(.busy | if . then "ocupado" else "libre" end))"' \
+            2>/dev/null || true)"
+        case "$VISTO" in *online*) break ;; esac
+        sleep 2
+    done
+    echo "${VISTO:-    no pude consultarlo}"
     echo "==> a dónde apunta el workflow"
-    echo "    $VAR_REPO=$(gh variable get "$VAR_REPO" --repo "$REPO" 2>/dev/null || echo '(sin definir -> ubuntu-latest)')"
+    # `gh variable list`, no `gh variable get`: ese subcomando no existe, y el `|| echo`
+    # que tenía acá se tragaba el error e informaba "sin definir" con la variable puesta.
+    VALOR="$(gh variable list --repo "$REPO" --json name,value \
+        --jq ".[] | select(.name==\"$VAR_REPO\") | .value" 2>/dev/null || true)"
+    echo "    $VAR_REPO=${VALOR:-(sin definir -> ubuntu-latest)}"
 }
 
 borrar() {
@@ -83,7 +95,9 @@ echo "==> requisitos"
 gh auth status >/dev/null 2>&1 || { echo "    ✗ gh no está autenticado: corré 'gh auth login'"; exit 1; }
 # El runtime .NET del runner necesita ICU; sin él arranca en modo "invariant" y falla al
 # parsear fechas de los workflows, con un error que no dice nada de esto.
-ldconfig -p | grep -q libicuuc || { echo "    ✗ falta libicu (sudo apt-get install libicu-dev)"; exit 1; }
+# `grep -c` y no `grep -q`: con -q grep corta al primer match, ldconfig se come un SIGPIPE y
+# sale 141, y bajo `pipefail` el pipeline "falla" aunque la biblioteca esté instalada.
+[ "$(ldconfig -p | grep -c libicuuc)" -gt 0 ] || { echo "    ✗ falta libicu (sudo apt-get install libicu-dev)"; exit 1; }
 [ "$(gh repo view --json isPrivate --jq .isPrivate)" = "true" ] || {
     echo "    ✗ el repo es PÚBLICO: un runner self-hosted acá deja que cualquier PR desde"
     echo "      un fork ejecute código en tu máquina. Leé el bloque de seguridad de arriba."
