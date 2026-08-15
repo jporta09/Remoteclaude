@@ -198,11 +198,26 @@ elif [ "$SIN_SUDO" = 1 ]; then
     echo "      Los E2E van a andar sólo mientras tengas sesión gráfica abierta."
 elif [ -e /dev/kvm ]; then
     echo "    no estás en el grupo kvm; el acceso de hoy viene de la ACL de tu sesión."
-    echo "    agregándote al grupo para que sea permanente (pide sudo):"
-    sudo usermod -aG kvm "$USER"
-    echo "    ✓ listo — pero NO aplica hasta que cierres sesión y vuelvas a entrar:"
-    echo "      los grupos suplementarios del gestor de servicios de usuario se fijan al"
-    echo "      iniciar sesión, así que reiniciar el runner solo no alcanza."
+    # Nada de esto puede abortar la instalación: hacer durable el KVM es una mejora, no un
+    # requisito para tener el runner andando. La primera versión llamaba a `sudo` derecho y,
+    # sin TTY para pedir la contraseña, `set -e` se llevaba puesto todo lo que venía
+    # después — servicio y variables incluidos.
+    if sudo -n true 2>/dev/null; then
+        if sudo -n usermod -aG kvm "$USER"; then
+            echo "    ✓ agregado al grupo kvm"
+            echo "      NO aplica hasta que cierres sesión y vuelvas a entrar: los grupos"
+            echo "      del gestor de servicios de usuario se fijan al iniciar sesión, así"
+            echo "      que reiniciar el runner solo no alcanza."
+        else
+            echo "    ⚠ no pude agregarte al grupo kvm; seguí sin eso."
+        fi
+    else
+        # `sudo -n` falla si haría falta contraseña, así que acá nunca se cuelga esperando.
+        echo "    para hacerlo permanente hace falta una terminal donde tipear la contraseña:"
+        echo "        sudo usermod -aG kvm $USER"
+        echo "      y después cerrar sesión y volver a entrar."
+        echo "    sin eso los E2E andan igual, pero sólo con tu sesión gráfica abierta."
+    fi
 else
     echo "    ⚠ esta máquina no tiene /dev/kvm: los E2E no van a poder correr acá."
 fi
