@@ -76,6 +76,17 @@ jobs:
           }
 
       - name: Suite
+        env:
+          # Render por software, a propósito. e2e.sh usa `-gpu host` con offload a la NVIDIA
+          # porque en una corrida local hay sesión gráfica; el runner arranca con el boot y
+          # NO tiene ninguna, así que el emulador moría con "Could not initialize emulated
+          # framebuffer / Could not start renderer".
+          #
+          # Lo peor de ese fallo es que era intermitente por el peor motivo: mientras el
+          # servicio venía de una sesión de escritorio heredaba DISPLAY y andaba; tras un
+          # reinicio, no. O sea que el gate dependía de si había alguien logueado — la misma
+          # dependencia del ambiente que el JAVA_HOME del Makefile y la ACL de KVM.
+          E2E_GPU: swiftshader_indirect
         run: make e2e
 
       - uses: actions/upload-artifact@v4
