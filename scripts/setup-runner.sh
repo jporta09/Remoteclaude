@@ -144,6 +144,25 @@ else
         --work _work
 fi
 
+# ---------------------------------------------------------------- entorno de los jobs
+# En ubuntu-latest el SDK de Android viene preinstalado y con ANDROID_HOME puesto; acá no,
+# y el servicio de systemd no hereda nada del shell. Localmente el build lo saca de
+# android/local.properties, que está gitignoreado y por lo tanto no existe en el checkout
+# del runner: los tres pasos de Gradle morían con "SDK location not found".
+#
+# Va en el .env del runner (que él lee al arrancar) y no en el workflow, para que el
+# workflow no dependa de rutas de esta máquina y siga sirviendo en los runners de GitHub.
+echo "==> entorno para los jobs"
+SDK="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-$HOME/.buildozer/android/platform/android-sdk}}"
+if [ -d "$SDK/platform-tools" ]; then
+    printf 'ANDROID_HOME=%s\nANDROID_SDK_ROOT=%s\n' "$SDK" "$SDK" > "$DIR/.env"
+    echo "    SDK de Android: $SDK"
+else
+    echo "    ⚠ no encontré el SDK de Android en $SDK"
+    echo "      los jobs de Gradle van a fallar con 'SDK location not found'."
+    echo "      Definí ANDROID_SDK_ROOT y volvé a correr este script."
+fi
+
 # ---------------------------------------------------------------- servicio
 # El svc.sh oficial instala una unit de SISTEMA y necesita sudo. Esta es de usuario: el
 # runner corre con los mismos permisos que si lo lanzaras a mano, que es exactamente el
@@ -169,7 +188,10 @@ TimeoutStopSec=5min
 WantedBy=default.target
 UNIT
 systemctl --user daemon-reload
-systemctl --user enable --now "$UNIDAD"
+systemctl --user enable "$UNIDAD"
+# `restart` y no `enable --now`: sobre un servicio ya activo, --now no hace nada y los
+# cambios del .env de arriba no se aplicarían hasta el próximo reinicio de la máquina.
+systemctl --user restart "$UNIDAD"
 
 # linger: sin esto el servicio se apaga al cerrar sesión gráfica y el CI se cae sin aviso.
 loginctl enable-linger "$USER" >/dev/null 2>&1 || \
