@@ -204,10 +204,13 @@ elif [ -e /dev/kvm ]; then
     # después — servicio y variables incluidos.
     if sudo -n true 2>/dev/null; then
         if sudo -n usermod -aG kvm "$USER"; then
-            echo "    ✓ agregado al grupo kvm"
-            echo "      NO aplica hasta que cierres sesión y vuelvas a entrar: los grupos"
-            echo "      del gestor de servicios de usuario se fijan al iniciar sesión, así"
-            echo "      que reiniciar el runner solo no alcanza."
+            echo "    ✓ agregado al grupo kvm — aplica RECIÉN EN EL PRÓXIMO REINICIO."
+            echo "      No alcanza con reiniciar el runner: sus grupos los hereda del"
+            echo "      gestor de servicios de usuario, que se los fija al nacer. Y con"
+            echo "      linger puesto ese gestor arranca con la máquina y sobrevive a que"
+            echo "      cierres y abras sesión, así que salir del escritorio tampoco sirve."
+            echo "      (loginctl terminate-user lo forzaría, pero se lleva puestas tus"
+            echo "      sesiones de tmux — o sea el trabajo que el celu tiene abierto.)"
         else
             echo "    ⚠ no pude agregarte al grupo kvm; seguí sin eso."
         fi
@@ -215,7 +218,8 @@ elif [ -e /dev/kvm ]; then
         # `sudo -n` falla si haría falta contraseña, así que acá nunca se cuelga esperando.
         echo "    para hacerlo permanente hace falta una terminal donde tipear la contraseña:"
         echo "        sudo usermod -aG kvm $USER"
-        echo "      y después cerrar sesión y volver a entrar."
+        echo "      y aplica recién en el próximo reinicio (ver arriba: con linger, salir"
+        echo "      del escritorio no reinicia el gestor de servicios de usuario)."
         echo "    sin eso los E2E andan igual, pero sólo con tu sesión gráfica abierta."
     fi
 else

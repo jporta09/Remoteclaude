@@ -63,7 +63,9 @@ jobs:
       # OJO: el permiso sobre /dev/kvm en esta máquina viene de una ACL de logind
       # (`user:jporta:rw-`), no del grupo kvm, y esas ACL se otorgan a la SESIÓN ACTIVA. Con
       # el runner corriendo como servicio con linger, cerrar sesión gráfica se la lleva.
-      # La solución durable es estar en el grupo `kvm`.
+      # La solución durable es estar en el grupo `kvm` (scripts/setup-runner.sh lo detecta
+      # y lo ofrece), y toma efecto recién al reiniciar la máquina: el gestor de servicios
+      # de usuario fija sus grupos al nacer y, con linger, nace con el boot.
       - name: Verificar KVM
         run: |
           test -r /dev/kvm && test -w /dev/kvm || {
