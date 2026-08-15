@@ -11,7 +11,7 @@ host:            ## tests de los daemons del host
 
 lint:            ## lint de Android + shellcheck de los scripts + ruff de los daemons
 	cd android && ./gradlew :app:lintDebug
-	uv run --with ruff ruff check scripts/*.py test/host/*.py
+	uv run --with ruff ruff check scripts/*.py test/host/*.py test/e2e/fixture/*.py
 	uv run --with shellcheck-py shellcheck --severity=warning \
 		scripts/*.sh scripts/marvin-stt scripts/marvin-display-allowed \
 		scripts/marvin-allow-display \

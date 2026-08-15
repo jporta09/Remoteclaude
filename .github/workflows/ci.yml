@@ -60,7 +60,7 @@ jobs:
             plugins/remotemarvin/scripts/*.sh \
             plugins/remotemarvin/skills/*/scripts/*.sh
       - name: ruff (daemons del host)
-        run: uv run --with ruff ruff check scripts/*.py test/host/*.py
+        run: uv run --with ruff ruff check scripts/*.py test/host/*.py test/e2e/fixture/*.py
       - name: Tests de los daemons
         run: uv run --with pytest --with websocket-client --with pycryptodome pytest test/host/ -q
 
