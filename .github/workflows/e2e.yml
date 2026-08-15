@@ -5,10 +5,20 @@ name: E2E
 # corre en cualquier máquina — necesita KVM, Docker y el AVD `marvin-e2e`. En los runners de
 # GitHub el APK arm64 bajo traducción tardaba ~30 min y era intermitente; por eso durante
 # mucho tiempo esto sólo existió como `make e2e` local.
+#
+# Reemplaza al "E2E (nocturno)" que vivía acá: corría en ubuntu-latest con swiftshader y
+# `continue-on-error: true`, así que la corrida figuraba **verde con el job en rojo** — la
+# última programada (2026-08-10) falló y en la lista aparece success. Un canario que sólo
+# dice "sí" no es un canario.
 on:
   pull_request:
   # Para poder correrla a mano sin abrir un PR (y para verificar el job la primera vez).
   workflow_dispatch:
+  # El canario semanal sí se conserva, y ahora sobre el runner de verdad: sin PRs de por
+  # medio nadie se enteraría de que la máquina cambió abajo (SDK, AVD, docker, la ACL de
+  # KVM). Sin continue-on-error: si falla, se ve rojo.
+  schedule:
+    - cron: "0 5 * * 1"   # lunes 05:00 UTC
 
 # El AVD y los puertos del fixture son recursos ÚNICOS de la máquina: dos corridas
 # simultáneas se pisan. Y ante dos pushes seguidos interesa el último.
