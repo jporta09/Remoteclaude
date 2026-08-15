@@ -238,6 +238,25 @@ puede bindear el puerto— y dejaba sin server a los tests siguientes, que falla
 otro con el motivo lejos de la causa. El stub corre **como el usuario**, igual que en
 producción (systemd `--user`), y loguea al stdout del contenedor.
 
+### Rotación y reconexión (nuevo)
+
+La suite llega a 29. Los 6 últimos cubren los dos casos que el plan preveía y no existían:
+
+- **Rotación y arranque en frío**: las dos caras del bug de `3795a8d`, que dejaba la app en la
+  pestaña equivocada. Se siembran TRES pestañas con la del medio activa a propósito: con dos,
+  "restaurar la última" pasaría de casualidad.
+- **Reconexión**: el corte es real (`e2e-drop-ssh` mata el sshd del usuario), y se verifica que
+  la sesión tmux sobreviva con su contenido, que lo tipeado *después* siga yendo a la misma
+  sesión, y que el reintento **no cree sesiones de más** — que sería perder de vista el trabajo
+  anterior.
+
+Escribiéndolos apareció un comportamiento que no estaba documentado: **las sesiones se conectan
+de forma perezosa**, al engancharse la vista de terminal. Restaurar tres pestañas crea UNA sola
+sesión en el host —la activa—; las otras existen recién cuando las tocás. No es un bug (ahorra
+conexiones), pero invalidaba la primera versión de los tests, que contaba sesiones. Ahora miran
+cuál quedó **enganchada**, que además detecta el bug original más directamente: su síntoma era
+justamente quedar enganchado a la pestaña equivocada.
+
 ### Cobertura de tests que falta
 Los arreglos de P4 entraron con tests propios: `test/host/` pasó de 16 a 31 (bloques
 idempotentes de `setup-host`, escritura de units, señal de actividad del dictado en vivo).
