@@ -31,7 +31,17 @@ fi
 if printf '%s' "$arg" | grep -qiE '^https?://'; then
         curl -fsS "${AUTH[@]}" -G --data-urlencode "url=$arg" "${BASE}/open"
 elif [ -f "$arg" ]; then
-    curl -fsS "${AUTH[@]}" -T "$arg" "${BASE}/file/$(basename -- "$arg")"
+    # El daemon exige nombres [A-Za-z0-9][A-Za-z0-9._-]* (whitelist estricta, a propósito).
+    # Sin normalizar, "informe final.html" moría acá con "curl: (3) bad URL" —el espacio
+    # hace ilegal la URL— y aunque llegara, el server lo rechazaría con 400. Espacios a
+    # guión bajo y se descarta el resto de lo prohibido; si no sobrevive nada usable, se
+    # avisa con el nombre original para que el error se entienda.
+    nombre="$(basename -- "$arg" | tr ' ' '_' | tr -cd 'A-Za-z0-9._-')"
+    case "$nombre" in
+        [A-Za-z0-9]*) ;;
+        *) echo "✗ el nombre no se puede normalizar al formato del daemon: $(basename -- "$arg")" >&2; exit 2 ;;
+    esac
+    curl -fsS "${AUTH[@]}" -T "$arg" "${BASE}/file/${nombre}"
 else
     echo "✗ no es URL ni archivo: $arg" >&2; exit 2
 fi

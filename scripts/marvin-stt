@@ -38,7 +38,10 @@ if [ "${1:-}" = "mode" ]; then
             ;;
         status)
             mode="$(cat "$MODE_FILE" 2>/dev/null || echo ondemand)"
-            if up; then estado="$(curl -fsS --max-time 2 "$URL/")"; else estado="daemon apagado"; fi
+            # `|| echo`: entre el `up` y este curl el daemon puede morir (idle-exit, crash).
+            # Sin el fallback, `set -e` mataba el script a mitad del status — sin imprimir
+            # nada — en vez de reportar el estado que justamente vino a preguntar.
+            if up; then estado="$(curl -fsS --max-time 2 "$URL/" || echo "daemon apagado")"; else estado="daemon apagado"; fi
             if (exec 3<>"/dev/tcp/127.0.0.1/$LIVE_PORT") 2>/dev/null; then live="en vivo: activo"; else live="en vivo: apagado"; fi
             echo "modo: $mode | $estado | $live"
             ;;
