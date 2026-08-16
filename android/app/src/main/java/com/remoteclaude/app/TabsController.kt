@@ -51,7 +51,14 @@ class TabsController(
     private val claveTabs = "tabs_$hostId"
     private val claveActivo = "active_$hostId"
 
-    private val barra = LinearLayout(act).apply { orientation = LinearLayout.HORIZONTAL }
+    // CENTER_VERTICAL explícito: sin gravedad, un LinearLayout horizontal alinea los hijos
+    // ARRIBA, y como el chip de la pestaña es el más alto de la fila, el "+" y los íconos
+    // quedaban flotando hacia el tope (se notó recién con los vectores, pero el texto de
+    // antes también estaba alto).
+    private val barra = LinearLayout(act).apply {
+        orientation = LinearLayout.HORIZONTAL
+        gravity = Gravity.CENTER_VERTICAL
+    }
 
     /** La vista de la barra, para colgarla del layout. */
     val vista: View = HorizontalScrollView(act).apply {
