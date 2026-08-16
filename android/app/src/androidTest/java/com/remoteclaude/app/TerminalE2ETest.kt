@@ -73,6 +73,18 @@ class TerminalE2ETest {
             await(what = "que aparezca 'term 1' en el fixture") {
                 fixture.tmuxSessions().contains("term 1")
             }
+            // El entorno que la app promete a sus sesiones. No es decorativo: de
+            // MARVIN_DISPLAY depende el túnel del display (~/.ssh/config lo usa en un
+            // Match exec), y de CLAUDE_CODE_NO_FLICKER que Claude Code arranque en
+            // fullscreen — sin él, leer con el dedo en el teléfono te deja mirando el
+            // historial congelado de tmux (ver docs/revision-integral.md). Se chequea en
+            // el global env de tmux, que es donde lo hereda cada panel.
+            val env = fixture.exec("tmux show-environment -g 2>/dev/null")
+            for (esperado in listOf("MARVIN_DISPLAY=localhost:6099", "CLAUDE_CODE_NO_FLICKER=1")) {
+                if (!env.lineSequence().any { it.trim() == esperado }) {
+                    throw AssertionError("falta $esperado en el env global de tmux; hay:\n$env")
+                }
+            }
         }
     }
 

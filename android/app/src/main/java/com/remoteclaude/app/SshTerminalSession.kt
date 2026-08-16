@@ -94,9 +94,20 @@ class SshTerminalSession(
                 // de tmux y lo heredan los panes; el ~/.ssh/config la usa (Match exec) para
                 // tunelizar el display/noVNC a los servers que SSH-ees DESDE la app (headed
                 // browser remoto). Una terminal/tmux abierta a mano NO lo tiene.
+                //
+                // CLAUDE_CODE_NO_FLICKER: Claude Code renderiza en pantalla alternativa
+                // (equivale a tui=fullscreen, es la variable documentada). En un teléfono el
+                // modo clásico es hostil: cada repintado empuja cuadros viejos al historial
+                // de tmux, y el gesto natural de leer con el dedo (rueda → copy mode) te deja
+                // mirando esa pila congelada — pantallas "mezcladas" que ninguna tecla
+                // arregla. Diagnóstico completo en docs/revision-integral.md. Con fullscreen
+                // el dedo scrollea la transcripción VIVA, los diálogos navegan en vivo y el
+                // historial no junta basura. Sólo afecta sesiones creadas por la app (el env
+                // se fija al CREAR la sesión tmux); en la PC manda el settings.json de cada
+                // uno, y dentro de una sesión /tui default lo revierte si alguien lo prefiere.
                 s.execCommand(
-                    "MARVIN_DISPLAY=localhost:6099 tmux -u new -A -D -s " +
-                        ShellQuote.sq(tmuxSession)
+                    "MARVIN_DISPLAY=localhost:6099 CLAUDE_CODE_NO_FLICKER=1 " +
+                        "tmux -u new -A -D -s " + ShellQuote.sq(tmuxSession)
                 )
                 sshSession = s
                 stdin = s.stdin

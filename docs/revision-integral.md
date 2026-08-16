@@ -386,6 +386,36 @@ se escribió con más confianza de la que los datos daban, y los mensajes de err
 coincidían con esa firma. La causa igual de plausible era el zombi. La decisión quedó igual;
 el motivo hubo que corregirlo.
 
+### El "chat roto" del celular: no era la app, y el arreglo es un default
+
+El sintoma reportado desde el telefono —pantallas mezcladas al navegar dialogos de
+opciones, que ninguna tecla arregla— resulto no ser corrupcion: era el **copy mode de
+tmux mostrando historial congelado**. La TUI clasica de Claude Code no usa pantalla
+alternativa, asi que cada repintado empuja cuadros viejos al historial; con `mouse on`,
+el gesto de leer con el dedo entra a copy mode y te deja mirando esa pila (el indicador
+`[100/1888]` de las capturas del usuario era la posicion en el historial). En copy mode
+las flechas mueven el cursor de copia, no el dialogo — por eso "no se arreglaba".
+
+Se descartaron con medicion las otras hipotesis: el motor vendorizado renderiza 26/26
+renglones identicos a pyte con el mismo flujo, y el A/B de synchronized output no cambia
+nada (tmux ni siquiera lo propaga hacia afuera).
+
+El arreglo es el modo fullscreen de Claude Code (pantalla alternativa): el dedo scrollea
+la transcripcion VIVA (claude captura el mouse y maneja la rueda), los dialogos navegan
+en vivo, el historial no junta basura, y la seleccion larga MEJORA (arrastrar al borde
+scrollea la vista de claude mientras selecciona; ademas claude copia al buffer de tmux y
+por OSC 52 — que la app ya implementaba). Verificado en el emulador con gestos reales.
+
+Como es un ajuste del settings.json de cada usuario del host, la app lo convierte en
+default de SUS sesiones inyectando `CLAUDE_CODE_NO_FLICKER=1` (la variable equivalente
+documentada) al crear la sesion tmux — mismo mecanismo que MARVIN_DISPLAY. Las
+terminales de PC no cambian, y `/tui default` lo revierte por sesion. El E2E de conexion
+ahora verifica ambas variables en el env global de tmux.
+
+Riesgos conocidos del modo (relevados de issues y doc oficial): flicker con tmux < 3.7
+(este host tiene 3.4; cosmetico, se va con el upgrade), scroll a saltos (ajustable con
+/scroll-speed), y en PC la seleccion nativa del terminal pasa a necesitar Shift+arrastre.
+
 ### Cobertura de tests que falta
 Los arreglos de P4 entraron con tests propios: `test/host/` pasó de 16 a 31 (bloques
 idempotentes de `setup-host`, escritura de units, señal de actividad del dictado en vivo).
