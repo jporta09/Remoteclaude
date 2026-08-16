@@ -156,8 +156,31 @@ if [ "$MODE" = "--caja-negra" ]; then
     # abajo contra un build limpio.
     echo "== APK de release (reglas del publicado)"
     ./gradlew :app:assembleRelease -PmarvinEmuAbi
-    APK="$REPO/android/app/build/outputs/apk/release/app-release.apk"
+    # Sin android/keystore.properties (gitignoreado: existe en la máquina de quien publica,
+    # no en un checkout limpio) AGP nombra la salida "-unsigned". El script buscaba sólo el
+    # nombre firmado y moría con un `cp` sin archivo, DESPUÉS de un build exitoso — el peor
+    # lugar para fallar.
+    SALIDA="$REPO/android/app/build/outputs/apk/release"
+    APK="$SALIDA/app-release.apk"
+    [ -f "$APK" ] || APK="$SALIDA/app-release-unsigned.apk"
+    [ -f "$APK" ] || { echo "!! no encontré el APK de release en $SALIDA" >&2; ls -1 "$SALIDA" >&2; exit 1; }
     cp "$APK" /tmp/marvin-caja-negra.apk
+
+    case "$APK" in *-unsigned.apk)
+        # Un APK sin firmar no se instala. Se firma con la clave de debug SOLO para poder
+        # instalarlo: la firma vive en el bloque de firma del zip y no toca el bytecode, que
+        # es exactamente lo que esta validación mira (y que se compara byte a byte abajo).
+        echo "   (sin keystore.properties: se firma con la clave de debug para poder instalar)"
+        DEBUG_KS="$HOME/.android/debug.keystore"
+        [ -f "$DEBUG_KS" ] || keytool -genkeypair -keystore "$DEBUG_KS" -storepass android \
+            -keypass android -alias androiddebugkey -keyalg RSA -keysize 2048 -validity 10000 \
+            -dname "CN=Android Debug,O=Android,C=US" >/dev/null
+        APKSIGNER="$(ls -1 "${ANDROID_SDK_ROOT:-$HOME/.buildozer/android/platform/android-sdk}"/build-tools/*/apksigner 2>/dev/null | sort -V | tail -1)"
+        [ -n "$APKSIGNER" ] || { echo "!! no encontré apksigner en el SDK" >&2; exit 1; }
+        "$APKSIGNER" sign --ks "$DEBUG_KS" --ks-pass pass:android --key-pass pass:android \
+            --ks-key-alias androiddebugkey /tmp/marvin-caja-negra.apk
+        ;;
+    esac
 
     echo "== comprobando que el DEX sea el del APK publicado"
     ./gradlew :app:assembleRelease            # sin la ABI extra: exactamente lo que se publica
