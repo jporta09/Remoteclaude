@@ -247,14 +247,23 @@ subirla hay que correr `playwright install chromium`.
 Se descubrió porque `render()` mandaba la salida del browser a `/dev/null` y se cambió por un
 log — sin eso el síntoma era "no pasa nada".
 
-### Próxima iteración: íconos vectoriales propios
+### Íconos vectoriales propios (cerrado)
 
-Los 8 íconos de la interfaz ya no dependen de la fuente del sistema (`marvin_icons.ttf`, 3 KB,
-armada con `scripts/build-icon-font.py`), así que se ven igual en todo teléfono y desaparece
-el riesgo de que ⧉ salga como un cuadrito. Lo que queda pendiente para una próxima vuelta es
-reemplazarlos por **`VectorDrawable` dibujados con la identidad de Marvin**: control total del
-trazo, nítidos a cualquier tamaño y sin depender de ninguna tipografía. Hoy los glifos son de
-Noto, o sea correctos y consistentes, pero no propios.
+Los 8 íconos de la interfaz son ahora `VectorDrawable` dibujados con la gramática del manual
+de identidad, releído a fondo antes de trazar una línea: grilla modular (24, trazo uniforme
+de 2), sólo rectas y diagonales, las esquinas cortadas de la cápsula del isotipo como forma
+contenedora, y las firmas de la línea `[▲\\▼]` repartidas por el set — el ▲ macizo es la
+cabeza del shift y la punta del reenganchar; la doble barra vive dentro del visor, el
+documento y el micrófono; la pantalla del visor ES la cápsula. Se iteraron primero como SVG
+renderizados sobre la paleta (dos vueltas: el micrófono v1 no respiraba a 28px) y recién
+después se portaron a XML.
+
+Historia completa del recorrido: emoji del sistema (distintos por fabricante, ⧉ inexistente
+en algunos equipos) → fuente propia de 8 glifos (`marvin_icons.ttf`) → vectores. La fuente y
+su generador (`build-icon-font.py`) se eliminaron. En los botones con palabra ("🎤 Dictar")
+el vector va embebido como ImageSpan centrado — con compound drawables el ícono quedaba
+pegado al borde del botón y el texto centrado, cada uno por su lado; y el ALIGN_CENTER de la
+plataforma pide API 29, así que el centrado vertical es propio (minSdk 26).
 
 ### Cobertura de tests: documentos y dictado (nuevo)
 

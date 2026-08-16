@@ -1,79 +1,79 @@
 package com.remoteclaude.app
 
 import android.content.Context
+import android.graphics.Canvas
 import android.graphics.Paint
-import android.graphics.Typeface
+import android.graphics.drawable.Drawable
 import android.text.SpannableString
 import android.text.Spanned
-import android.text.TextPaint
-import android.text.style.MetricAffectingSpan
+import android.text.style.ImageSpan
+import android.util.TypedValue
+import androidx.core.graphics.withSave
 
 /**
- * Los íconos de la interfaz, dibujados por una fuente NUESTRA.
+ * Los íconos de la interfaz, como `VectorDrawable` propios.
  *
- * Ninguna de las fuentes de marca tiene estos glifos, así que hasta acá los dibujaba la
- * fuente del sistema por fallback: se veían distintos según el fabricante del teléfono, y
- * ⧉ (el de "Sel") es tan poco frecuente que ni DejaVu lo trae — en un equipo sin cobertura
- * el botón salía como un cuadrito.
+ * Historia: primero eran emoji (se veían distintos según el fabricante, y ⧉ ni existía en
+ * algunos equipos); después una fuente propia de 8 glifos (`marvin_icons.ttf`), que unificó
+ * pero seguía siendo tipografía ajena. Ahora son vectores dibujados con la gramática del
+ * manual de marca: grilla de 24, trazo uniforme de 2, sólo rectas y diagonales, las
+ * esquinas cortadas de la cápsula del isotipo, y las firmas de la línea `[▲\\▼]` — el ▲
+ * macizo (shift, punta del reenganchar) y la doble barra (visor, docs, micrófono).
  *
- * `marvin_icons.ttf` son 3 KB con exactamente estos ocho glifos (ver
- * `scripts/build-icon-font.py`).
+ * Control total del trazo, nítidos a cualquier tamaño y tintables con la paleta.
  */
 object Iconos {
-    const val VISOR = "🖥"
-    const val DOCS = "📄"
-    const val CLAVE = "🔑"
-    const val MICROFONO = "🎤"
-    const val SELECCION = "⧉"
-    const val SHIFT = "⇧"
-    const val REENGANCHAR = "⟳"
-    const val CERRAR = "✕"
+    val VISOR = R.drawable.ic_marvin_visor
+    val DOCS = R.drawable.ic_marvin_docs
+    val CLAVE = R.drawable.ic_marvin_clave
+    val MICROFONO = R.drawable.ic_marvin_microfono
+    val SELECCION = R.drawable.ic_marvin_seleccion
+    val SHIFT = R.drawable.ic_marvin_shift
+    val REENGANCHAR = R.drawable.ic_marvin_reenganchar
+    val CERRAR = R.drawable.ic_marvin_cerrar
 
-    private var fuente: Typeface? = null
-
-    private fun fuente(ctx: Context): Typeface? {
-        if (fuente == null) {
-            fuente = runCatching { ctx.resources.getFont(R.font.marvin_icons) }.getOrNull()
-        }
-        return fuente
+    /** El drawable tintado y medido, listo para usar donde sea. */
+    fun drawable(ctx: Context, id: Int, color: Int, tamanoDp: Float): Drawable {
+        val d = requireNotNull(ctx.getDrawable(id)).mutate()
+        d.setTint(color)
+        val px = TypedValue.applyDimension(
+            TypedValue.COMPLEX_UNIT_DIP, tamanoDp, ctx.resources.displayMetrics,
+        ).toInt()
+        d.setBounds(0, 0, px, px)
+        return d
     }
 
     /**
-     * Aplica la fuente de íconos SÓLO a los caracteres que son íconos, dejando el resto del
-     * texto en la tipografía que tenga la vista. Es lo que permite que "🎤 Dictar" salga con
-     * el ícono nuestro y la palabra en mononoki.
+     * "Ícono + palabra" como UN solo texto (el patrón "🎤 Dictar" de siempre): el vector va
+     * embebido como ImageSpan, así el conjunto se centra junto en el botón. Con compound
+     * drawables no servía: en un botón ancho el ícono quedaba pegado al borde izquierdo y
+     * el texto centrado, cada uno por su lado.
      */
-    fun conIconos(ctx: Context, texto: String): CharSequence {
-        val tf = fuente(ctx) ?: return texto
-        val out = SpannableString(texto)
-        var i = 0
-        while (i < texto.length) {
-            val cp = texto.codePointAt(i)
-            val ancho = Character.charCount(cp)
-            if (esIcono(cp)) {
-                out.setSpan(FuenteSpan(tf), i, i + ancho, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+    fun etiqueta(ctx: Context, id: Int, color: Int, tamanoDp: Float, texto: String): CharSequence {
+        val s = SpannableString("\uFFFC $texto")
+        s.setSpan(
+            SpanCentrado(drawable(ctx, id, color, tamanoDp)),
+            0, 1, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE,
+        )
+        return s
+    }
+
+    /**
+     * ImageSpan alineado al CENTRO vertical del renglón. El ALIGN_CENTER de la plataforma
+     * recién existe en API 29 y la app soporta 26; con ALIGN_BASELINE el ícono quedaba
+     * sentado sobre la línea base, flotando alto respecto del texto.
+     */
+    private class SpanCentrado(d: Drawable) : ImageSpan(d) {
+        override fun draw(
+            canvas: Canvas, text: CharSequence?, start: Int, end: Int,
+            x: Float, top: Int, y: Int, bottom: Int, paint: Paint,
+        ) {
+            val alto = bottom - top
+            val dy = top + (alto - drawable.bounds.height()) / 2f
+            canvas.withSave {
+                translate(x, dy)
+                drawable.draw(this)
             }
-            i += ancho
-        }
-        return out
-    }
-
-    private fun esIcono(cp: Int): Boolean = when (cp) {
-        0x1F5A5, 0x1F4C4, 0x1F511, 0x1F3A4, 0x29C9, 0x21E7, 0x27F3, 0x2715 -> true
-        else -> false
-    }
-
-    /**
-     * Span que cambia la tipografía de un tramo.
-     *
-     * No se usa `TypefaceSpan(Typeface)` porque ese constructor recién existe desde API 28 y
-     * la app soporta desde 26.
-     */
-    private class FuenteSpan(private val tf: Typeface) : MetricAffectingSpan() {
-        override fun updateDrawState(paint: TextPaint) = aplicar(paint)
-        override fun updateMeasureState(paint: TextPaint) = aplicar(paint)
-        private fun aplicar(paint: Paint) {
-            paint.typeface = tf
         }
     }
 }

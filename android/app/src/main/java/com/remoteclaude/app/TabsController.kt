@@ -12,6 +12,7 @@ import android.widget.ArrayAdapter
 import android.widget.EditText
 import android.widget.HorizontalScrollView
 import android.widget.LinearLayout
+import android.widget.ImageView
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
@@ -280,23 +281,30 @@ class TabsController(
                 setOnClickListener { activar(i) }
                 setOnLongClickListener { preguntarNombre(i); true }
             })
-            chip.addView(TextView(act).apply {
-                text = Iconos.conIconos(act, "  ${Iconos.CERRAR}")
+            chip.addView(ImageView(act).apply {
+                setImageDrawable(Iconos.drawable(act, Iconos.CERRAR, Paleta.CHEV_FG, 13f))
                 contentDescription = "Cerrar ${tab.session.tmuxSession}"
-                setTextColor(Paleta.CHEV_FG)
-                setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
-                setPadding(act.dp(4), 0, act.dp(4), 0)
+                setPadding(act.dp(8), act.dp(2), act.dp(4), 0)
                 setOnClickListener { preguntarAlCerrar(i) }
             })
             barra.addView(chip)
         }
         barra.addView(boton("  +  ", "Pestaña nueva", 17f, Paleta.KEY_FG, act.dp(10)) { nueva() })
-        barra.addView(boton(Iconos.REENGANCHAR, "Reenganchar una sesión", 16f, Paleta.CHEV_FG, act.dp(8)) { menuReenganche() })
-        barra.addView(boton(Iconos.VISOR, "Ver el escritorio del host", 15f, null, act.dp(6)) { acciones.abrirVisor() })
-        barra.addView(boton(Iconos.DOCS, "Documentos compartidos", 15f, null, act.dp(6)) { acciones.abrirDocumentos() })
-        barra.addView(boton(Iconos.CLAVE, "Clave pública de la app", 15f, null, act.dp(6)) { acciones.mostrarClavePublica() })
+        barra.addView(botonIcono(Iconos.REENGANCHAR, "Reenganchar una sesión", act.dp(8)) { menuReenganche() })
+        barra.addView(botonIcono(Iconos.VISOR, "Ver el escritorio del host", act.dp(6)) { acciones.abrirVisor() })
+        barra.addView(botonIcono(Iconos.DOCS, "Documentos compartidos", act.dp(6)) { acciones.abrirDocumentos() })
+        barra.addView(botonIcono(Iconos.CLAVE, "Clave pública de la app", act.dp(6)) { acciones.mostrarClavePublica() })
         guardar()
     }
+
+    /** Botón de la barra que es SOLO un ícono: vector tintado, mismo alto que los de texto. */
+    private fun botonIcono(iconRes: Int, descripcion: String, padH: Int, alTocar: () -> Unit) =
+        ImageView(act).apply {
+            setImageDrawable(Iconos.drawable(act, iconRes, Paleta.CHEV_FG, 19f))
+            contentDescription = descripcion
+            setPadding(padH, act.dp(6), padH, act.dp(6))
+            setOnClickListener { alTocar() }
+        }
 
     private fun boton(
         etiqueta: String,
@@ -306,8 +314,8 @@ class TabsController(
         padH: Int,
         alTocar: () -> Unit,
     ) = TextView(act).apply {
-        text = Iconos.conIconos(act, etiqueta)
-        contentDescription = descripcion   // los emoji solos son ilegibles para TalkBack
+        text = etiqueta
+        contentDescription = descripcion   // un ícono solo es ilegible para TalkBack
         color?.let { setTextColor(it) }
         setTextSize(TypedValue.COMPLEX_UNIT_SP, sp)
         setPadding(padH, act.dp(4), padH, act.dp(4))

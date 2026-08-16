@@ -42,6 +42,9 @@ class KeypadView(ctx: Context, private val io: Io) : LinearLayout(ctx) {
     var altActivo = false; private set
     var shiftActivo = false; private set
     private var modoSel = false
+
+    /** Tamaño de los íconos de esta fila, a juego con el texto de 13sp. */
+    private val TAM_ICONO = 15f
     private var overflow = false
     private var tecladoArriba = false
 
@@ -93,7 +96,11 @@ class KeypadView(ctx: Context, private val io: Io) : LinearLayout(ctx) {
 
     /** Estado visible del botón de dictado (lo maneja [DictationController]). */
     fun estadoMicrofono(texto: String, color: Int) {
-        botonMic?.let { it.text = Iconos.conIconos(context, texto); it.setTextColor(color) }
+        botonMic?.let {
+            // El ícono acompaña el color del estado (reposo / grabando / transcribiendo).
+            it.text = Iconos.etiqueta(context, Iconos.MICROFONO, color, TAM_ICONO, texto)
+            it.setTextColor(color)
+        }
     }
 
     /** Tab, o Shift+Tab si el modificador está activo (y en ese caso lo suelta). */
@@ -158,13 +165,20 @@ class KeypadView(ctx: Context, private val io: Io) : LinearLayout(ctx) {
     private fun poblarFilaShift() {
         filaShift.removeAllViews()
         if (tecladoArriba) return
-        botonShift = teclaAncha("${Iconos.SHIFT} Shift") { alternarShift() }
-            .also { it.setTextColor(if (shiftActivo) Paleta.ACCENT else Paleta.KEY_FG) }
+        botonShift = teclaAncha("Shift") { alternarShift() }.also {
+            val color = if (shiftActivo) Paleta.ACCENT else Paleta.KEY_FG
+            it.text = Iconos.etiqueta(context, Iconos.SHIFT, color, TAM_ICONO, "Shift")
+            it.setTextColor(color)
+        }
         filaShift.addView(botonShift)
-        botonSel = teclaAncha("${Iconos.SELECCION} Sel") { alternarSeleccion() }
-            .also { it.setTextColor(if (modoSel) Paleta.ACCENT else Paleta.KEY_FG) }
+        botonSel = teclaAncha("Sel") { alternarSeleccion() }.also {
+            val color = if (modoSel) Paleta.ACCENT else Paleta.KEY_FG
+            it.text = Iconos.etiqueta(context, Iconos.SELECCION, color, TAM_ICONO, "Sel")
+            it.setTextColor(color)
+        }
         filaShift.addView(botonSel)
-        botonMic = teclaAncha("${Iconos.MICROFONO} Dictar") {}.also {
+        botonMic = teclaAncha("Dictar") {}.also {
+            it.text = Iconos.etiqueta(context, Iconos.MICROFONO, Paleta.KEY_FG, TAM_ICONO, "Dictar")
             it.contentDescription = "Dictar: mantené apretado para hablar"
             it.setOnTouchListener { _, ev -> io.tocaronMicrofono(ev) }
         }
@@ -186,8 +200,7 @@ class KeypadView(ctx: Context, private val io: Io) : LinearLayout(ctx) {
     }
 
     private fun tecla(etiqueta: String, alTocar: () -> Unit) = Button(context).apply {
-        // conIconos: la fuente de íconos se aplica sólo al glifo, el texto queda en mono.
-        text = Iconos.conIconos(context, etiqueta)
+        text = etiqueta
         isAllCaps = false
         typeface = mono
         setTextColor(Paleta.KEY_FG)

@@ -1,0 +1,7 @@
+<!-- Clave: cabeza octogonal (esquinas cortadas), vástago y dientes en ángulo recto. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp"
+    android:viewportWidth="24" android:viewportHeight="24">
+    <path android:pathData="M6,8 H10 L12.5,10.5 V13.5 L10,16 H6 L3.5,13.5 V10.5 Z" android:strokeColor="#FFF2F2F2" android:strokeWidth="2" android:strokeLineCap="round" android:strokeLineJoin="round" android:fillColor="@android:color/transparent"/>
+    <path android:pathData="M12.5,12 H20.5 M17,12 V15.5 M20.5,12 V14.5" android:strokeColor="#FFF2F2F2" android:strokeWidth="2" android:strokeLineCap="round" android:strokeLineJoin="round" android:fillColor="@android:color/transparent"/>
+</vector>
