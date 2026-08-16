@@ -63,8 +63,14 @@ android {
                 // Sólo al validar R8 con la suite: keeps que necesita el runner de
                 // instrumentación y que el APK publicado NO lleva (ver el archivo).
                 proguardFile("proguard-rules-e2e.pro")
-                // x86_64 para que la validación corra nativa en el emulador. R8 opera sobre
-                // bytecode Java: la ABI no cambia en nada lo que se está probando.
+            }
+            // La ABI del emulador va SEPARADA de las keeps. Estaban juntas, y esa
+            // coincidencia era justamente la brecha: no había forma de pedir "el APK
+            // publicado, pero instalable en el emulador". Con -PmarvinEmuAbi se agrega
+            // x86_64 sin tocar una sola regla de R8, así el DEX sale idéntico al que se
+            // publica — y `verificarDexIdenticoAlPublicado` lo comprueba en vez de
+            // pedir que se le crea.
+            if (project.hasProperty("marvinTestRelease") || project.hasProperty("marvinEmuAbi")) {
                 ndk { abiFilters += "x86_64" }
             }
             if (keystorePropsFile.exists()) {

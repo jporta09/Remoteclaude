@@ -19,3 +19,5 @@ rootProject.name = "Remoteclaude"
 include(":app")
 include(":terminal-emulator")   // motor Termux vendorizado (GPLv3)
 include(":terminal-view")       // view Termux vendorizado (GPLv3)
+// Validación en caja negra del release: NO depende de :app a propósito (ver su build).
+include(":blackbox")

@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- El canal de control contra el fixture sale por red desde el proceso de test. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <!-- Sin esto, en API 30+ el proceso de test no VE a com.remoteclaude.app:
+         getLaunchIntentForPackage devuelve null y el test falla diciendo que la app no
+         está instalada, cuando en realidad está. -->
+    <queries>
+        <package android:name="com.remoteclaude.app" />
+    </queries>
+
+    <!-- Aplicación deliberadamente vacía: no hay nada que probar acá adentro, es sólo el
+         envase del runner de instrumentación. -->
+    <application android:label="RemoteMarvin blackbox" />
+</manifest>

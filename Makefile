@@ -1,5 +1,5 @@
 # Atajos de verificación. El detalle de los E2E está en test/e2e/README.md.
-.PHONY: unit host go lint e2e e2e-device e2e-release release-check aar all
+.PHONY: unit host go lint e2e e2e-device e2e-release e2e-caja-negra release-check aar all
 
 # Sin esto, `make unit` y `make lint` fallaban o no según el JAVA_HOME que tuviera el shell
 # de turno (el java por defecto de esta máquina es un 21 sin jlink, que AGP necesita). Que
@@ -40,6 +40,9 @@ e2e-device:      ## idem contra un dispositivo ya conectado (no repetible)
 
 e2e-release:     ## la misma suite contra el APK minificado (valida las reglas de R8)
 	E2E_RELEASE=1 scripts/e2e.sh
+
+e2e-caja-negra:  ## valida el APK PUBLICADO desde afuera (sin costuras de test en el APK)
+	scripts/e2e.sh --caja-negra
 
 release-check:   ## build de release + verificación de las reglas de R8 (sin dispositivo)
 	cd android && ./gradlew :app:assembleRelease

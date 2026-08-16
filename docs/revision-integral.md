@@ -142,6 +142,38 @@ Lo que sigue abierto, con su destino:
 | ✅ S9/S10: hardening de units, `mktemp` en el prewarm, `ts-link-qr` sin imprimir la key ni pasar el secreto por argv | Ya estaban asignados a P4. |
 | ✅ Docs (`README`, `android/README`, `DESIGN.md`), `LICENSE` GPL-3.0, `NOTICE.md` y `SECURITY.md` | Los tres describen el gateway con `nsenter` que no existe más; falta el LICENSE pese a vendorizar Termux. |
 
+### La brecha del release cerrada: validación en caja negra
+
+`make e2e-caja-negra` valida el APK **tal como se publica**. El módulo `:blackbox` no
+depende de `:app` ni referencia una sola de sus clases, así que R8 no tiene que dejarle
+ninguna costura: se maneja la app por la interfaz con UI Automator y el oráculo es el host.
+
+Lo que hacía falta separar en el build: la ABI del emulador y las keeps de test estaban
+pegadas bajo la misma bandera, y esa coincidencia **era** la brecha — no había forma de
+pedir "el APK publicado, pero instalable en el emulador". Ahora `-PmarvinEmuAbi` agrega
+`x86_64` sin tocar una regla de R8, y el script **comprueba** el resultado en vez de
+afirmarlo: construye las dos variantes y compara el sha256 de los `.dex` (`classes.dex` da
+idéntico; lo único que cambia es que se suma `lib/x86_64/libgojni.so`).
+
+Tres tests: que el APK publicado abra SSH de verdad y cree la sesión en el host, que lo
+tipeado llegue (`input text` → `tmux capture-pane`), y que el binding JNI de gomobile siga
+en pie. Este último funciona **sin tailnet**: con una auth key inválida el puente igual se
+invoca, y lo que se afirma es la CLASE de error — uno de Tailscale significa que se ejecutó
+código Go; un `NoClassDefFoundError`/`UnsatisfiedLinkError` significa que R8 se llevó puesto
+el binding.
+
+**Se verificó que puede fallar**, que es lo único que distingue un gate de un adorno: con el
+keep de trilead removido a propósito, los tres tests se ponen rojos (y el APK igual se
+produce, porque el portero estático corre después de empaquetar).
+
+Dos cosas honestas sobre el estado: se apoya en el diálogo "Falta autorizar este
+dispositivo" para leer la clave pública de la pantalla —la única vía que tiene un test de
+afuera de saberla—, y **todavía parpadea**: 6 de 8 corridas en verde, con 2 fallos en los
+que la app quedaba en pantalla sin mostrar lo esperado y que no llegué a explicar. Por eso
+NO bloquea PRs todavía: un gate que falla 1 de 4 veces entrena a ignorar el rojo. Los
+mensajes de timeout ahora incluyen qué había en pantalla, así que el próximo fallo va a
+poder diagnosticarse; recién ahí pasa a `pull_request`.
+
 ### Brecha conocida: el APK que valida `make e2e-release` no es el publicado
 
 La instrumentación es caja blanca por construcción — el APK de tests se carga en el proceso

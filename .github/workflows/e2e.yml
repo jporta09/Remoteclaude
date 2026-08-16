@@ -75,18 +75,12 @@ jobs:
             exit 1
           }
 
+      # El modo de render lo elige e2e.sh según haya o no sesión gráfica — acá no hay, el
+      # runner arranca con el boot. Vive ahí y no en este workflow a propósito: así el
+      # mismo `make e2e` anda en los dos lados sin que quien lo corre tenga que saberlo.
+      # (Fijarlo acá dejaba la corrida local igual de rota cuando se la lanza sin DISPLAY,
+      # que es como pasó de verdad.)
       - name: Suite
-        env:
-          # Render por software, a propósito: es lo único que se sostiene sin sesión
-          # gráfica, y el runner arranca con el boot.
-          #
-          # Comprobado a mano acá: con `env -u DISPLAY`, el `-gpu host` que usa e2e.sh no
-          # arranca ni se degrada solo — "Could not open libX11-xcb.so" → "Failed to get
-          # EGL display" → "Failed to initialize GL emulation", y el emulador nunca bootea.
-          # O sea que el camino acelerado pasa por X11: sin servidor X no hay GPU. Levantar
-          # uno headless pediría root y config de Xorg, y Xvfb daría DISPLAY pero con GL por
-          # software — el mismo costo que esto y ninguna ganancia.
-          E2E_GPU: swiftshader_indirect
         run: make e2e
 
       - uses: actions/upload-artifact@v4
@@ -100,6 +94,51 @@ jobs:
       # El runner es una máquina de verdad y el estado sobrevive al job: si la corrida se
       # cancela (cancel-in-progress), el trap de limpieza de e2e.sh no llega a correr y
       # quedarían el emulador y el fixture arriba, pisando la corrida siguiente.
+      - name: Limpieza
+        if: always()
+        run: |
+          docker compose -f test/e2e/docker-compose.e2e.yml down -v --remove-orphans || true
+          "${ADB:-adb}" -s emulator-5556 emu kill || true
+
+  caja-negra:
+    name: Release en caja negra (APK publicado)
+    # NO corre en PRs todavía, y es a propósito: la suite detecta rupturas reales de R8
+    # (comprobado quitando el keep de trilead: los 3 tests se ponen rojos), pero en las
+    # primeras 8 corridas locales hubo 2 fallos que NO llegué a explicar — la app quedaba
+    # en pantalla sin mostrar lo esperado. Bloquear PRs con algo que falla 1 de 4 veces
+    # entrena a ignorar el rojo, que es peor que no tenerlo. Los mensajes de timeout ahora
+    # incluyen qué había en pantalla: cuando vuelva a pasar, se va a poder diagnosticar, y
+    # ahí sí pasa a `pull_request`.
+    if: (github.event_name != 'pull_request') && vars.MARVIN_RUNNER != ''
+    runs-on: ${{ vars.MARVIN_RUNNER }}
+    timeout-minutes: 45
+    # Comparte AVD y puertos del fixture con el job de arriba: tienen que ir en serie.
+    needs: [e2e]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Ubicar el SDK de Android
+        env:
+          SDK_DEL_RUNNER: ${{ vars.MARVIN_ANDROID_SDK }}
+        run: |
+          SDK="${SDK_DEL_RUNNER:-$ANDROID_HOME}"
+          test -n "$SDK" || { echo "::error::no sé dónde está el SDK de Android"; exit 1; }
+          echo "sdk.dir=$SDK" > android/local.properties
+          echo "ANDROID_SDK_ROOT=$SDK" >> "$GITHUB_ENV"
+          echo "ADB=$SDK/platform-tools/adb" >> "$GITHUB_ENV"
+      - name: Suite de caja negra
+        run: make e2e-caja-negra
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: reportes-caja-negra
+          path: |
+            android/blackbox/build/reports/androidTests/connected/
+            /tmp/e2e-emulator.log
       - name: Limpieza
         if: always()
         run: |

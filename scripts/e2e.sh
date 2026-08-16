@@ -1,8 +1,13 @@
 #!/usr/bin/env bash
 # Corre la suite E2E instrumentada contra el fixture desechable (test/e2e).
 #
-#   scripts/e2e.sh            # AVD liviano (default; ver test/e2e/README.md)
-#   scripts/e2e.sh --device   # dispositivo ya conectado por adb (no repetible)
+#   scripts/e2e.sh              # AVD liviano (default; ver test/e2e/README.md)
+#   scripts/e2e.sh --device     # dispositivo ya conectado por adb (no repetible)
+#   scripts/e2e.sh --caja-negra # valida el APK PUBLICADO manejándolo desde afuera
+#
+# --caja-negra corre los tests de :blackbox, que no referencian ninguna clase de la app y
+# por eso no obligan a R8 a dejar costuras: el APK que se prueba tiene el mismo bytecode
+# que el que se publica, y el script lo comprueba en vez de pedir que se le crea.
 #
 # El fixture escucha SÓLO en 127.0.0.1. Con --device se usa `adb reverse`, así que no
 # queda expuesto a ninguna red.
@@ -103,9 +108,19 @@ else
     # -gpu host + PRIME offload: esta máquina tiene una NVIDIA libre (el escritorio va con
     # la Intel). Con render por software el emulador compite con Gradle por CPU y ya colgó
     # la máquina una vez.
+    #
+    # Pero el camino acelerado del emulador pasa por X11: SIN sesión gráfica no arranca y
+    # —lo peor— no se degrada solo, muere con "Could not start renderer". Se elige según lo
+    # que haya en vez de dejarlo fijo: así el mismo comando sirve en una terminal del
+    # escritorio y en el runner de CI, que arranca con el boot y no tiene ninguna sesión.
+    # Antes esto era un default fijo y el resultado dependía de si alguien estaba logueado.
+    if [ -z "${E2E_GPU:-}" ]; then
+        if [ -n "${DISPLAY:-}" ]; then E2E_GPU=host; else E2E_GPU=swiftshader_indirect; fi
+    fi
+    echo "   gpu: $E2E_GPU${DISPLAY:+ (DISPLAY=$DISPLAY)}"
     __NV_PRIME_RENDER_OFFLOAD=1 __GLX_VENDOR_LIBRARY_NAME=nvidia \
     "$EMU" -avd "$AVD" -no-window -no-audio -no-boot-anim -no-snapshot -wipe-data \
-        -memory "${E2E_MEM:-2048}" -cores "${E2E_CORES:-2}" -gpu "${E2E_GPU:-host}" \
+        -memory "${E2E_MEM:-2048}" -cores "${E2E_CORES:-2}" -gpu "$E2E_GPU" \
         -port "$PORT" >/tmp/e2e-emulator.log 2>&1 &
     echo "   esperando boot…"
     for _ in $(seq 1 40); do
@@ -134,6 +149,54 @@ fi
 
 echo "== suite"
 cd "$REPO/android"
+if [ "$MODE" = "--caja-negra" ]; then
+    # El APK bajo prueba se construye SIN -PmarvinTestRelease, o sea con las reglas de R8
+    # del APK publicado. -PmarvinEmuAbi agrega la .so de x86_64 para que corra nativo en el
+    # emulador y no toca una sola regla; que el DEX sea el mismo no se afirma, se comprueba
+    # abajo contra un build limpio.
+    echo "== APK de release (reglas del publicado)"
+    ./gradlew :app:assembleRelease -PmarvinEmuAbi
+    APK="$REPO/android/app/build/outputs/apk/release/app-release.apk"
+    cp "$APK" /tmp/marvin-caja-negra.apk
+
+    echo "== comprobando que el DEX sea el del APK publicado"
+    ./gradlew :app:assembleRelease            # sin la ABI extra: exactamente lo que se publica
+    python3 - "$APK" /tmp/marvin-caja-negra.apk <<'PY'
+import hashlib, sys, zipfile
+def dex(p):
+    z = zipfile.ZipFile(p)
+    return {n: hashlib.sha256(z.read(n)).hexdigest()
+            for n in sorted(z.namelist()) if n.endswith(".dex")}
+pub, probado = dex(sys.argv[1]), dex(sys.argv[2])
+if pub != probado:
+    print("!! el APK a probar NO tiene el bytecode del publicado — la validación no valdría", file=sys.stderr)
+    for n in sorted(set(pub) | set(probado)):
+        print(f"   {n}: publicado={pub.get(n,'(falta)')[:16]} probado={probado.get(n,'(falta)')[:16]}", file=sys.stderr)
+    raise SystemExit(1)
+print("   ✓ DEX idéntico al publicado (" + ", ".join(f"{n}={h[:12]}" for n, h in pub.items()) + ")")
+PY
+
+    # Instalación por adb y no por Gradle: Gradle instalaría el APK de la variante que él
+    # construye, y acá el punto es probar ESTE archivo. -r conserva los datos (la clave del
+    # Keystore vive ahí; borrarla sería perder justo lo que interesa que sobreviva).
+    echo "== instalando el APK publicado"
+    "$ADB" -s "${ANDROID_SERIAL:-emulator-5556}" install -r /tmp/marvin-caja-negra.apk
+
+    # Despertar OTRA VEZ: entre el despertar de arriba y este punto pasaron dos builds de
+    # release y una instalación, o sea varios minutos. Si la pantalla se durmió en el medio,
+    # ninguna ventana toma foco y toda la suite falla con "no apareció en pantalla…", que
+    # parece un problema de la app. Ya se vio una corrida así.
+    [ "$MODE" = "--device" ] || despertar
+
+    echo "== suite de caja negra"
+    ./gradlew :blackbox:connectedDebugAndroidTest \
+        -Pandroid.injected.androidTest.leaveApksInstalledAfterRun=true \
+        -Pandroid.testInstrumentationRunnerArguments.fixtureHost="${FIXTURE_HOST:-127.0.0.1}" \
+        -Pandroid.testInstrumentationRunnerArguments.fixturePort=2222
+    echo "== reporte: android/blackbox/build/reports/androidTests/connected/"
+    exit 0
+fi
+
 # E2E_RELEASE=1: corre contra la variante MINIFICADA, que es la única forma de validar que
 # las reglas de R8 no rompieron nada (una keep faltante compila bien y falla en runtime).
 # Es más lenta en el emulador x86_64: el release es sólo arm64 y va bajo traducción.
