@@ -97,8 +97,10 @@ class KeypadView(ctx: Context, private val io: Io) : LinearLayout(ctx) {
     /** Estado visible del botón de dictado (lo maneja [DictationController]). */
     fun estadoMicrofono(texto: String, color: Int) {
         botonMic?.let {
-            // El ícono acompaña el color del estado (reposo / grabando / transcribiendo).
-            it.text = Iconos.etiqueta(context, Iconos.MICROFONO, color, TAM_ICONO, texto)
+            // En reposo el ícono va a dos tonos (acento de marca); en un estado (grabando,
+            // transcribiendo) se tinta monocromo al color del estado, como el manual.
+            val tinte = if (color == Paleta.KEY_FG) null else color
+            it.text = Iconos.etiqueta(context, Iconos.MICROFONO, tinte, TAM_ICONO, texto)
             it.setTextColor(color)
         }
     }
@@ -167,18 +169,18 @@ class KeypadView(ctx: Context, private val io: Io) : LinearLayout(ctx) {
         if (tecladoArriba) return
         botonShift = teclaAncha("Shift") { alternarShift() }.also {
             val color = if (shiftActivo) Paleta.ACCENT else Paleta.KEY_FG
-            it.text = Iconos.etiqueta(context, Iconos.SHIFT, color, TAM_ICONO, "Shift")
+            it.text = Iconos.etiqueta(context, Iconos.SHIFT, if (shiftActivo) color else null, TAM_ICONO, "Shift")
             it.setTextColor(color)
         }
         filaShift.addView(botonShift)
         botonSel = teclaAncha("Sel") { alternarSeleccion() }.also {
             val color = if (modoSel) Paleta.ACCENT else Paleta.KEY_FG
-            it.text = Iconos.etiqueta(context, Iconos.SELECCION, color, TAM_ICONO, "Sel")
+            it.text = Iconos.etiqueta(context, Iconos.SELECCION, if (modoSel) color else null, TAM_ICONO, "Sel")
             it.setTextColor(color)
         }
         filaShift.addView(botonSel)
         botonMic = teclaAncha("Dictar") {}.also {
-            it.text = Iconos.etiqueta(context, Iconos.MICROFONO, Paleta.KEY_FG, TAM_ICONO, "Dictar")
+            it.text = Iconos.etiqueta(context, Iconos.MICROFONO, null, TAM_ICONO, "Dictar")
             it.contentDescription = "Dictar: mantené apretado para hablar"
             it.setOnTouchListener { _, ev -> io.tocaronMicrofono(ev) }
         }

@@ -1,7 +1,10 @@
-<!-- Shift: cabeza = ▲ macizo (la firma), tallo abierto. -->
+<!-- Shift: la A del logo hecha flecha — ▲ macizo (esquinas suavizadas con trazo del mismo
+     color) + la barra al lado, pendiente 0.46 y sobresaliendo del ápice, medida del asset
+     (ver docs/revision-integral.md). El tallo abierto abajo. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="24dp" android:height="24dp"
     android:viewportWidth="24" android:viewportHeight="24">
-    <path android:pathData="M12,3.5 L19,12 H5 Z" android:fillColor="#FFF2F2F2"/>
-    <path android:pathData="M9.5,12 V19.5 H14.5 V12" android:strokeColor="#FFF2F2F2" android:strokeWidth="2" android:strokeLineCap="round" android:strokeLineJoin="round" android:fillColor="@android:color/transparent"/>
+    <path android:pathData="M10.2,4.5 L14,12.2 H6.4 Z" android:fillColor="#FF71BF44" android:strokeColor="#FF71BF44" android:strokeWidth="1.1" android:strokeLineJoin="round"/>
+    <path android:pathData="M12.33,1.6 L17.08,11.97" android:strokeColor="#FFF2F2F2" android:strokeWidth="1.9" android:strokeLineCap="round" android:strokeLineJoin="round" android:fillColor="@android:color/transparent"/>
+    <path android:pathData="M9.75,13.9 V19.6 H14.55 V13.9" android:strokeColor="#FFF2F2F2" android:strokeWidth="2" android:strokeLineCap="round" android:strokeLineJoin="round" android:fillColor="@android:color/transparent"/>
 </vector>

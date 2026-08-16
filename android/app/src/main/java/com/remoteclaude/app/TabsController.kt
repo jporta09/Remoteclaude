@@ -300,7 +300,7 @@ class TabsController(
     /** Botón de la barra que es SOLO un ícono: vector tintado, mismo alto que los de texto. */
     private fun botonIcono(iconRes: Int, descripcion: String, padH: Int, alTocar: () -> Unit) =
         ImageView(act).apply {
-            setImageDrawable(Iconos.drawable(act, iconRes, Paleta.CHEV_FG, 19f))
+            setImageDrawable(Iconos.drawable(act, iconRes, null, 19f))
             contentDescription = descripcion
             setPadding(padH, act.dp(6), padH, act.dp(6))
             setOnClickListener { alTocar() }

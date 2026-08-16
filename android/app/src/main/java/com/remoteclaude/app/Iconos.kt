@@ -32,10 +32,14 @@ object Iconos {
     val REENGANCHAR = R.drawable.ic_marvin_reenganchar
     val CERRAR = R.drawable.ic_marvin_cerrar
 
-    /** El drawable tintado y medido, listo para usar donde sea. */
-    fun drawable(ctx: Context, id: Int, color: Int, tamanoDp: Float): Drawable {
+    /**
+     * El drawable medido, listo para usar. Con `color` se tinta MONOCROMO (pisa el acento:
+     * es el estado activo/grabando, como la variante monocroma del manual); con null se ve
+     * a dos tonos, con el acento de marca horneado en el XML.
+     */
+    fun drawable(ctx: Context, id: Int, color: Int?, tamanoDp: Float): Drawable {
         val d = requireNotNull(ctx.getDrawable(id)).mutate()
-        d.setTint(color)
+        color?.let { d.setTint(it) }
         val px = TypedValue.applyDimension(
             TypedValue.COMPLEX_UNIT_DIP, tamanoDp, ctx.resources.displayMetrics,
         ).toInt()
@@ -49,7 +53,7 @@ object Iconos {
      * drawables no servía: en un botón ancho el ícono quedaba pegado al borde izquierdo y
      * el texto centrado, cada uno por su lado.
      */
-    fun etiqueta(ctx: Context, id: Int, color: Int, tamanoDp: Float, texto: String): CharSequence {
+    fun etiqueta(ctx: Context, id: Int, color: Int?, tamanoDp: Float, texto: String): CharSequence {
         val s = SpannableString("\uFFFC $texto")
         s.setSpan(
             SpanCentrado(drawable(ctx, id, color, tamanoDp)),

@@ -247,7 +247,27 @@ subirla hay que correr `playwright install chromium`.
 Se descubrió porque `render()` mandaba la salida del browser a `/dev/null` y se cambió por un
 log — sin eso el síntoma era "no pasa nada".
 
-### Íconos vectoriales propios (cerrado)
+### Íconos vectoriales propios (cerrado, segunda vuelta con el usuario)
+
+La primera versión pasó por revisión de diseño del usuario y salieron tres correcciones,
+todas resueltas midiendo el asset real (`marvin_isologo_bar.png`) en vez de interpretar:
+
+- **Las flechas (shift, reenganchar) ahora citan la composición exacta de la A del logo**:
+  el ▲ macizo con LA BARRA diagonal al lado — pendiente 0.47, grosor 0.24·h, sobresaliendo
+  un 40% de la altura por encima del ápice, con su aire de ~1/3 del ancho. Se llegó por
+  superposición iterativa contra la letra ampliada ×8 (tres rondas; el escaneo inicial
+  tenía la ventana mal y cortaba media barra — todas las medidas previas nacieron viciadas).
+- **Dos tonos en reposo**: estructura en gris claro y acento VERDE CTR horneado en el XML
+  (▲ de las flechas, dobles barras de visor/docs/micrófono). En estados (shift activo,
+  grabando) se tinta monocromo al color del estado, como las variantes de un color del
+  manual. `Iconos.drawable(color=null)` = dos tonos; con color = monocromo.
+- **El ámbar quedó descartado con el manual en la mano**: el usuario prefería probarlo, y
+  la fila "Colores" de usos incorrectos muestra literalmente los triángulos en ámbar como
+  ejemplo tachado — el ámbar es "señalética complementaria", nunca va dentro de las
+  figuras de marca. Se validó con A/B real en el emulador (ambas variantes instaladas y
+  capturadas) antes de decidir.
+
+### Íconos vectoriales propios (primera versión)
 
 Los 8 íconos de la interfaz son ahora `VectorDrawable` dibujados con la gramática del manual
 de identidad, releído a fondo antes de trazar una línea: grilla modular (24, trazo uniforme
