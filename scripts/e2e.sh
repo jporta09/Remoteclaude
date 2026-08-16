@@ -46,7 +46,22 @@ cleanup() {
     [ "$KEEP" = "1" ] && { echo "== fixture y emulador quedan arriba (E2E_KEEP=1)"; return; }
     echo "== bajando el fixture"
     docker compose -f "$COMPOSE" down -v >/dev/null 2>&1 || true
-    [ "$MODE" = "--device" ] || "$ADB" -s "${ANDROID_SERIAL:-emulator-5556}" emu kill >/dev/null 2>&1 || true
+    if [ "$MODE" != "--device" ]; then
+        "$ADB" -s "${ANDROID_SERIAL:-emulator-5556}" emu kill >/dev/null 2>&1 || true
+        # `emu kill` habla por adb, así que NO sirve justo cuando más hace falta: si el
+        # emulador no llegó a bootear (por ejemplo, sin contexto gráfico no arranca el
+        # renderer), no hay adb con quien hablar y el proceso queda vivo. Pasó de verdad:
+        # dos emuladores huérfanos envenenaron la corrida siguiente, que fallo 6 tests con
+        # errores de conexión al fixture — un sintoma que no se parece en nada a la causa.
+        #
+        # El patrón va con corchetes para que pgrep no matchee esta misma línea de comandos
+        # y el script no se mate a sí mismo.
+        sleep 1
+        for p in $(pgrep -f "[q]emu-system.*$AVD" 2>/dev/null); do
+            echo "== emulador $p seguía vivo tras emu kill; lo termino"
+            kill "$p" 2>/dev/null || true
+        done
+    fi
 }
 trap cleanup EXIT
 
