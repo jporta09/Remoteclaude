@@ -83,9 +83,7 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-    kotlinOptions {
-        jvmTarget = "17"
-    }
+    kotlinOptions { jvmTarget = "17" }
 
     lint {
         // Que un warning nuevo no pase desapercibido: el CI lo corre en cada push.
@@ -100,6 +98,10 @@ android {
 
     testOptions {
         unitTests.isIncludeAndroidResources = true
+        // El motor de terminal vendorizado loguea con android.util.Log, que en un test JVM
+        // no existe y explota. Con esto se lo puede ejercitar sin dispositivo, que es donde
+        // conviene: es código puro que procesa bytes y decide qué queda en pantalla.
+        unitTests.isReturnDefaultValues = true
     }
 }
 
