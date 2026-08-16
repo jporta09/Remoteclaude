@@ -12,15 +12,32 @@ import com.trilead.ssh2.Connection
  */
 class Fixture(private val host: String, private val port: Int) {
 
+    /**
+     * Timeouts generosos y con reintento, a propósito.
+     *
+     * Con 8 s de kexTimeout esto se caía con `SocketTimeoutException` cuando la máquina
+     * estaba cargada — reproducido saturando 10 de 12 núcleos: 11 corridas verdes con la
+     * máquina tranquila, roja en la primera con carga. El runner comparte máquina con el
+     * escritorio y con los builds, así que la carga es la condición normal, no la
+     * excepción. Y el modo de fallar es de los peores: parece un problema del producto
+     * cuando el que no llegó a tiempo fue el andamio del test.
+     */
     private fun <T> conectado(block: (Connection) -> T): T {
-        val c = Connection(host, port)
-        return try {
-            c.connect({ _, _, _, _ -> true }, 8000, 8000)   // fixture: no interesa pinnear
-            check(c.authenticateWithPassword(USER, PASS)) { "el fixture rechazó la password" }
-            block(c)
-        } finally {
-            try { c.close() } catch (_: Exception) {}
+        var ultima: Exception? = null
+        repeat(3) { intento ->
+            val c = Connection(host, port)
+            try {
+                c.connect({ _, _, _, _ -> true }, 30_000, 30_000)   // fixture: no interesa pinnear
+                check(c.authenticateWithPassword(USER, PASS)) { "el fixture rechazó la password" }
+                return block(c)
+            } catch (e: Exception) {
+                ultima = e
+                Thread.sleep(1_000L * (intento + 1))
+            } finally {
+                try { c.close() } catch (_: Exception) {}
+            }
         }
+        throw IllegalStateException("no pude hablar con el fixture en 3 intentos", ultima)
     }
 
     fun exec(cmd: String): String = conectado { c ->

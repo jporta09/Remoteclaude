@@ -102,14 +102,13 @@ jobs:
 
   caja-negra:
     name: Release en caja negra (APK publicado)
-    # NO corre en PRs todavía, y es a propósito: la suite detecta rupturas reales de R8
-    # (comprobado quitando el keep de trilead: los 3 tests se ponen rojos), pero en las
-    # primeras 8 corridas locales hubo 2 fallos que NO llegué a explicar — la app quedaba
-    # en pantalla sin mostrar lo esperado. Bloquear PRs con algo que falla 1 de 4 veces
-    # entrena a ignorar el rojo, que es peor que no tenerlo. Los mensajes de timeout ahora
-    # incluyen qué había en pantalla: cuando vuelva a pasar, se va a poder diagnosticar, y
-    # ahí sí pasa a `pull_request`.
-    if: (github.event_name != 'pull_request') && vars.MARVIN_RUNNER != ''
+    # Sí bloquea PRs, después de diagnosticar la intermitencia que tenía. No era del
+    # producto ni del emulador: era CONTENCIÓN DE CPU. Se reprodujo a pedido saturando 10
+    # de 12 núcleos —11 corridas verdes con la máquina tranquila, roja en la primera con
+    # carga— y ahí el mensaje fue claro: `kexTimeout (8000 ms) expired`, o sea el canal de
+    # control del propio test al fixture. Con los plazos del andamio ajustados, 3 de 3 en
+    # verde bajo esa misma carga.
+    if: vars.MARVIN_RUNNER != ''
     runs-on: ${{ vars.MARVIN_RUNNER }}
     timeout-minutes: 45
     # Comparte AVD y puertos del fixture con el job de arriba: tienen que ir en serie.

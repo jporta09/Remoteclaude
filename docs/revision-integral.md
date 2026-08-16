@@ -166,13 +166,28 @@ el binding.
 keep de trilead removido a propósito, los tres tests se ponen rojos (y el APK igual se
 produce, porque el portero estático corre después de empaquetar).
 
-Dos cosas honestas sobre el estado: se apoya en el diálogo "Falta autorizar este
-dispositivo" para leer la clave pública de la pantalla —la única vía que tiene un test de
-afuera de saberla—, y **todavía parpadea**: 6 de 8 corridas en verde, con 2 fallos en los
-que la app quedaba en pantalla sin mostrar lo esperado y que no llegué a explicar. Por eso
-NO bloquea PRs todavía: un gate que falla 1 de 4 veces entrena a ignorar el rojo. Los
-mensajes de timeout ahora incluyen qué había en pantalla, así que el próximo fallo va a
-poder diagnosticarse; recién ahí pasa a `pull_request`.
+Se apoya en el diálogo "Falta autorizar este dispositivo" para leer la clave pública de la
+pantalla: es la única vía que tiene un test de afuera de saberla.
+
+**La intermitencia que tenía, diagnosticada.** Las primeras 8 corridas dieron 6 verdes y 2
+rojas sin explicación: la app quedaba en pantalla sin mostrar lo esperado. Después no
+reprodujo nunca —11 verdes seguidas—, lo que descartó que fuera determinístico y apuntó al
+entorno: los dos fallos habían caído justo después del experimento de mutación, con la
+máquina cargada. Se puso a prueba esa hipótesis saturando 10 de 12 núcleos, y falló en la
+**primera** corrida, esta vez con un mensaje preciso: `kexTimeout (8000 ms) expired` en
+`com.trilead.ssh2.Connection.connect` — o sea el canal de control **del propio test** al
+fixture, no la app.
+
+Los plazos del andamio estaban pensados para una máquina ociosa, y el runner comparte
+máquina con el escritorio y con los builds: la carga es la condición normal, no la
+excepción. Se subieron los timeouts (8 s → 30 s, con reintento), `tocar` pasó de 15 a 30 s,
+y `abrirApp` ahora espera la pantalla de hosts en vez de "cualquier ventana de la app" —
+esperar la ventana daba por buena la del splash, y el fallo aparecía después, en un `tocar`
+que no encontraba nada. Resultado: **3 de 3 en verde bajo la misma carga que lo tiraba**, y
+por eso ya bloquea PRs.
+
+Vale la pena anotar el modo de fallo, porque se repite en este proyecto: el andamio del
+test se rendía antes que el producto, y el síntoma parecía del producto.
 
 ### Brecha conocida: el APK que valida `make e2e-release` no es el publicado
 

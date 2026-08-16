@@ -76,7 +76,13 @@ class ReleaseCajaNegraTest {
             )
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
         ctx.startActivity(intent)
-        assertThat(device.wait(Until.hasObject(By.pkg(APP).depth(0)), 30_000)).isTrue()
+        // Esperar la ventana de la app NO alcanza: la primera que aparece es el splash, y
+        // el test seguía adelante creyendo que ya estaba en la lista de hosts. Con la
+        // máquina cargada esa diferencia se nota y el fallo aparece más tarde, en un
+        // `tocar` que no encuentra nada — lejos de la causa. Se espera la pantalla que de
+        // verdad hace falta.
+        assertThat(device.wait(Until.hasObject(By.pkg(APP).depth(0)), 60_000)).isTrue()
+        esperar("_hosts", 60_000)
     }
 
     /**
@@ -103,7 +109,10 @@ class ReleaseCajaNegraTest {
      * pasos tira `StaleObjectException` de forma intermitente, que es la peor manera de
      * fallar — parece un bug de la app y es del test.
      */
-    private fun tocar(texto: String, ms: Long = 15_000) {
+    // 30 s y no 15: el emulador va por software y comparte máquina con Gradle, el
+    // escritorio y lo que el usuario esté haciendo. Bajo carga, 15 s no alcanzaban para que
+    // una pantalla terminara de dibujarse.
+    private fun tocar(texto: String, ms: Long = 30_000) {
         val fin = System.currentTimeMillis() + ms
         var ultimo: String? = null
         while (System.currentTimeMillis() < fin) {
