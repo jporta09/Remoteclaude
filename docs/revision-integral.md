@@ -15,7 +15,7 @@ archivos del repo, nunca a la configuración de una máquina puntual.
 
 | # | Hallazgo | Estado |
 |---|---|---|
-| S1 | **noVNC expuesto a la LAN sin autenticación**: `docker-compose.yml` publica `6080` en `0.0.0.0` y `Xvnc` corre con `-SecurityTypes None -ac`. Verificado en vivo con `ss` y `ps`. Sin firewall, cualquiera en el wifi controla el escritorio virtual. | ✅ **cerrado y verificado**: el 6080 sólo escucha en loopback (desde la LAN da rechazado) y el visor anda por túnel SSH · ⏳ falta password VNC y quitar `-ac` (defensa en profundidad) |
+| S1 | **noVNC expuesto a la LAN sin autenticación**: `docker-compose.yml` publica `6080` en `0.0.0.0` y `Xvnc` corre con `-SecurityTypes None -ac`. Verificado en vivo con `ss` y `ps`. Sin firewall, cualquiera en el wifi controla el escritorio virtual. | ✅ **cerrado y verificado**: el 6080 sólo escucha en loopback (desde la LAN da rechazado) y el visor anda por túnel SSH · password VNC y cookie X también cerrados (ver "Lo que queda abierto") |
 | S2 | **Host key sin verificar** en las 5 rutas SSH (`{_,_,_,_->true}`): habilita MITM sobre la terminal completa. `sshlib` ya trae `KnownHosts` para resolverlo. | ✅ pinning TOFU en las 5 rutas (`HostKeys`), verificado end-to-end |
 | S3 | **`RemoteForward` incondicional**: todo server al que SSH-eás desde la app recibe un canal a tu display X y al render-daemon, que no tiene auth y abre URLs arbitrarias (incluido `file://`) y escribe archivos sin límite de tamaño. | ✅ allowlist por host (`marvin-display-allowed`, bloque con sentinelas migrable) + daemon endurecido (sólo http/s, nombres y extensiones validados, tope de 25 MB, token opcional). Verificado con `ssh -G` y batería contra el daemon |
 | S4 | **El túnel del dictado bindea `0.0.0.0` en el celular** (`createLocalPortForwarder(int,…)` → `new ServerSocket(port)`, verificado en el jar): durante un dictado, cualquiera en la red del teléfono entra al WhisperLiveKit del host. | ✅ bind a IPv4 loopback explícito en `LiveDictation` y `PortTunnel` |
@@ -28,8 +28,8 @@ archivos del repo, nunca a la configuración de una máquina puntual.
 | S6 | Interpolación ad-hoc en comandos remotos; `renameSession` saneaba `new` pero no `old`. | ✅ `ShellQuote`/`TmuxName` en los 6 call sites |
 | S7 | OSC 52 sin tope ni confirmación tras decodificar: escritura silenciosa del portapapeles. | ✅ diálogo arriba de 100 KB, verificado end-to-end con el fixture |
 | S8 | Enrolamiento muerto: manda una password a un host no verificado y su mitad server se borró del repo. `ENROLL_PASSWORD` quedó huérfano en `.env` (que usa 8 claves vs 5 documentadas). | ✅ flujo y diálogo borrados; `.env.example` sincronizado |
-| S9 | Units systemd sin hardening; prewarm con rutas fijas en `/tmp`; `curl \| sh` en el setup. | ⏳ P4 |
-| S10 | `ts-link-qr.sh` imprime la auth key en claro y pasa el `client_secret` por argv (visible en `/proc`). | ⏳ P4 |
+| S9 | Units systemd sin hardening; prewarm con rutas fijas en `/tmp`. | ✅ `NoNewPrivileges`/`ProtectSystem` y compañía + `mktemp` (P4) |
+| S10 | `ts-link-qr.sh` imprimía la auth key en claro y pasaba secretos por argv. | ✅ secretos por `--config` stdin; la key sólo con `--mostrar-key` explícito (P4) |
 
 ---
 
@@ -53,8 +53,8 @@ archivos del repo, nunca a la configuración de una máquina puntual.
 |---|---|
 | Cada dictado corto filtraba una conexión SSH + un `ServerSocket` + un WebSocket (la cancelación corría sobre campos aún nulos). | ✅ |
 | Cerrar una pestaña mientras conectaba dejaba el hilo leyendo un socket vivo para siempre. | ✅ |
-| Re-escanear el QR no limpiaba el cache de forwards: "conectado" pero nada funcionaba. Del lado Go, los listeners nunca se cierran en `Stop()`. | ✅ (Kotlin) / ⏳ (Go) |
-| Tras un fallo de auth, `finishIfRunning()` es no-op y el `ioExecutor` (hilo no-daemon) nunca se apaga. | ⏳ |
+| Re-escanear el QR no limpiaba el cache de forwards; del lado Go, los listeners no se cerraban en `Stop()`. | ✅ ambos (el Go en P3, con test de puerto libre tras `Stop()`) |
+| Tras un fallo de auth, `finishIfRunning()` era no-op y el `ioExecutor` no se apagaba. | ✅ verificado en el código actual: `mRunning` queda en true tras el fallo, así que el retry cierra transporte y executor |
 
 ### Comportamiento incorrecto
 
@@ -67,7 +67,7 @@ archivos del repo, nunca a la configuración de una máquina puntual.
 | `transcribe()` ignoraba el exit status: el error del cliente se tipeaba como transcripción. | ✅ |
 | `exec()` devolvía `""` ante cualquier fallo, indistinguible de vacío. | ✅ *(el mecanismo entró en P1, pero **sólo lo usaba `renameSession`**: el camino de documentos —el que el hallazgo nombraba— siguió tragándose el error hasta que un E2E lo expuso)* |
 | Doble toque en un host abre dos `MainActivity` que se pelean la misma sesión tmux (`-D` mutuo). | ✅ `launchMode=singleTop` |
-| Tras autorizar la clave, solo la pestaña activa se recupera; las demás quedan muertas. | ⏳ |
+| Tras autorizar la clave, solo la pestaña activa se recuperaba; las demás quedaban muertas. | ✅ `reconectarTodas()` en los dos diálogos (autorizar clave y confiar host key): la decisión es del host, no de una pestaña. Las de fondo reviven perezosas, sin costo hasta tocarlas |
 | Las interfaces de red se pasan a tsnet una sola vez: al cambiar de wifi a datos el nodo embebido no se recupera. | ✅ `refreshInterfaces()` desde el callback de red |
 
 ### Concurrencia
@@ -87,14 +87,14 @@ archivos del repo, nunca a la configuración de una máquina puntual.
 
 | Hallazgo | Estado |
 |---|---|
-| `marvin-stt` usa `curl -f`, que descarta el cuerpo del error: el mensaje del daemon se pierde y llega texto de curl. (Mitigado del lado app mirando el exit status.) | ⏳ |
-| `run-visible.sh` / `run-local.sh`: bajo `pipefail`, un glob sin match o un `grep` sin resultado abortan el script en silencio; el fallback a `:0` es código muerto. | ⏳ |
-| `display-entrypoint.sh`: si Xvnc o websockify mueren, el container queda vivo como zombi y `restart: unless-stopped` nunca actúa. | ⏳ |
-| `setup-host.sh`: reescribe las units pero no reinicia lo que está corriendo; si el repo se mueve, las units fallan y quedan latcheadas; `uv` es dependencia dura que no instala ni verifica; deshabilita password auth *antes* de que exista la clave; un `~/.tmux.conf` preexistente nunca recibe las líneas que el sistema necesita. | ⏳ |
-| `marvin-stt-live` no tiene idle-exit pero la app lo arranca igual en modo *ondemand*: ~2 GB de VRAM quedan tomados. | ⏳ |
-| `check-version.sh`: compara versiones como strings y si no encuentra `plugin.json` avisa "desactualizado" en cada sesión, para siempre. | ⏳ |
-| `marvin-show.sh`: la URL se corta en el primer `&` (solo escapa espacios). | ⏳ |
-| Watchdog del STT puede matar una transcripción en curso; fugas de temporales; `ensure_cuda_ld` sin sentinela de re-exec. | ⏳ |
+| `marvin-stt` usa `curl -f`, que descarta el cuerpo del error. | ✅ `--fail-with-body` en el camino del dictado; y el `mode status` ya no muere por `set -e` si el daemon cae entre el chequeo y el curl |
+| `run-visible.sh` / `run-local.sh`: bajo `pipefail`, un glob sin match o un `grep` sin resultado abortan en silencio; el fallback a `:0` era código muerto. | ✅ `\|\| true` en ambos + normalización del socket X (el chequeo de existencia siempre pasaba) |
+| `display-entrypoint.sh`: si Xvnc o websockify mueren, el container queda como zombi. | ✅ supervisión con `wait -n` + mapa de servicios (P4) |
+| `setup-host.sh`: no reiniciaba units, `~/.tmux.conf` preexistente sin las líneas necesarias, etc. | ✅ `setup-host-lib.sh` (bloques con sentinelas idempotentes, `escribir_unidad` reinicia lo activo), 13 tests (P4) |
+| `marvin-stt-live` sin idle-exit: ~2 GB de VRAM tomados para siempre en *ondemand*. | ✅ reescrito con supervisor + idle-exit (P4) |
+| `check-version.sh`: comparaba versiones como strings (`1.10 < 1.9`) y sin `plugin.json` avisaba "desactualizado" para siempre. | ✅ `sort -V` + silencio bajo el hook; **5 tests de regresión nuevos** |
+| `marvin-show.sh`: la URL se cortaba en el primer `&`. | ✅ `--data-urlencode`; **y el test de regresión destapó otro**: un archivo con espacio en el nombre moría en `curl (3)` — ahora se normaliza a la whitelist del daemon. 4 tests nuevos |
+| Watchdog del STT podía matar una transcripción en curso; fugas de temporales; `ensure_cuda_ld` sin sentinela. | ✅ (P4) |
 
 ---
 
@@ -103,10 +103,10 @@ archivos del repo, nunca a la configuración de una máquina puntual.
 | Hallazgo | Estado |
 |---|---|
 | **Cero tests, CI y linters** en todo el proyecto. | ✅ 51 tests JVM + 40 pytest + **29 E2E instrumentados** contra fixture desechable + CI bloqueante (hoy sobre runner self-hosted, ver más abajo) + job nocturno de E2E |
-| `marvints.aar`: 14 MB commiteados, build manual con rutas absolutas, sin versión ni checksum, solo arm64. | ⏳ P3 |
-| README raíz, README de android y DESIGN.md describen una arquitectura eliminada (gateway privilegiado, `nsenter`, mosh, sshj, Compose). | ⏳ P4 |
-| Sin `LICENSE` en la raíz pese a vendorizar Termux (GPL-3.0). | ⏳ P4 |
-| `MainActivity.kt` con 918 líneas concentra un tercio del código propio. | ⏳ P3 |
+| `marvints.aar`: build manual con rutas absolutas, sin checksum, solo arm64. | ✅ `build-aar.sh` reproducible + `.sha256` + multi-ABI (P3) |
+| README raíz, README de android y DESIGN.md describían una arquitectura eliminada. | ✅ reescritos (P4) |
+| Sin `LICENSE` en la raíz pese a vendorizar Termux (GPL-3.0). | ✅ GPL-3.0 + NOTICE.md + SECURITY.md (P4) |
+| `MainActivity.kt` con 918 líneas concentraba un tercio del código propio. | ✅ 918 → 328, repartido en 5 componentes + 17 tests JVM (P3) |
 
 ---
 

@@ -208,7 +208,9 @@ class MainActivity : AppCompatActivity() {
             .setPositiveButton("Confiar en la nueva") { _, _ ->
                 HostKeys.forget(this, host, port)
                 dialogoClaveVisible = false
-                tabs.reconectarActiva()
+                // Todas, no sólo la activa: confiar en la clave nueva vale para el host
+                // entero, y las pestañas que ya habían fallado quedaban muertas.
+                tabs.reconectarTodas()
             }
             .setCancelable(false)
             .show()
@@ -228,7 +230,8 @@ class MainActivity : AppCompatActivity() {
             .setNeutralButton("Copiar clave") { _, _ -> copiarAlPortapapeles(pub) }
             .setPositiveButton("Reintentar") { _, _ ->
                 dialogoAuthVisible = false
-                tabs.reconectarActiva()
+                // Ídem: la autorización de la clave es del host, no de una pestaña.
+                tabs.reconectarTodas()
             }
             .setNegativeButton("Cerrar") { _, _ -> dialogoAuthVisible = false }
             .setOnCancelListener { dialogoAuthVisible = false }

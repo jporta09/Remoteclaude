@@ -106,6 +106,23 @@ class TabsController(
         activar(i)
     }
 
+    /**
+     * Recrea TODAS las sesiones, no sólo la activa. Es lo que corresponde tras autorizar
+     * la clave o confiar en una host key nueva: esas decisiones valen para el host entero,
+     * pero cada pestaña que ya había fallado quedó con su loop de conexión terminado
+     * (`userClosed`) y no revive sola — el usuario la tocaba y la encontraba muerta.
+     * Recrear el objeto alcanza: la conexión real es perezosa (se abre al engancharse la
+     * vista), así que las de fondo no cuestan nada hasta que las toques.
+     */
+    fun reconectarTodas() {
+        tabs.indices.forEach { i ->
+            val nombre = tabs[i].session.tmuxSession
+            tabs[i].session.finishIfRunning()
+            tabs[i] = Tab(crearSesion(nombre))
+        }
+        activar(activo)
+    }
+
     fun cerrarTodas() = tabs.forEach { it.session.finishIfRunning() }
 
     /** Avisa a todas las sesiones de un cambio de red. Itera una copia: estas llegan desde
