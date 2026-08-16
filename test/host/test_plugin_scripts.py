@@ -12,6 +12,7 @@ import shutil
 import subprocess
 import threading
 from pathlib import Path
+from typing import ClassVar
 
 import pytest
 
@@ -26,15 +27,17 @@ CHECK = RAIZ / "plugins/remotemarvin/scripts/check-version.sh"
 class _Captura(http.server.BaseHTTPRequestHandler):
     """Render-daemon de mentira: acepta todo y anota qué le pidieron."""
 
-    pedidos: list[str] = []
+    # ClassVar a propósito: el fixture la resetea por test; compartirla entre
+    # instancias del handler es justamente el mecanismo de captura.
+    pedidos: ClassVar[list[str]] = []
 
-    def do_GET(self):  # noqa: N802 (nombre que exige BaseHTTPRequestHandler)
+    def do_GET(self):  # nombre que exige BaseHTTPRequestHandler
         self.pedidos.append(self.path)
         self.send_response(200)
         self.end_headers()
         self.wfile.write(b"ok")
 
-    def do_PUT(self):  # noqa: N802
+    def do_PUT(self):
         self.pedidos.append(self.path)
         largo = int(self.headers.get("Content-Length", 0))
         self.rfile.read(largo)
@@ -59,7 +62,8 @@ def daemon_falso():
 def _correr_show(puerto, tmp_path, *args):
     env = dict(os.environ, MARVIN_RENDER_PORT=str(puerto), HOME=str(tmp_path))
     return subprocess.run(
-        ["bash", str(SHOW), *args], env=env, capture_output=True, text=True, timeout=30
+        ["bash", str(SHOW), *args], env=env, capture_output=True, text=True, timeout=30,
+        check=False,
     )
 
 
@@ -125,7 +129,7 @@ def test_show_sin_daemon_falla_con_mensaje(tmp_path):
     env = dict(os.environ, MARVIN_RENDER_PORT="1", HOME=str(tmp_path))  # nadie escucha
     r = subprocess.run(
         ["bash", str(SHOW), "https://example.com"],
-        env=env, capture_output=True, text=True, timeout=30,
+        env=env, capture_output=True, text=True, timeout=30, check=False,
     )
     assert r.returncode == 1
     assert "No llego al render" in r.stderr
@@ -165,7 +169,7 @@ def _correr_check(repo):
     # stdout NO es TTY acá, o sea el modo hook: tiene que callar salvo desactualizado.
     return subprocess.run(
         ["bash", str(repo / "plugins/remotemarvin/scripts/check-version.sh")],
-        capture_output=True, text=True, timeout=30,
+        capture_output=True, text=True, timeout=30, check=False,
     )
 
 
