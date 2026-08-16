@@ -77,15 +77,15 @@ jobs:
 
       - name: Suite
         env:
-          # Render por software, a propósito. e2e.sh usa `-gpu host` con offload a la NVIDIA
-          # porque en una corrida local hay sesión gráfica; el runner arranca con el boot y
-          # NO tiene ninguna, así que el emulador moría con "Could not initialize emulated
-          # framebuffer / Could not start renderer".
+          # Render por software, a propósito: es lo único que se sostiene sin sesión
+          # gráfica, y el runner arranca con el boot.
           #
-          # Lo peor de ese fallo es que era intermitente por el peor motivo: mientras el
-          # servicio venía de una sesión de escritorio heredaba DISPLAY y andaba; tras un
-          # reinicio, no. O sea que el gate dependía de si había alguien logueado — la misma
-          # dependencia del ambiente que el JAVA_HOME del Makefile y la ACL de KVM.
+          # Comprobado a mano acá: con `env -u DISPLAY`, el `-gpu host` que usa e2e.sh no
+          # arranca ni se degrada solo — "Could not open libX11-xcb.so" → "Failed to get
+          # EGL display" → "Failed to initialize GL emulation", y el emulador nunca bootea.
+          # O sea que el camino acelerado pasa por X11: sin servidor X no hay GPU. Levantar
+          # uno headless pediría root y config de Xorg, y Xvfb daría DISPLAY pero con GL por
+          # software — el mismo costo que esto y ninguna ganancia.
           E2E_GPU: swiftshader_indirect
         run: make e2e
 
