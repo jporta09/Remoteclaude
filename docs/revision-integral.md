@@ -304,8 +304,40 @@ de pushear. Ahora hay `make go`, la búsqueda vive en `scripts/go-bin.sh` (misma
 `jdk17.sh`) y `all` la incluye, así que "todo lo que no necesita dispositivo" por fin es
 todo.
 
-Lo que sigue abierto: devolver los **E2E instrumentados a gate de PR** ahora que el runner
-tiene KVM, AVD y Docker — que era el motivo original de querer un runner propio.
+### Los E2E como gate de PR, y lo que costó
+
+Los 29 tests instrumentados ya corren en cada PR (`.github/workflows/e2e.yml`), verde en el
+runner en ~5 min. Va en un workflow aparte del gate rápido, se **saltea** —no falla— si no
+hay runner propio, y limpia con `if: always()` porque el runner es una máquina de verdad
+donde el estado sobrevive al job.
+
+Ponerlo a andar sacó tres cosas, y ninguna era el emulador:
+
+**KVM venía de una ACL, no de un grupo.** `/dev/kvm` tenía `user:jporta:rw-`, que la pone
+logind para la **sesión activa**. El runner corre con linger, o sea pensado para andar sin
+nadie logueado. Sin KVM el emulador no falla: arranca por software y la suite se va a
+timeout — síntoma lejísimos de la causa. El arreglo (estar en el grupo `kvm`) va en
+`setup-runner.sh`, no aplicado a mano, y **aplica recién al reiniciar**: los grupos del
+gestor de servicios de usuario se fijan al nacer y, con linger, nace con el boot. Se
+confirmó solo horas después: tras un reinicio la ACL quedó en `lightdm` —nadie había
+entrado al escritorio— y el gate corrió igual, por el grupo.
+
+**La limpieza dejaba emuladores zombis.** `adb emu kill` habla por adb, así que no sirve
+justo cuando hace falta: si el emulador no llegó a bootear, no hay con quién hablar.
+Quedaron dos vivos y envenenaron la corrida siguiente, que dio **6 tests rojos con errores
+de conexión al fixture** — un síntoma que no se parece en nada a su causa. Ahora se termina
+por PID si sobrevive, con el patrón entre corchetes para que `pgrep` no matchee la propia
+línea de comandos (sin eso el script se mata a sí mismo).
+
+**Sin sesión gráfica no hay GPU.** Comprobado con `env -u DISPLAY`: `-gpu host` no bootea
+**ni se degrada solo** (`libX11-xcb` → `Failed to get EGL display`). El camino acelerado del
+emulador pasa por X11, así que el job usa `swiftshader_indirect`; un X headless pediría root
+y Xvfb daría GL por software igual, sin ganancia.
+
+Vale anotar cómo se llegó: la primera explicación del fallo —"el runner no hereda DISPLAY"—
+se escribió con más confianza de la que los datos daban, y los mensajes de error no
+coincidían con esa firma. La causa igual de plausible era el zombi. La decisión quedó igual;
+el motivo hubo que corregirlo.
 
 ### Cobertura de tests que falta
 Los arreglos de P4 entraron con tests propios: `test/host/` pasó de 16 a 31 (bloques
