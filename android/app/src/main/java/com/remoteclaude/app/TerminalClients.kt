@@ -24,9 +24,12 @@ class TerminalClients(
     private val mostrarTeclado: () -> Unit,
     private val copiar: (String) -> Unit,
 ) {
-    private var fuentePx = act.sp(15f)
-    private val fuenteMin = act.sp(8f)
-    private val fuenteMax = act.sp(28f)
+    // En float, no en Int: ver Zoom.kt. Con Int los incrementos chicos del pellizco se
+    // truncaban y la fuente sólo sabía achicarse.
+    private var fuente = act.sp(15f).toFloat()
+    private val fuenteMin = act.sp(8f).toFloat()
+    private val fuenteMax = act.sp(28f).toFloat()
+    private var fuentePx = Zoom.aPixeles(fuente)
 
     /** Tamaño inicial de fuente, para que la vista arranque igual que el zoom. */
     fun fuenteInicialPx(): Int = fuentePx
@@ -81,7 +84,8 @@ class TerminalClients(
 
     val vistaCliente: TerminalViewClient = object : TerminalViewClient {
         override fun onScale(scale: Float): Float {
-            val nuevo = (fuentePx * scale).toInt().coerceIn(fuenteMin, fuenteMax)
+            fuente = Zoom.escalar(fuente, scale, fuenteMin, fuenteMax)
+            val nuevo = Zoom.aPixeles(fuente)
             if (nuevo != fuentePx) {
                 fuentePx = nuevo
                 vista().setTextSize(nuevo)
