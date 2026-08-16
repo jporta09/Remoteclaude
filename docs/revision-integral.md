@@ -445,6 +445,24 @@ Riesgos conocidos del modo (relevados de issues y doc oficial): flicker con tmux
 (este host tiene 3.4; cosmetico, se va con el upgrade), scroll a saltos (ajustable con
 /scroll-speed), y en PC la seleccion nativa del terminal pasa a necesitar Shift+arrastre.
 
+### Pendiente: documentar el Sel en el manual de uso
+
+`scripts/gen-manual.py` menciona el Sel en una línea; falta la explicación que importa,
+salida de una pregunta del usuario (ago-2026):
+
+- **Cuándo usar cada copia**: el long-press nativo selecciona sobre el búfer local de la
+  app, y con tmux en el medio cada fila llega redibujada por separado — el motor nunca ve
+  la marca de "línea envuelta", así que un comando de 2+ líneas se copia cortado (un `\n`
+  duro por línea visual, más el relleno de espacios). Sirve para fragmentos de una línea o
+  para copiar literalmente lo que se ve.
+- **El Sel delega la selección en el host**: el dedo se reporta como botón de mouse, tmux
+  (o Claude Code en fullscreen) selecciona sobre SUS líneas lógicas y al soltar copia la
+  línea entera, unida y sin relleno — lista para pegar y ejecutar. Es el camino
+  recomendado para comandos y cualquier texto que se vaya a reutilizar.
+- Mencionar que por SSH la copia viaja por OSC 52 al portapapeles del teléfono (con el
+  diálogo de consentimiento para copias grandes), y que en claude fullscreen el mismo
+  arrastre dispara además la copia propia de claude al buffer de tmux.
+
 ### Cobertura de tests que falta
 Los arreglos de P4 entraron con tests propios: `test/host/` pasó de 16 a 31 (bloques
 idempotentes de `setup-host`, escritura de units, señal de actividad del dictado en vivo).
