@@ -1,5 +1,11 @@
 package com.remoteclaude.app
 
+import android.content.Intent
+import android.graphics.pdf.PdfDocument
+import android.view.View
+import android.view.ViewGroup
+import android.widget.ImageView
+import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.google.common.truth.Truth.assertThat
@@ -7,6 +13,7 @@ import org.junit.After
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
+import java.io.ByteArrayOutputStream
 
 /**
  * E2E del visor de documentos contra el fixture desechable, que ya viene con
@@ -35,7 +42,7 @@ class DocsE2ETest {
     }
 
     @After fun tearDown() {
-        runCatching { fixture.exec("rm -f /tmp/canario ~/RemoteMarvinDocs/hostil* 2>/dev/null; true") }
+        runCatching { fixture.exec("rm -f /tmp/canario ~/RemoteMarvinDocs/hostil* ~/RemoteMarvinDocs/mini.pdf 2>/dev/null; true") }
     }
 
     @Test fun listaLosDocumentosQueElHostComparte() {
@@ -75,6 +82,54 @@ class DocsE2ETest {
         assertThat(control.readDocBase64("raro'nombre.txt")).isEmpty()
         assertThat(control.readDocBase64("../../etc/passwd")).isEmpty()
         assertThat(control.readDocBase64("con\nsalto.txt")).isEmpty()
+    }
+
+    @Test fun elVisorRenderizaUnPdf_noSoloLoBaja() {
+        // Regresión del "Unsupported pixel format": el transporte (readDocBase64) andaba
+        // perfecto y estos tests pasaban, pero PdfRenderer.render() solo acepta bitmaps
+        // ARGB_8888 y el visor le pasaba RGB_565 — TODO pdf moría con un mensaje de error.
+        // Este test atraviesa la pantalla de verdad: exige ver una página renderizada.
+        val pdf = PdfDocument().let { d ->
+            val pag = d.startPage(PdfDocument.PageInfo.Builder(300, 400, 0).create())
+            pag.canvas.drawColor(android.graphics.Color.WHITE)
+            d.finishPage(pag)
+            val out = ByteArrayOutputStream()
+            d.writeTo(out)
+            d.close()
+            out.toByteArray()
+        }
+        val b64 = android.util.Base64.encodeToString(pdf, android.util.Base64.NO_WRAP)
+        fixture.exec("printf %s '$b64' | base64 -d > ~/RemoteMarvinDocs/mini.pdf")
+
+        val intent = Intent(ctx, DocViewerActivity::class.java).apply {
+            putExtra("hostname", host)
+            putExtra("port", port)
+            putExtra("user", FixtureSsh.USER)
+            putExtra("name", "mini.pdf")
+            putExtra("size", pdf.size.toLong())
+        }
+        ActivityScenario.launch<DocViewerActivity>(intent).use { esc ->
+            esperar("una página de PDF renderizada en pantalla") {
+                var hay = false
+                esc.onActivity { a -> hay = contarPaginas(a.window.decorView) > 0 }
+                hay
+            }
+        }
+    }
+
+    private fun contarPaginas(v: View): Int = when (v) {
+        is ImageView -> if (v.drawable != null) 1 else 0
+        is ViewGroup -> (0 until v.childCount).sumOf { contarPaginas(v.getChildAt(it)) }
+        else -> 0
+    }
+
+    private fun esperar(que: String, ms: Long = 45_000, cond: () -> Boolean) {
+        val fin = System.currentTimeMillis() + ms
+        while (System.currentTimeMillis() < fin) {
+            if (cond()) return
+            Thread.sleep(300)
+        }
+        throw AssertionError("timeout esperando: $que")
     }
 
     @Test fun siElHostNoResponde_seDistingueDeNoTenerDocumentos() {

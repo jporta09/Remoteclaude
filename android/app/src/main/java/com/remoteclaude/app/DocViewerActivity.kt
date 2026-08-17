@@ -152,11 +152,16 @@ class DocViewerActivity : AppCompatActivity() {
                     for (i in 0 until renderer.pageCount) {
                         renderer.openPage(i).use { page ->
                             val h = (targetW.toFloat() / page.width * page.height).toInt()
-                            // RGB_565 = la mitad de memoria por página; sin alfa no se
-                            // pierde nada visible en un PDF.
-                            val bmp = Bitmap.createBitmap(targetW, h, Bitmap.Config.RGB_565)
-                            bmp.eraseColor(android.graphics.Color.WHITE)
-                            page.render(bmp, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
+                            // PdfRenderer SOLO renderiza sobre ARGB_8888 (con cualquier
+                            // otro formato tira "Unsupported pixel format"). Para no pagar
+                            // 4 bytes/px por cada página retenida, se renderiza en ARGB y
+                            // lo que se guarda es la copia a RGB_565 (mitad de memoria,
+                            // sin alfa no se pierde nada visible en un PDF).
+                            val argb = Bitmap.createBitmap(targetW, h, Bitmap.Config.ARGB_8888)
+                            argb.eraseColor(android.graphics.Color.WHITE)
+                            page.render(argb, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
+                            val bmp = argb.copy(Bitmap.Config.RGB_565, false)
+                            argb.recycle()
                             pages.addView(ImageView(this).apply {
                                 setImageBitmap(bmp)
                                 adjustViewBounds = true
