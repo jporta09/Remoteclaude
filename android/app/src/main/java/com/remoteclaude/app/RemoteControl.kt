@@ -100,30 +100,56 @@ class RemoteControl(
     // --- Documentos compartidos (~/RemoteMarvinDocs del usuario) ----------------
     // exec() corre directamente como el usuario en el host (SSH al sshd del host), así
     // que leemos ~/RemoteMarvinDocs sin saltos: el '~' lo expande el shell de login.
+    //
+    // Dos orígenes: la raíz es lo que comparte Claude (marvin-share) y `subidos/` es lo
+    // que sube el teléfono. El nombre NUNCA puede traer '/', así que el subdirectorio se
+    // decide acá con el flag `subido`, no viaja dentro del nombre.
+
+    /** Un documento del host. [btime] = 0 si el filesystem no registra creación. */
+    data class Doc(
+        val name: String,
+        val size: Long,
+        val mtime: Long,
+        val btime: Long,
+        val subido: Boolean,
+    )
+
+    private fun rutaDoc(name: String, subido: Boolean) =
+        "~/RemoteMarvinDocs/" + (if (subido) "subidos/" else "") + ShellQuote.sq(name)
+
+    /** El saneo compartido de nombres: nada de comillas, saltos de línea ni rutas. */
+    private fun nombreInseguro(name: String) =
+        name.isBlank() || name.contains('\'') || name.contains('\n') || name.contains('/')
 
     /**
-     * Lista los docs compartidos: (nombre, bytes, mtimeEpoch), más nuevos primero.
+     * Lista los docs de ambos orígenes, SIN ordenar (el criterio lo elige la pantalla).
      *
      * LANZA si no se pudo llegar al host. La distinción importa: un `find` que no encuentra
      * nada sale 0 con salida vacía —eso sí es "no hay documentos"— pero una conexión que
      * falla devolvía también vacío, y la pantalla lo presentaba como un hecho sobre TUS
      * archivos ("Sin documentos en ~/RemoteMarvinDocs del host") sin haber llegado a mirar.
+     * El `true` final mantiene rc=0 cuando `subidos/` todavía no existe.
      */
-    fun listDocs(): List<Triple<String, Long, Long>> {
+    fun listDocs(): List<Doc> {
         val r = execResult(
-            "find ~/RemoteMarvinDocs -maxdepth 1 -type f -printf '%f\\t%s\\t%T@\\n' 2>/dev/null"
+            "find ~/RemoteMarvinDocs -maxdepth 1 -type f -printf '%f\\t%s\\t%T@\\t%W@\\tc\\n' 2>/dev/null; " +
+                "find ~/RemoteMarvinDocs/subidos -maxdepth 1 -type f -printf '%f\\t%s\\t%T@\\t%W@\\ts\\n' 2>/dev/null; " +
+                "true"
         )
         if (r.failed) throw IllegalStateException(r.error ?: "no pude conectarme al host")
         return r.out.lineSequence().mapNotNull {
             val p = it.split('\t')
-            if (p.size >= 3 && p[0].isNotBlank())
-                Triple(
-                    p[0],
-                    p[1].toLongOrNull() ?: 0L,
-                    p[2].substringBefore('.').toLongOrNull() ?: 0L,
+            if (p.size >= 5 && p[0].isNotBlank())
+                Doc(
+                    name = p[0],
+                    size = p[1].toLongOrNull() ?: 0L,
+                    mtime = p[2].substringBefore('.').toLongOrNull() ?: 0L,
+                    // %W@ da 0 (o -1 en finds viejos) si el FS no registra btime
+                    btime = (p[3].substringBefore('.').toLongOrNull() ?: 0L).coerceAtLeast(0L),
+                    subido = p[4] == "s",
                 )
             else null
-        }.sortedByDescending { it.third }.toList()
+        }.toList()
     }
 
     /**
@@ -131,11 +157,53 @@ class RemoteControl(
      * se pudo llegar al host, por lo mismo que [listDocs]: un archivo que no se pudo traer
      * no es un archivo vacío.
      */
-    fun readDocBase64(name: String): String {
-        if (name.contains('\'') || name.contains('\n') || name.contains('/')) return ""
-        val r = execResult("base64 ~/RemoteMarvinDocs/${ShellQuote.sq(name)} 2>/dev/null")
+    fun readDocBase64(name: String, subido: Boolean = false): String {
+        if (nombreInseguro(name)) return ""
+        val r = execResult("base64 ${rutaDoc(name, subido)} 2>/dev/null")
         if (r.failed) throw IllegalStateException(r.error ?: "no pude conectarme al host")
         return r.out.replace("\n", "").trim()
+    }
+
+    /**
+     * Sube bytes del teléfono a ~/RemoteMarvinDocs/subidos/ del host, por el stdin de un
+     * `cat` remoto (el mismo patrón que [transcribe]: cerrar stdin = EOF). BLOQUEA.
+     */
+    fun uploadDoc(name: String, bytes: ByteArray): Exec {
+        if (nombreInseguro(name)) return Exec("", false, "nombre de archivo inválido")
+        val (h, p) = try { TailscaleBridge.endpoint(host, port) } catch (e: Exception) {
+            return Exec("", false, e.message ?: "no se pudo resolver el host")
+        }
+        val c = Connection(h, p)
+        return try {
+            c.connect(verifier(), 10000, 10000)
+            if (!c.authenticateWithPublicKey(user, key))
+                return Exec("", false, "la clave de la app no está autorizada en el host")
+            val s = c.openSession()
+            s.execCommand("mkdir -p ~/RemoteMarvinDocs/subidos && cat > ${rutaDoc(name, subido = true)}")
+            s.stdin.use { stdin ->
+                var i = 0
+                while (i < bytes.size) {
+                    val n = minOf(64 * 1024, bytes.size - i)
+                    stdin.write(bytes, i, n)
+                    i += n
+                }
+            }
+            val out = String(s.stdout.readBytes(), Charsets.UTF_8)
+            val rc = s.exitStatus
+            s.close()
+            if (rc != null && rc != 0) Exec(out, false, "el host devolvió código $rc")
+            else Exec(out, true)
+        } catch (e: Exception) {
+            Exec("", false, e.message ?: "no se pudo conectar al host")
+        } finally {
+            try { c.close() } catch (_: Exception) {}
+        }
+    }
+
+    /** Borra un doc EN EL HOST. Mismo saneo que la lectura: el nombre jamás llega al shell. */
+    fun deleteDoc(name: String, subido: Boolean): Exec {
+        if (nombreInseguro(name)) return Exec("", false, "nombre de archivo inválido")
+        return execResult("rm -- ${rutaDoc(name, subido)}")
     }
 
     // --- Dictado por voz ---------------------------------------------------------

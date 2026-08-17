@@ -44,19 +44,74 @@ class DocsE2ETest {
     }
 
     @After fun tearDown() {
-        runCatching { fixture.exec("rm -f /tmp/canario ~/RemoteMarvinDocs/hostil* ~/RemoteMarvinDocs/mini.pdf 2>/dev/null; true") }
+        runCatching { fixture.exec("rm -rf /tmp/canario ~/RemoteMarvinDocs/hostil* ~/RemoteMarvinDocs/mini.pdf ~/RemoteMarvinDocs/borrame-raiz.txt ~/RemoteMarvinDocs/subidos 2>/dev/null; true") }
     }
 
     @Test fun listaLosDocumentosQueElHostComparte() {
-        val nombres = control.listDocs().map { it.first }
+        val nombres = control.listDocs().map { it.name }
         assertThat(nombres).containsAtLeast("notas.txt", "datos.csv")
     }
 
     @Test fun elTamanioReportadoEsElReal() {
         // La lista muestra el tamaño; si se leyera mal el `find -printf`, mostraría 0 y
         // nadie lo notaría hasta ver un archivo "vacío" que no lo está.
-        val notas = control.listDocs().first { it.first == "notas.txt" }
-        assertThat(notas.second).isEqualTo(fixture.exec("stat -c %s ~/RemoteMarvinDocs/notas.txt").trim().toLong())
+        val notas = control.listDocs().first { it.name == "notas.txt" }
+        assertThat(notas.size).isEqualTo(fixture.exec("stat -c %s ~/RemoteMarvinDocs/notas.txt").trim().toLong())
+    }
+
+    @Test fun listDocs_traeSubidosYCompartidosConSuEtiqueta() {
+        fixture.exec("mkdir -p ~/RemoteMarvinDocs/subidos && echo hola > ~/RemoteMarvinDocs/subidos/desde-celu.txt")
+
+        val docs = control.listDocs()
+        val subido = docs.first { it.name == "desde-celu.txt" }
+        val compartido = docs.first { it.name == "notas.txt" }
+
+        assertThat(subido.subido).isTrue()
+        assertThat(compartido.subido).isFalse()
+        // btime: >0 si el FS lo registra, 0 si no — nunca negativo ni basura.
+        assertThat(subido.btime).isAtLeast(0L)
+        assertThat(subido.mtime).isGreaterThan(0L)
+    }
+
+    @Test fun subirUnArchivo_llegaIntactoASubidosDelHost() {
+        // Texto y binario (bytes 0..255): el canal es el stdin de un `cat` remoto y
+        // cualquier mediación de shell/charset corrompería el binario.
+        val texto = "subida de prueba\n".toByteArray()
+        assertThat(control.uploadDoc("subida.txt", texto).ok).isTrue()
+        assertThat(fixture.exec("cat ~/RemoteMarvinDocs/subidos/subida.txt"))
+            .isEqualTo("subida de prueba\n")
+
+        val binario = ByteArray(256) { it.toByte() }
+        assertThat(control.uploadDoc("subida.bin", binario).ok).isTrue()
+        val shaHost = fixture.exec("sha256sum ~/RemoteMarvinDocs/subidos/subida.bin").trim().split(" ")[0]
+        val shaLocal = java.security.MessageDigest.getInstance("SHA-256")
+            .digest(binario).joinToString("") { "%02x".format(it) }
+        assertThat(shaHost).isEqualTo(shaLocal)
+    }
+
+    @Test fun borrarUnDocumento_desapareceDelHost() {
+        fixture.exec("mkdir -p ~/RemoteMarvinDocs/subidos && echo x > ~/RemoteMarvinDocs/subidos/borrame.txt && echo y > ~/RemoteMarvinDocs/borrame-raiz.txt")
+
+        assertThat(control.deleteDoc("borrame.txt", subido = true).ok).isTrue()
+        assertThat(control.deleteDoc("borrame-raiz.txt", subido = false).ok).isTrue()
+
+        assertThat(fixture.exec("ls ~/RemoteMarvinDocs/subidos/borrame.txt 2>/dev/null; ls ~/RemoteMarvinDocs/borrame-raiz.txt 2>/dev/null").trim())
+            .isEmpty()
+        // Borrar algo que no existe es un error visible, no un silencio.
+        assertThat(control.deleteDoc("no-existe.txt", subido = false).failed).isTrue()
+    }
+
+    @Test fun unNombreHostilSeRechazaAlSubirYAlBorrar_sinTocarElShell() {
+        val hostil = "hostil'; touch /tmp/canario; echo '.txt"
+
+        assertThat(control.uploadDoc(hostil, "x".toByteArray()).failed).isTrue()
+        assertThat(control.deleteDoc(hostil, subido = false).failed).isTrue()
+        assertThat(control.deleteDoc("../notas.txt", subido = true).failed).isTrue()
+
+        val canario = fixture.exec("test -e /tmp/canario && echo EJECUTADO || echo limpio").trim()
+        assertThat(canario).isEqualTo("limpio")
+        // Y el intento de traversal no borró el archivo real de la raíz.
+        assertThat(fixture.exec("cat ~/RemoteMarvinDocs/notas.txt").trim()).isEqualTo("contenido de prueba")
     }
 
     @Test fun leeElContenidoDeUnDocumento() {
