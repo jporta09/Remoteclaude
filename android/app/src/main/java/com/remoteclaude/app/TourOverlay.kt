@@ -164,11 +164,15 @@ class TourOverlay(
             val yo = IntArray(2).also { getLocationInWindow(it) }
             val el = IntArray(2).also { v.getLocationInWindow(it) }
             val aire = context.dp(6)
+            // Recortado a los bordes de la pantalla: con blancos de ancho completo (la
+            // barra del host, la terminal, la fila Shift) el marco se iba afuera y sus
+            // lados no se veían — recortado queda como un indicador siempre visible.
+            val borde = context.dp(5).toFloat()
             nuevoBlanco = RectF(
-                (el[0] - yo[0] - aire).toFloat(),
-                (el[1] - yo[1] - aire).toFloat(),
-                (el[0] - yo[0] + v.width + aire).toFloat(),
-                (el[1] - yo[1] + v.height + aire).toFloat(),
+                (el[0] - yo[0] - aire).toFloat().coerceAtLeast(borde),
+                (el[1] - yo[1] - aire).toFloat().coerceAtLeast(borde),
+                (el[0] - yo[0] + v.width + aire).toFloat().coerceAtMost(width - borde),
+                (el[1] - yo[1] + v.height + aire).toFloat().coerceAtMost(height - borde),
             )
             burbuja.measure(
                 MeasureSpec.makeMeasureSpec(width - 2 * margen, MeasureSpec.EXACTLY),
