@@ -125,6 +125,13 @@ class HostsActivity : AppCompatActivity() {
                 "Te muestro lo básico en un minuto: tocá para seguir.",
         ),
         Tour.Paso(
+            "Primero, prepará la PC",
+            "Una sola vez en tu PC: cloná el repo de RemoteMarvin y corré estos " +
+                "comandos. Dejan SSH, tmux y los daemons listos — y el manual completo " +
+                "te queda después en Documentos.",
+            codigo = "bash scripts/setup-host.sh\ndocker compose up -d --build",
+        ),
+        Tour.Paso(
             "Agregá tu primer host",
             "Tocá acá y cargá tu PC o server: nombre, IP y usuario. Después, la tarjeta " +
                 "se toca para conectar y se mantiene apretada para editar o borrar.",

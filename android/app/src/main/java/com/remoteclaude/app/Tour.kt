@@ -30,6 +30,8 @@ object Tour {
         val blanco: (() -> View?)? = null,
         /** Precondición barata antes de medir (ej: scrollear la barra hasta el botón). */
         val preparar: (() -> Unit)? = null,
+        /** Comandos u otro texto literal, en mono sobre fondo oscuro (como el manual). */
+        val codigo: String? = null,
     )
 
     fun visto(ctx: Context, id: String): Boolean =

@@ -35,6 +35,14 @@ class TourOverlay(
     private val agujero = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         xfermode = PorterDuffXfermode(PorterDuff.Mode.CLEAR)
     }
+    // El marco vívido alrededor del blanco: adentro la app a pleno, afuera el scrim, y el
+    // borde verde con el mismo chaflán marca exactamente de qué botón habla la burbuja.
+    private val marco = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        color = Paleta.ACCENT
+        strokeWidth = ctx.dp(2).toFloat()
+        strokeJoin = Paint.Join.ROUND
+    }
     private var blanco: RectF? = null
     private var actual = -1
 
@@ -48,6 +56,15 @@ class TourOverlay(
         setTextColor(Paleta.KEY_FG)
         setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
         setPadding(0, context.dp(4), 0, context.dp(8))
+    }
+    private val codigo = TextView(ctx).apply {
+        typeface = resources.getFont(R.font.mononoki)
+        setTextColor(Paleta.ACCENT)
+        setTextSize(TypedValue.COMPLEX_UNIT_SP, 12.5f)
+        setBackgroundColor(Paleta.CHEV_BG)
+        val p = context.dp(10)
+        setPadding(p, context.dp(7), p, context.dp(7))
+        visibility = GONE
     }
     private val saltar = TextView(ctx).apply {
         text = "Saltar demo"
@@ -70,6 +87,9 @@ class TourOverlay(
         setPadding(p, context.dp(12), p, context.dp(10))
         addView(titulo)
         addView(cuerpo)
+        addView(codigo, LinearLayout.LayoutParams(Paleta.MATCH, Paleta.WRAP).apply {
+            bottomMargin = ctx.dp(8)
+        })
         addView(LinearLayout(ctx).apply {
             orientation = LinearLayout.HORIZONTAL
             addView(saltar)
@@ -106,6 +126,8 @@ class TourOverlay(
         val paso = pasos[i]
         titulo.text = paso.titulo
         cuerpo.text = paso.texto
+        codigo.text = paso.codigo ?: ""
+        codigo.visibility = if (paso.codigo != null) VISIBLE else GONE
         contador.text = "${i + 1}/${pasos.size} · tocá para seguir"
         colocar()
         announceForAccessibility("${paso.titulo}. ${paso.texto}")
@@ -179,6 +201,7 @@ class TourOverlay(
         canvas.drawColor(scrim)
         blanco?.let { canvas.drawPath(chaflan(it, context.dp(10).toFloat()), agujero) }
         canvas.restoreToCount(capa)
+        blanco?.let { canvas.drawPath(chaflan(it, context.dp(10).toFloat()), marco) }
     }
 
     private fun cerrar() {
