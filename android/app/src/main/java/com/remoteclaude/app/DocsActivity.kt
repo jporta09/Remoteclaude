@@ -148,8 +148,8 @@ class DocsActivity : AppCompatActivity() {
                 Tour.Paso(
                     "Subir desde el teléfono",
                     "El botón ＋ abre el selector de Android: los archivos elegidos " +
-                        "suben a la carpeta subidos/ del host (hasta 25 MB cada uno) y " +
-                        "aparecen en su propia sección.",
+                        "suben a la carpeta subidos/ del host (hasta 25 MB cada uno), " +
+                        "aparecen en su propia sección y quedan disponibles para Claude.",
                     blanco = { botonSubir },
                 ),
                 Tour.Paso(

@@ -346,7 +346,8 @@ S.append(B("<b>Subir</b>: el botón <b>+</b> abre el selector de Android (se pue
            "elegir varios). Los archivos caen en "
            "<font name='Mono' size='9'>~/RemoteMarvinDocs/subidos/</font> del host — "
            "separados de lo de Claude — y la lista los muestra en su propia sección. "
-           "Tope de 25 MB por archivo."))
+           "Tope de 25 MB por archivo. Y quedan a mano de Claude: decile "
+           "<i>“te subí una captura, mirala”</i> y sabe dónde buscar."))
 S.append(B("<b>Ordenar</b>: el botón <b>⇅</b> elige el criterio — nombre, tamaño, tipo, "
            "fecha de creación o de modificación — y la dirección. Queda guardado. "
            "“Creación” depende de que el disco del host la registre; si no, se usa "

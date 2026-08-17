@@ -6,8 +6,10 @@ Empaqueta las skills de Claude Code para usar las capacidades de la app **Remote
 ## Skills
 
 - **remotemarvin** — guía/índice: resume las capacidades de la app y rutea a las demás.
-- **share-doc** — publica un archivo generado (imagen/PDF/txt/csv) al visor 📄 del celu
-  (vía `scripts/marvin-share.sh`, bundleado en la skill).
+- **share-doc** — publica un archivo generado (imagen/PDF/txt/csv) al visor de
+  Documentos del celu (vía `scripts/marvin-share.sh`, bundleado en la skill), y sabe
+  dónde caen los archivos que el usuario sube desde el teléfono
+  (`~/RemoteMarvinDocs/subidos/`).
 - **headed-browser** — corre un navegador *headed* visible por noVNC (`:99`/`:6080`) o en
   el monitor local.
 
