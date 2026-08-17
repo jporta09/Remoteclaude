@@ -40,6 +40,7 @@ class DocViewerActivity : AppCompatActivity() {
         val port = intent.getIntExtra("port", 22)
         val user = intent.getStringExtra("user") ?: "root"
         val name = intent.getStringExtra("name") ?: run { finish(); return }
+        val subido = intent.getBooleanExtra("subido", false)
 
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -85,7 +86,7 @@ class DocViewerActivity : AppCompatActivity() {
         val control = RemoteControl(this, host, port, user, KeyStoreSsh.getOrCreateKeyPair())
         thread {
             val bytes = try {
-                val b64 = control.readDocBase64(name)
+                val b64 = control.readDocBase64(name, subido)
                 if (b64.isBlank()) null else Base64.decode(b64, Base64.DEFAULT)
             } catch (_: Throwable) {
                 null   // Throwable, no Exception: OutOfMemoryError es un Error
