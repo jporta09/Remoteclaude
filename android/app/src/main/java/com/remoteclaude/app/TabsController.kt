@@ -77,6 +77,24 @@ class TabsController(
      */
     val sesionActiva: SshTerminalSession? get() = tabs.getOrNull(activo)?.session
 
+    // --- Blancos para la demo de primer uso --------------------------------------------
+    // refrescarBarra() reconstruye todo, así que se buscan al momento, nunca se guardan.
+
+    /** El chip de la pestaña activa, o null si la barra todavía no se pobló. */
+    fun chipActivo(): View? = barra.getChildAt(activo)
+
+    /** Un botón de la barra por su contentDescription (sobrevive al rebuild). */
+    fun botonBarra(descripcion: String): View? {
+        for (i in 0 until barra.childCount) {
+            val v = barra.getChildAt(i)
+            if (v.contentDescription == descripcion) return v
+        }
+        return null
+    }
+
+    /** Deja visible el final de la barra (donde viven los botones de acción). */
+    fun scrollAlFinal() = (vista as HorizontalScrollView).fullScroll(View.FOCUS_RIGHT)
+
     val nombres: List<String> get() = tabs.map { it.session.tmuxSession }
 
     /** Al abrir: reengancha las pestañas que estaban abiertas, o crea una nueva. */

@@ -478,3 +478,31 @@ idempotentes de `setup-host`, escritura de units, señal de actividad del dictad
 Lo que sigue sin cobertura automática es `display-entrypoint`, que se verificó a mano
 matando cada proceso dentro del contenedor. El
 fixture ya existe y puede hospedarlos.
+
+### Demo de primer uso (coach marks) — ago-2026
+
+La app no tenía onboarding: la vinculación por QR estaba escondida detrás de la línea de
+VPN y la fila Shift/Sel/Dictar ni se veía (el teclado del sistema la tapa al entrar).
+Ahora cada pantalla dispara su mini-demo la primera vez que se entra: burbujas con
+chaflán (la cápsula del isotipo, sin esquinas redondeadas) que resaltan el lugar con un
+agujero en el scrim y lo explican. Bloquea y narra: tocar avanza, "Saltar demo" corta.
+Hosts (4 pasos), terminal (12 — con el teclado suprimido para que la fila Shift se vea, y
+una burbuja que explica que va y viene con el teclado), docs (2), visor (1 + 3 del panel;
+la explicación del Zoom vive en la burbuja de Escritorio porque el botón está INVISIBLE
+en modo Pantalla y su paso se saltearía siempre). Replay: long-press en "_hosts".
+
+Implementación: `Tour.kt` (gating por prefs `tour_*`, kill-switch `tour_off` que siembran
+los E2E, lógica pura testeable) + `TourOverlay.kt` (scrim + agujero PorterDuff CLEAR +
+burbuja; blancos como lambdas re-evaluados porque `refrescarBarra()` reconstruye todo).
+Los diálogos SSH quedan en su propia ventana ENCIMA del overlay: se resuelven y la demo
+sigue. La caja negra descarta la demo oportunista con `saltarDemoSiAparece()` (el estado
+persiste entre corridas, no se puede exigir que esté).
+
+**Lección que costó 1h40 de suite colgada**: un `OnGlobalLayoutListener` que setea
+`layoutParams` (o invalida) incondicionalmente se retroalimenta — cada set dispara otro
+layout, el listener vuelve a correr, y el main thread queda girando traversals con la
+cola siempre detrás de la barrera de sync. Ni ANR ni crash: cuelgue silencioso, y
+`onActivity` de los tests bloquea sin que el timeout del test pueda dispararse. El fix es
+hacer el listener idempotente (comparar antes de setear) y, en los tests que dependen de
+`onActivity`, un `Timeout` de JUnit que corre el test en otro hilo: mejor rojo que un
+gate eterno.

@@ -83,6 +83,18 @@ class ReleaseCajaNegraTest {
         // verdad hace falta.
         assertThat(device.wait(Until.hasObject(By.pkg(APP).depth(0)), 60_000)).isTrue()
         esperar("_hosts", 60_000)
+        saltarDemoSiAparece()
+    }
+
+    /**
+     * En un device virgen la demo de primer uso aparece encima de la pantalla y bloquea
+     * los toques: se descarta como lo haría un usuario. Oportunista a propósito — el
+     * estado de la app persiste entre corridas (acá no hay pm clear), así que solo la
+     * primera corrida la ve y no se puede exigir que esté.
+     */
+    private fun saltarDemoSiAparece() {
+        device.wait(Until.findObject(By.text("Saltar demo")), 3_000)?.click()
+        device.waitForIdle(1_000)
     }
 
     /**
@@ -177,6 +189,7 @@ class ReleaseCajaNegraTest {
 
         fixture.autorizar(clave)
         tocar("Reintentar")
+        saltarDemoSiAparece()   // la demo de la terminal sale al conectar la primera vez
 
         // El oráculo es el host: si la sesión existe, el APK publicado abrió un SSH real y
         // corrió tmux del otro lado. Eso ejercita trilead entero bajo R8.
@@ -191,6 +204,7 @@ class ReleaseCajaNegraTest {
         tocar("CajaNegra")
         fixture.autorizar(claveDelDialogo())
         tocar("Reintentar")
+        saltarDemoSiAparece()
         esperarQue("la sesión tmux", 60_000) { fixture.sesionesTmux().contains("term 1") }
 
         // Tipear "de verdad": `input text` va a la vista con foco, que es la terminal. Es

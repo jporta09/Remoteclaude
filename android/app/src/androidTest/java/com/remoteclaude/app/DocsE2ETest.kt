@@ -38,6 +38,8 @@ class DocsE2ETest {
         fixture = FixtureSsh(host, port)
         fixture.authorize(KeyStoreSsh.openSshPublicKey("remoteclaude-app"))
         HostKeys.forget(ctx, host, port)
+        ctx.getSharedPreferences("remotemarvin", android.content.Context.MODE_PRIVATE)
+            .edit().putBoolean("tour_off", true).commit()
         control = RemoteControl(ctx, host, port, FixtureSsh.USER, KeyStoreSsh.getOrCreateKeyPair())
     }
 

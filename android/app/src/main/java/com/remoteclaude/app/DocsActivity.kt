@@ -24,6 +24,7 @@ class DocsActivity : AppCompatActivity() {
 
     private lateinit var list: LinearLayout
     private lateinit var status: TextView
+    private lateinit var botonRecargar: TextView
     private lateinit var control: RemoteControl
     private val titleFont by lazy { resources.getFont(R.font.osifont) }
     private val monoFont by lazy { resources.getFont(R.font.mononoki) }
@@ -66,14 +67,15 @@ class DocsActivity : AppCompatActivity() {
             setTextColor(getColor(R.color.marvin_green))
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 22f)
         }, LinearLayout.LayoutParams(0, WRAP, 1f))
-        header.addView(TextView(this).apply {
+        botonRecargar = TextView(this).apply {
             text = "⟳"
             typeface = monoFont
             setTextColor(getColor(R.color.marvin_amber))
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 18f)
             setPadding(dp(12), dp(8), dp(8), dp(8))
             setOnClickListener { loadDocs() }
-        })
+        }
+        header.addView(botonRecargar)
         root.addView(header)
 
         status = TextView(this).apply {
@@ -89,6 +91,21 @@ class DocsActivity : AppCompatActivity() {
             LinearLayout.LayoutParams(MATCH, 0, 1f))
 
         setContentView(root)
+        root.post {
+            Tour.lanzar(this, "docs", listOf(
+                Tour.Paso(
+                    "Documentos compartidos",
+                    "Acá cae lo que Claude comparte desde el host con: marvin-share " +
+                        "archivo. Tocá uno para abrirlo.",
+                    blanco = { status },
+                ),
+                Tour.Paso(
+                    "Actualizar",
+                    "La lista no se refresca sola: tocá ⟳ después de pedirle algo a Claude.",
+                    blanco = { botonRecargar },
+                ),
+            ))
+        }
     }
 
     override fun onResume() {

@@ -102,6 +102,15 @@ class DisplayActivity : AppCompatActivity() {
         root.addView(buildTopBar(), FrameLayout.LayoutParams(MATCH, WRAP, Gravity.TOP))
         root.addView(buildBottomSheet(), FrameLayout.LayoutParams(MATCH, WRAP, Gravity.BOTTOM))
         setContentView(root)
+        root.post {
+            Tour.lanzar(this, "display", listOf(
+                Tour.Paso(
+                    "Controles del visor",
+                    "Tocá ▴ Controles para elegir cómo ver el escritorio del host.",
+                    blanco = { handle },
+                ),
+            ))
+        }
 
         updateButtons()
         // Resolver el endpoint del noVNC (forward local del Tailscale embebido, o directo)
@@ -280,6 +289,23 @@ class DisplayActivity : AppCompatActivity() {
         drawerOpen = !drawerOpen
         panel.visibility = if (drawerOpen) View.VISIBLE else View.GONE
         handle.text = if (drawerOpen) "▾  Controles" else "▴  Controles"
+        if (drawerOpen) panel.post {
+            Tour.lanzar(this, "display_panel", listOf(
+                Tour.Paso(
+                    "Pantalla",
+                    "El escritorio se adapta al teléfono. El modo de todos los días.",
+                    blanco = { btnFit },
+                ),
+                // El botón Zoom queda INVISIBLE en modo Pantalla (reserva el lugar), así
+                // que su explicación va acá y no en un paso propio que casi nunca se vería.
+                Tour.Paso(
+                    "Escritorio",
+                    "El escritorio completo en 1920×1080, como en un monitor. Ahí se " +
+                        "prende Zoom: pellizcá para acercar re-nítido, arrastrá para moverte.",
+                    blanco = { btnDesk },
+                ),
+            ))
+        }
     }
 
     // --- modos ---

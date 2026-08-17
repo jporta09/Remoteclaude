@@ -50,7 +50,8 @@ class RotacionE2ETest {
         fixture.authorize(KeyStoreSsh.openSshPublicKey("remoteclaude-app"))
         fixture.killAllTmux()
         HostKeys.forget(ctx, host, port)
-        prefs.edit().remove("tabs_$hostId").remove("active_$hostId").commit()
+        prefs.edit().remove("tabs_$hostId").remove("active_$hostId")
+            .putBoolean("tour_off", true).commit()
     }
 
     @After fun tearDown() {

@@ -30,6 +30,7 @@ class HostsActivity : AppCompatActivity() {
 
     private lateinit var list: LinearLayout
     private lateinit var vpnStatus: TextView
+    private lateinit var botonAgregar: Button
     private val titleFont by lazy { resources.getFont(R.font.osifont) }     // títulos (marca)
     private val monoFont by lazy { resources.getFont(R.font.mononoki) }      // code / técnico
     private val bodyFont by lazy { resources.getFont(R.font.ubuntu) }        // cuerpo de texto (marca)
@@ -77,6 +78,8 @@ class HostsActivity : AppCompatActivity() {
             setTextColor(getColor(R.color.marvin_amber))
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
             setPadding(dp(20), 0, dp(20), dp(8))
+            // El replay de la demo (lo enseña la última burbuja del tour de hosts).
+            setOnLongClickListener { preguntarRepetirDemo(); true }
         })
         // Estado de la VPN (Tailscale embebido) — tocar para configurar el auth key
         vpnStatus = TextView(this).apply {
@@ -92,7 +95,7 @@ class HostsActivity : AppCompatActivity() {
             LinearLayout.LayoutParams(MATCH, 0, 1f))
 
         // Botón agregar
-        root.addView(Button(this).apply {
+        botonAgregar = Button(this).apply {
             text = "+  Agregar host"
             isAllCaps = false
             typeface = bodyFont
@@ -102,7 +105,8 @@ class HostsActivity : AppCompatActivity() {
             setOnClickListener { showEditDialog(null) }
             val lp = LinearLayout.LayoutParams(MATCH, WRAP); lp.setMargins(dp(16), dp(8), dp(16), dp(16))
             layoutParams = lp
-        })
+        }
+        root.addView(botonAgregar)
 
         setContentView(root)
     }
@@ -111,6 +115,43 @@ class HostsActivity : AppCompatActivity() {
         super.onResume()
         refresh()
         updateVpnStatus()
+        vpnStatus.post { Tour.lanzar(this, "hosts", pasosDemo()) }
+    }
+
+    private fun pasosDemo() = listOf(
+        Tour.Paso(
+            "¡Hola! Esto es RemoteMarvin",
+            "Tu terminal para manejar Claude en tu PC desde el teléfono. " +
+                "Te muestro lo básico en un minuto: tocá para seguir.",
+        ),
+        Tour.Paso(
+            "Agregá tu primer host",
+            "Tocá acá y cargá tu PC o server: nombre, IP y usuario. Después, la tarjeta " +
+                "se toca para conectar y se mantiene apretada para editar o borrar.",
+            blanco = { botonAgregar },
+        ),
+        Tour.Paso(
+            "Conectate desde cualquier lado",
+            "Tocá esta línea para usar el Tailscale embebido: en la PC corré ts-link-qr " +
+                "y escaneá el QR. Sin IP fija ni abrir puertos.",
+            blanco = { vpnStatus },
+        ),
+        Tour.Paso(
+            "Eso es todo por acá",
+            "Cada pantalla nueva trae su propia mini-demo. Para repetir esta, " +
+                "mantené apretado \"_hosts\".",
+        ),
+    )
+
+    private fun preguntarRepetirDemo() {
+        AlertDialog.Builder(this)
+            .setMessage("¿Repetir la demo de primer uso?")
+            .setPositiveButton("Repetir") { _, _ ->
+                Tour.reiniciar(this)
+                Tour.lanzar(this, "hosts", pasosDemo())
+            }
+            .setNegativeButton("Cancelar", null)
+            .show()
     }
 
     private val vpnPoll = Runnable { updateVpnStatus() }

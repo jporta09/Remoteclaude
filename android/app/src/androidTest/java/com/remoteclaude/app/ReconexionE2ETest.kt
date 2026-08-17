@@ -41,7 +41,8 @@ class ReconexionE2ETest {
         fixture.killAllTmux()
         HostKeys.forget(ctx, host, port)
         ctx.getSharedPreferences("remotemarvin", Context.MODE_PRIVATE).edit()
-            .remove("tabs_$hostId").remove("active_$hostId").commit()
+            .remove("tabs_$hostId").remove("active_$hostId")
+            .putBoolean("tour_off", true).commit()
     }
 
     @After fun tearDown() {

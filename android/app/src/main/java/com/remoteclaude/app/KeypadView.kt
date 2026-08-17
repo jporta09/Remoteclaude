@@ -7,6 +7,7 @@ import android.graphics.Typeface
 import android.util.TypedValue
 import android.view.KeyEvent
 import android.view.MotionEvent
+import android.view.View
 import android.widget.Button
 import android.widget.LinearLayout
 
@@ -87,6 +88,13 @@ class KeypadView(ctx: Context, private val io: Io) : LinearLayout(ctx) {
         if (arriba) shiftActivo = false
         poblarFilaShift()
     }
+
+    // Blancos para la demo de primer uso. Los botones se recrean en cada repoblado y la
+    // fila entera se vacía con el QWERTY arriba: null → el paso de la demo se salta solo.
+    fun vistaChevron(): View = chevron
+    fun vistaFilaShift(): View? = filaShift.takeIf { it.childCount > 0 }
+    fun vistaSel(): View? = botonSel
+    fun vistaMic(): View? = botonMic
 
     /** Suelta Ctrl y Alt: se llama después de consumir un carácter modificado. */
     fun soltarModificadores() {

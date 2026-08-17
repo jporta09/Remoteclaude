@@ -46,7 +46,8 @@ class ClipboardE2ETest {
         fx.killAllTmux()
         HostKeys.forget(ctx, host, port)
         ctx.getSharedPreferences("remotemarvin", Context.MODE_PRIVATE).edit()
-            .remove("tabs_e2e-clip").remove("active_e2e-clip").commit()
+            .remove("tabs_e2e-clip").remove("active_e2e-clip")
+            .putBoolean("tour_off", true).commit()
     }
 
     @After fun tearDown() { runCatching { fx.killAllTmux() } }

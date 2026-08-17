@@ -44,6 +44,8 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var control: RemoteControl
     private lateinit var keyPair: java.security.KeyPair
+    private lateinit var barraHost: View
+    private var demoPendiente = false
     private val prefs by lazy { getSharedPreferences("remotemarvin", Context.MODE_PRIVATE) }
     private val monoFont: Typeface by lazy { resources.getFont(R.font.mononoki) }
 
@@ -76,9 +78,13 @@ class MainActivity : AppCompatActivity() {
         hostLabel = intent.getStringExtra("label") ?: host
 
         aplicarColoresDeMarca()
+        // Con la demo pendiente el teclado arranca cerrado: si no, tapa la fila
+        // Shift/Sel/Dictar que la demo tiene que mostrar, y el resize mueve todo.
+        demoPendiente = Tour.pendiente(this, "terminal")
         window.setSoftInputMode(
             WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE or
-                WindowManager.LayoutParams.SOFT_INPUT_STATE_VISIBLE
+                if (demoPendiente) WindowManager.LayoutParams.SOFT_INPUT_STATE_HIDDEN
+                else WindowManager.LayoutParams.SOFT_INPUT_STATE_VISIBLE
         )
 
         keyPair = KeyStoreSsh.getOrCreateKeyPair()
@@ -125,6 +131,14 @@ class MainActivity : AppCompatActivity() {
                 terminalView.attachSession(sesion)
                 terminalView.onScreenUpdated()
                 terminalView.requestFocus()
+                // La demo arranca recién acá: con la primera pestaña activa la barra ya
+                // está poblada y todos los blancos existen.
+                if (demoPendiente) {
+                    demoPendiente = false
+                    terminalView.post {
+                        Tour.lanzar(this, "terminal", pasosDemo()) { mostrarTeclado() }
+                    }
+                }
             },
             acciones = object : TabsController.Acciones {
                 override fun abrirVisor() = abrirOtraPantalla(DisplayActivity::class.java)
@@ -133,9 +147,10 @@ class MainActivity : AppCompatActivity() {
             },
         )
 
+        barraHost = barraDeHost()
         setContentView(LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            addView(barraDeHost(), LinearLayout.LayoutParams(Paleta.MATCH, Paleta.WRAP))
+            addView(barraHost, LinearLayout.LayoutParams(Paleta.MATCH, Paleta.WRAP))
             addView(tabs.vista, LinearLayout.LayoutParams(Paleta.MATCH, Paleta.WRAP))
             addView(terminalView, LinearLayout.LayoutParams(Paleta.MATCH, 0, 1f))
             addView(burbuja, LinearLayout.LayoutParams(Paleta.MATCH, Paleta.WRAP))
@@ -147,8 +162,82 @@ class MainActivity : AppCompatActivity() {
         tabs.restaurarOCrear()
 
         terminalView.requestFocus()
-        terminalView.post { mostrarTeclado() }
+        if (!demoPendiente) terminalView.post { mostrarTeclado() }
     }
+
+    /** Los pasos de la demo de la terminal, de arriba hacia abajo de la pantalla. */
+    private fun pasosDemo() = listOf(
+        Tour.Paso(
+            "Conectado a tu host",
+            "Esta barra dice a qué máquina estás enchufado. Tocala para volver a la " +
+                "lista de hosts.",
+            blanco = { barraHost },
+        ),
+        Tour.Paso(
+            "Pestañas = sesiones tmux",
+            "Cada pestaña sigue viva en el host aunque cierres la app. Mantené apretado " +
+                "el nombre para renombrarla; la ✕ la cierra.",
+            blanco = { tabs.chipActivo() },
+        ),
+        Tour.Paso(
+            "Más sesiones en paralelo",
+            "Con + abrís otra pestaña: ideal para un Claude por proyecto.",
+            blanco = { tabs.botonBarra("Pestaña nueva") },
+            preparar = { tabs.scrollAlFinal() },
+        ),
+        Tour.Paso(
+            "Reenganchar",
+            "¿Quedó una sesión viva en el host pero cerrada acá? Desde este botón la " +
+                "recuperás, con un vistazo de su última línea.",
+            blanco = { tabs.botonBarra("Reenganchar una sesión") },
+        ),
+        Tour.Paso(
+            "Visor del escritorio",
+            "Abre el escritorio del host (noVNC): para cuando Claude usa el navegador " +
+                "con cabeza.",
+            blanco = { tabs.botonBarra("Ver el escritorio del host") },
+        ),
+        Tour.Paso(
+            "Documentos",
+            "Lo que Claude comparte con marvin-share aparece acá: imágenes, PDFs y texto.",
+            blanco = { tabs.botonBarra("Documentos compartidos") },
+        ),
+        Tour.Paso(
+            "Tu clave pública",
+            "La clave SSH de este teléfono, para autorizarla en authorized_keys de " +
+                "otro host.",
+            blanco = { tabs.botonBarra("Clave pública de la app") },
+        ),
+        Tour.Paso(
+            "La terminal",
+            "Pellizcá para agrandar o achicar la letra. Tocá para abrir el teclado.",
+            blanco = { terminalView },
+        ),
+        Tour.Paso(
+            "Más teclas",
+            "El › cambia Esc/Tab/Ctrl/Alt por Home/End/PgUp/PgDn. PgUp y PgDn vienen " +
+                "bárbaro para scrollear lo que contesta Claude.",
+            blanco = { keypad.vistaChevron() },
+        ),
+        Tour.Paso(
+            "Estas teclas van y vienen",
+            "Shift, Sel y Dictar viven en esta fila. Cuando el teclado del sistema " +
+                "sube, la fila se esconde para dejar lugar: cerrá el teclado y vuelve.",
+            blanco = { keypad.vistaFilaShift() },
+        ),
+        Tour.Paso(
+            "Copiar sin sufrir",
+            "Sel: arrastrá el dedo para marcar líneas y al soltar se copian solas. Es " +
+                "la forma recomendada de copiar comandos.",
+            blanco = { keypad.vistaSel() },
+        ),
+        Tour.Paso(
+            "Dictado por voz",
+            "Mantené apretado y hablá: rojo graba, … transcribe, y el texto cae en la " +
+                "terminal. Soltá para terminar.",
+            blanco = { keypad.vistaMic() },
+        ),
+    )
 
     override fun onDestroy() {
         try { connectivity.unregisterNetworkCallback(networkCallback) } catch (_: Exception) {}

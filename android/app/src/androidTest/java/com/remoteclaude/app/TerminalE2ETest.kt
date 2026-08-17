@@ -60,6 +60,7 @@ class TerminalE2ETest {
             .edit()
             .remove("tabs_${hostId(fixturePort)}").remove("active_${hostId(fixturePort)}")
             .remove("tabs_${hostId(rotatedPort)}").remove("active_${hostId(rotatedPort)}")
+            .putBoolean("tour_off", true)
             .commit()
     }
 

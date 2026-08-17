@@ -38,7 +38,8 @@ class TabsE2ETest {
         fx.killAllTmux()
         HostKeys.forget(ctx, host, port)
         ctx.getSharedPreferences("remotemarvin", Context.MODE_PRIVATE).edit()
-            .remove("tabs_e2e-tabs").remove("active_e2e-tabs").commit()
+            .remove("tabs_e2e-tabs").remove("active_e2e-tabs")
+            .putBoolean("tour_off", true).commit()
     }
 
     @After fun tearDown() { runCatching { fx.killAllTmux() } }
