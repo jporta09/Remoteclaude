@@ -93,7 +93,7 @@ class ReleaseCajaNegraTest {
      * primera corrida la ve y no se puede exigir que esté.
      */
     private fun saltarDemoSiAparece() {
-        device.wait(Until.findObject(By.text("Saltar demo")), 3_000)?.click()
+        device.wait(Until.findObject(By.text("Omitir demo")), 3_000)?.click()
         device.waitForIdle(1_000)
     }
 

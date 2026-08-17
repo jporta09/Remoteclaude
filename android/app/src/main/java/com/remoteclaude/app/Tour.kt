@@ -9,7 +9,7 @@ import android.view.ViewGroup
  * Demo de primer uso: burbujas que resaltan un lugar de la pantalla y lo explican, una
  * secuencia corta por pantalla, disparada la primera vez que el usuario entra a cada una.
  *
- * El overlay bloquea y narra (tocar avanza, "Saltar demo" corta): dejar pasar el toque al
+ * El overlay bloquea y narra (tocar avanza, "Omitir demo" corta): dejar pasar el toque al
  * elemento real dispararía acciones a mitad de demo, y la barra de pestañas se
  * reconstruye entera en cada cambio, así que los blancos son lambdas que se re-evalúan
  * al mostrar cada paso — nunca referencias guardadas.

@@ -20,7 +20,7 @@ import android.widget.TextView
 
 /**
  * La capa que dibuja la demo: scrim oscuro con un agujero sobre el blanco del paso y una
- * burbuja de texto al lado. Tocar en cualquier lado avanza; "Saltar demo" cierra.
+ * burbuja de texto al lado. Tocar en cualquier lado avanza; "Omitir demo" cierra.
  *
  * La geometría de agujero y burbuja usa el chaflán (esquinas cortadas) de la cápsula del
  * isotipo — la app no tiene ni una esquina redondeada y acá tampoco.
@@ -67,7 +67,7 @@ class TourOverlay(
         visibility = GONE
     }
     private val saltar = TextView(ctx).apply {
-        text = "Saltar demo"
+        text = "Omitir demo"
         typeface = context.fuenteDetalle()
         setTextColor(Paleta.CHEV_FG)
         setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
@@ -128,7 +128,7 @@ class TourOverlay(
         cuerpo.text = paso.texto
         codigo.text = paso.codigo ?: ""
         codigo.visibility = if (paso.codigo != null) VISIBLE else GONE
-        contador.text = "${i + 1}/${pasos.size} · tocá para seguir"
+        contador.text = "${i + 1}/${pasos.size} · toque para continuar"
         colocar()
         announceForAccessibility("${paso.titulo}. ${paso.texto}")
     }

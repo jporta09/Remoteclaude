@@ -106,7 +106,7 @@ class DisplayActivity : AppCompatActivity() {
             Tour.lanzar(this, "display", listOf(
                 Tour.Paso(
                     "Controles del visor",
-                    "Tocá ▴ Controles para elegir cómo ver el escritorio del host.",
+                    "Toque ▴ Controles para elegir cómo ver el escritorio del host.",
                     blanco = { handle },
                 ),
             ))
@@ -293,15 +293,16 @@ class DisplayActivity : AppCompatActivity() {
             Tour.lanzar(this, "display_panel", listOf(
                 Tour.Paso(
                     "Pantalla",
-                    "El escritorio se adapta al teléfono. El modo de todos los días.",
+                    "El escritorio se adapta al tamaño del teléfono. Es el modo habitual.",
                     blanco = { btnFit },
                 ),
                 // El botón Zoom queda INVISIBLE en modo Pantalla (reserva el lugar), así
                 // que su explicación va acá y no en un paso propio que casi nunca se vería.
                 Tour.Paso(
                     "Escritorio",
-                    "El escritorio completo en 1920×1080, como en un monitor. Ahí se " +
-                        "prende Zoom: pellizcá para acercar re-nítido, arrastrá para moverte.",
+                    "Muestra el escritorio completo en 1920×1080, como en un monitor. " +
+                        "En este modo se habilita Zoom: pellizque para acercar con " +
+                        "nitidez y arrastre para desplazarse.",
                     blanco = { btnDesk },
                 ),
             ))

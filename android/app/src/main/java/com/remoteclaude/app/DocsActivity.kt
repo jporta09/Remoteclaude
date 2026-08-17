@@ -95,13 +95,14 @@ class DocsActivity : AppCompatActivity() {
             Tour.lanzar(this, "docs", listOf(
                 Tour.Paso(
                     "Documentos compartidos",
-                    "Acá cae lo que Claude comparte desde el host con: marvin-share " +
-                        "archivo. Tocá uno para abrirlo.",
+                    "Aquí aparecen los archivos que Claude comparte desde el host con: " +
+                        "marvin-share archivo. Toque uno para abrirlo.",
                     blanco = { status },
                 ),
                 Tour.Paso(
                     "Actualizar",
-                    "La lista no se refresca sola: tocá ⟳ después de pedirle algo a Claude.",
+                    "La lista no se actualiza sola: toque ⟳ después de pedirle algo " +
+                        "a Claude.",
                     blanco = { botonRecargar },
                 ),
             ))

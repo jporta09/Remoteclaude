@@ -168,73 +168,75 @@ class MainActivity : AppCompatActivity() {
     /** Los pasos de la demo de la terminal, de arriba hacia abajo de la pantalla. */
     private fun pasosDemo() = listOf(
         Tour.Paso(
-            "Conectado a tu host",
-            "Esta barra dice a qué máquina estás enchufado. Tocala para volver a la " +
+            "Host conectado",
+            "Esta barra indica a qué equipo está conectado. Tóquela para volver a la " +
                 "lista de hosts.",
             blanco = { barraHost },
         ),
         Tour.Paso(
             "Pestañas = sesiones tmux",
-            "Cada pestaña sigue viva en el host aunque cierres la app. Mantené apretado " +
-                "el nombre para renombrarla; la ✕ la cierra.",
+            "Cada pestaña es una sesión tmux que sigue activa en el host aunque se " +
+                "cierre la aplicación. Mantenga presionado el nombre para renombrarla; " +
+                "la ✕ la cierra.",
             blanco = { tabs.chipActivo() },
         ),
         Tour.Paso(
-            "Más sesiones en paralelo",
-            "Con + abrís otra pestaña: ideal para un Claude por proyecto.",
+            "Sesiones en paralelo",
+            "El botón + abre otra pestaña: útil para tener un Claude por proyecto.",
             blanco = { tabs.botonBarra("Pestaña nueva") },
             preparar = { tabs.scrollAlFinal() },
         ),
         Tour.Paso(
-            "Reenganchar",
-            "¿Quedó una sesión viva en el host pero cerrada acá? Desde este botón la " +
-                "recuperás, con un vistazo de su última línea.",
+            "Reenganchar sesiones",
+            "Si una sesión quedó activa en el host pero cerrada en la aplicación, " +
+                "este botón permite recuperarla, con una vista previa de su última línea.",
             blanco = { tabs.botonBarra("Reenganchar una sesión") },
         ),
         Tour.Paso(
             "Visor del escritorio",
-            "Abre el escritorio del host (noVNC): para cuando Claude usa el navegador " +
-                "con cabeza.",
+            "Abre el escritorio del host (noVNC), para cuando Claude usa el navegador " +
+                "en modo visible.",
             blanco = { tabs.botonBarra("Ver el escritorio del host") },
         ),
         Tour.Paso(
             "Documentos",
-            "Lo que Claude comparte con marvin-share aparece acá: imágenes, PDFs y texto.",
+            "Los archivos que Claude comparte con marvin-share aparecen ahí: " +
+                "imágenes, PDF y texto.",
             blanco = { tabs.botonBarra("Documentos compartidos") },
         ),
         Tour.Paso(
-            "Tu clave pública",
-            "La clave SSH de este teléfono, para autorizarla en authorized_keys de " +
-                "otro host.",
+            "Clave pública del teléfono",
+            "Muestra la clave SSH de este teléfono, para autorizarla en el archivo " +
+                "authorized_keys de otro host.",
             blanco = { tabs.botonBarra("Clave pública de la app") },
         ),
         Tour.Paso(
             "La terminal",
-            "Pellizcá para agrandar o achicar la letra. Tocá para abrir el teclado.",
+            "Pellizque para ajustar el tamaño de la letra. Toque para abrir el teclado.",
             blanco = { terminalView },
         ),
         Tour.Paso(
             "Más teclas",
-            "El › cambia Esc/Tab/Ctrl/Alt por Home/End/PgUp/PgDn. PgUp y PgDn vienen " +
-                "bárbaro para scrollear lo que contesta Claude.",
+            "El botón › alterna Esc/Tab/Ctrl/Alt por Home/End/PgUp/PgDn. PgUp y PgDn " +
+                "sirven para desplazarse por las respuestas de Claude.",
             blanco = { keypad.vistaChevron() },
         ),
         Tour.Paso(
-            "Estas teclas van y vienen",
+            "Una fila que aparece y desaparece",
             "Shift, Sel y Dictar viven en esta fila. Cuando el teclado del sistema " +
-                "sube, la fila se esconde para dejar lugar: cerrá el teclado y vuelve.",
+                "está abierto, la fila se oculta para dejar espacio; al cerrarlo, vuelve.",
             blanco = { keypad.vistaFilaShift() },
         ),
         Tour.Paso(
-            "Copiar sin sufrir",
-            "Sel: arrastrá el dedo para marcar líneas y al soltar se copian solas. Es " +
-                "la forma recomendada de copiar comandos.",
+            "Copiar con Sel",
+            "Con Sel activado, arrastre el dedo para marcar líneas; al soltar se " +
+                "copian automáticamente. Es la forma recomendada de copiar comandos.",
             blanco = { keypad.vistaSel() },
         ),
         Tour.Paso(
             "Dictado por voz",
-            "Mantené apretado y hablá: rojo graba, … transcribe, y el texto cae en la " +
-                "terminal. Soltá para terminar.",
+            "Mantenga presionado el botón y hable: rojo indica que graba, … que " +
+                "transcribe, y el texto aparece en la terminal. Suelte para terminar.",
             blanco = { keypad.vistaMic() },
         ),
     )

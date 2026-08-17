@@ -120,39 +120,42 @@ class HostsActivity : AppCompatActivity() {
 
     private fun pasosDemo() = listOf(
         Tour.Paso(
-            "¡Hola! Esto es RemoteMarvin",
-            "Tu terminal para manejar Claude en tu PC desde el teléfono. " +
-                "Te muestro lo básico en un minuto: tocá para seguir.",
+            "Bienvenida a RemoteMarvin",
+            "RemoteMarvin es una terminal para controlar Claude en su PC desde el " +
+                "teléfono. Esta guía muestra las funciones básicas de cada pantalla: " +
+                "toque en cualquier lugar para continuar.",
         ),
         Tour.Paso(
-            "Primero, prepará la PC",
-            "Una sola vez en tu PC: cloná el repo de RemoteMarvin y corré estos " +
-                "comandos. Dejan SSH, tmux y los daemons listos — y el manual completo " +
-                "te queda después en Documentos.",
+            "Preparación de la PC",
+            "Antes de conectarse, la PC debe configurarse una única vez: clone el " +
+                "repositorio de RemoteMarvin y ejecute estos comandos. Dejan listos " +
+                "SSH, tmux y los servicios; el manual completo quedará luego " +
+                "disponible en Documentos.",
             codigo = "bash scripts/setup-host.sh\ndocker compose up -d --build",
         ),
         Tour.Paso(
-            "Agregá tu primer host",
-            "Tocá acá y cargá tu PC o server: nombre, IP y usuario. Después, la tarjeta " +
-                "se toca para conectar y se mantiene apretada para editar o borrar.",
+            "Agregar un host",
+            "Toque este botón para registrar su PC o servidor: nombre, IP y usuario. " +
+                "La tarjeta creada se toca para conectar, y se mantiene presionada " +
+                "para editar o eliminar.",
             blanco = { botonAgregar },
         ),
         Tour.Paso(
-            "Conectate desde cualquier lado",
-            "Tocá esta línea para usar el Tailscale embebido: en la PC corré ts-link-qr " +
-                "y escaneá el QR. Sin IP fija ni abrir puertos.",
+            "Conexión desde cualquier red",
+            "Toque esta línea para activar el Tailscale integrado: en la PC ejecute " +
+                "ts-link-qr y escanee el código QR. No requiere IP fija ni abrir puertos.",
             blanco = { vpnStatus },
         ),
         Tour.Paso(
-            "Eso es todo por acá",
-            "Cada pantalla nueva trae su propia mini-demo. Para repetir esta, " +
-                "mantené apretado \"_hosts\".",
+            "Fin de esta guía",
+            "Cada pantalla nueva presenta su propia guía la primera vez que se abre. " +
+                "Para repetir esta, mantenga presionado el subtítulo \"_hosts\".",
         ),
     )
 
     private fun preguntarRepetirDemo() {
         AlertDialog.Builder(this)
-            .setMessage("¿Repetir la demo de primer uso?")
+            .setMessage("¿Repetir la demostración de primer uso?")
             .setPositiveButton("Repetir") { _, _ ->
                 Tour.reiniciar(this)
                 Tour.lanzar(this, "hosts", pasosDemo())

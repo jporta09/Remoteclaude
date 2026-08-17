@@ -18,7 +18,7 @@ import java.util.concurrent.TimeUnit
 
 /**
  * La demo de primer uso, sobre la pantalla de hosts (no necesita fixture SSH): con prefs
- * vírgenes aparece, tocar avanza, "Saltar demo" cierra y persiste, y no vuelve a salir.
+ * vírgenes aparece, tocar avanza, "Omitir demo" cierra y persiste, y no vuelve a salir.
  */
 @RunWith(AndroidJUnit4::class)
 class TourE2ETest {
@@ -53,8 +53,8 @@ class TourE2ETest {
                 ahora.isNotEmpty() && ahora != antes
             }
 
-            esc.onActivity { a -> textoExacto(overlay(a)!!, "Saltar demo")!!.performClick() }
-            esperar("que Saltar cierre la demo") { overlay(esc) == null }
+            esc.onActivity { a -> textoExacto(overlay(a)!!, "Omitir demo")!!.performClick() }
+            esperar("que Omitir cierre la demo") { overlay(esc) == null }
             assertThat(prefs.getBoolean("tour_hosts", false)).isTrue()
         }
 
@@ -85,7 +85,7 @@ class TourE2ETest {
         buscar(a.window.decorView) { it is TourOverlay } as TourOverlay?
 
     private fun contador(o: TourOverlay): String =
-        (buscar(o) { it is TextView && it.text.toString().contains("tocá para seguir") } as TextView)
+        (buscar(o) { it is TextView && it.text.toString().contains("toque para continuar") } as TextView)
             .text.toString()
 
     private fun textoExacto(o: TourOverlay, texto: String): View? =
