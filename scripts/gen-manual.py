@@ -14,6 +14,7 @@ from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.platypus import (
     BaseDocTemplate,
     Frame,
+    Image,
     NextPageTemplate,
     PageBreak,
     PageTemplate,
@@ -72,8 +73,14 @@ smallB = ParagraphStyle("smallB", parent=small, fontName="DetailB", textColor=IN
 icon = ParagraphStyle("icon", fontName="Sym", fontSize=13, textColor=GREEN, leading=16)
 
 
+def ic(nombre, lado=0.5):
+    """Ícono real de la app (scripts/manual-assets, generados de los VectorDrawable en
+    variante negativo: figura petróleo + acento verde, para página clara)."""
+    return Image(f"scripts/manual-assets/ic_{nombre}.png", width=lado * cm, height=lado * cm)
+
+
 _SYMS = {"→": "&#8594;", "✓": "&#10003;", "⟳": "&#10227;", "▸": "&#9656;",
-         "•": "&#8226;", "⇧": "&#8679;"}
+         "•": "&#8226;", "⇧": "&#8679;", "✕": "&#10005;", "⚡": "&#9889;"}
 # Emoji de los botones de la app. Van en otra fuente que los símbolos de arriba porque
 # DejaVu no los tiene y Noto Emoji no tiene los otros.
 _EMOJI = {"🎤": "&#127908;", "🖥": "&#128421;", "📄": "&#128196;", "🔑": "&#128273;"}
@@ -225,16 +232,34 @@ S.append(B("<b>Multi-pestaña</b>: varias sesiones a la vez, con “+”. Cada h
 S.append(B("<b>Teclado extra</b>: Ctrl / Alt / Shift, flechas, Tab y ⇧Tab — las teclas "
            "que un teclado de celu no tiene. Ctrl, Alt y Shift quedan <i>pegados</i>: los "
            "tocás y modifican la tecla siguiente."))
-S.append(B("<b>Portapapeles</b>: con “Sel” arrastrás el dedo para marcar texto y al soltar "
-           "queda en el portapapeles del teléfono."))
+S.append(B("El <b>›</b> del borde derecho da vuelta la fila: aparecen <b>Home / End / "
+           "PgUp / PgDn</b> — que además son las teclas de scroll de Claude Code."))
+S.append(B("<b>Zoom</b>: pellizcá para agrandar o achicar la letra de la terminal."))
+S.append(B("<b>Renombrar una pestaña</b>: dejá apretado el nombre. Renombra también la "
+           "sesión tmux en el host."))
+S.append(B("Al <b>cerrar una pestaña</b> (✕) la app pregunta: <i>matar la sesión</i> (se "
+           "pierde lo que corría) o <i>dejarla viva</i> — sigue en el host y la reenganchás "
+           "después con ⟳."))
+
+S.append(P("Copiar: Sel contra la selección del celular", h2))
+S.append(P("Hay dos formas de copiar, y no son equivalentes:"))
+S.append(B("<b>Sel (recomendado)</b>: tu dedo viaja al host como si fuera un mouse, y la "
+           "selección la hace <b>tmux sobre sus líneas lógicas</b>. Un comando que en "
+           "pantalla ocupa 2 o 3 renglones se copia <b>entero y sin relleno</b>: lo pegás y "
+           "ejecuta. Al soltar queda en el portapapeles del teléfono."))
+S.append(B("<b>Selección nativa</b> (mantener apretado): copia lo que se <i>ve</i>, renglón "
+           "por renglón — un comando largo llega cortado con saltos de línea. Sirve para "
+           "fragmentos de una línea o para copiar literalmente la pantalla."))
+S.append(P("Si un programa del host quiere escribir más de 100 KB en tu portapapeles, la "
+           "app pide confirmación antes.", small))
 S.append(P("Barra de la terminal", h2))
 S.append(P("De izquierda a derecha:", small))
 row = Table([
     [P("+", icon), "nueva pestaña"],
-    [P("⟳", icon), "reenganchar sesiones tmux sueltas"],
-    [P("🖥", icon), "abrir el visor del navegador (noVNC)"],
-    [P("📄", icon), "abrir el visor de documentos"],
-    [P("🔑", icon), "ver la clave pública de la app"],
+    [ic("reenganchar"), "reenganchar sesiones tmux sueltas"],
+    [ic("visor"), "abrir el visor del navegador (noVNC)"],
+    [ic("docs"), "abrir el visor de documentos"],
+    [ic("clave"), "ver la clave pública de la app"],
 ], colWidths=[2.2 * cm, 10.2 * cm])
 row.setStyle(TableStyle([
     ("FONTNAME", (1, 0), (1, -1), "Body"),
@@ -250,16 +275,38 @@ row.setStyle(TableStyle([
 S.append(row)
 S.append(Spacer(1, 6))
 
-# --- 6. Dictado -------------------------------------------------------------
+# --- 6. Claude Code ----------------------------------------------------------
+S.append(P("Claude Code en el celular", h1))
+S.append(P("La app arranca Claude Code en <b>modo fullscreen</b> (pantalla alternativa). "
+           "Es la diferencia entre que el chat “se rompa” o no: en el modo clásico la "
+           "interfaz deja cuadros viejos en el historial de tmux, y un scroll con el dedo "
+           "te metía en ese historial sucio — pantalla congelada, flechas que no responden, "
+           "respuestas de preguntas mezcladas. En fullscreen el historial queda limpio y "
+           "Claude captura el mouse, así que:"))
+S.append(B("<b>Scrollear con el dedo</b> mueve la conversación <i>en vivo</i> — también "
+           "dentro de diálogos de opciones largos. Nunca te caés a una foto vieja."))
+S.append(B("<b>PgUp / PgDn</b> (bajo el ›) también scrollean la conversación."))
+S.append(B("Para <b>buscar en el historial</b>: Ctrl+O abre la transcripción completa, "
+           "con “/” para buscar. Ctrl+O de nuevo vuelve al chat."))
+S.append(P("Si algún día lo querés desactivar, adentro de Claude: "
+           "<font name='Mono' size='9'>/tui default</font> (y "
+           "<font name='Mono' size='9'>/tui fullscreen</font> lo devuelve).", small))
+
+# --- 7. Dictado -------------------------------------------------------------
 S.append(P("Dictado por voz", h1))
-S.append(P("Mantené apretado <b>🎤 Dictar</b> y hablá: al soltar, el texto aparece en la "
+S.append(P("Mantené apretado <b>Dictar</b> (el micrófono) y hablá: al soltar, el texto aparece en la "
            "terminal como si lo hubieras tipeado. <b>Sin Enter</b>, así lo revisás antes de "
            "mandarlo."))
 S.append(B("Si la PC tiene GPU, vas viendo el texto <b>en vivo</b> mientras hablás."))
 S.append(B("El audio se transcribe <b>en tu PC</b> (faster-whisper), no en un servicio de "
            "terceros, y viaja por tu propia conexión."))
 S.append(B("El motor se apaga solo tras un rato sin uso para liberar la memoria de la "
-           "placa; se enciende de nuevo al dictar."))
+           "placa; se enciende de nuevo al dictar. Si preferís que quede <b>siempre "
+           "encendido</b> (responde al instante, a costa de ~2 GB de VRAM), activá "
+           "“⚡ Dictado siempre encendido” editando el host — el modo vive en la PC, no en "
+           "el teléfono."))
+S.append(B("El botón te habla con el color: <b>rojo</b> = grabando, <b>verde</b> = "
+           "transcribiendo, normal = listo."))
 
 # --- 7. Hosts ---------------------------------------------------------------
 S.append(P("Hosts y autorización", h1))
@@ -275,7 +322,8 @@ S.append(P("La primera vez que conectás, la app <b>memoriza la clave del host</
            "adelante cambia, la conexión se <b>rechaza</b> y te muestra las dos huellas "
            "para que decidas: si reinstalaste el server es esperable, y si no, alguien "
            "puede estar interceptando. Solo la terminal pregunta — el visor, los documentos "
-           "y el dictado fallan sin ofrecer confiar."))
+           "y el dictado fallan sin ofrecer confiar. Al confiar en la clave nueva se "
+           "reconectan <b>todas</b> las pestañas del host, no solo la que preguntó."))
 
 # --- 8. Navegador -----------------------------------------------------------
 S.append(P("Visor de navegador (noVNC)", h1))
@@ -298,6 +346,8 @@ S.append(P("El visor es <b>nativo</b>:"))
 S.append(B("<b>Imágenes</b> (png/jpg/webp…): con pinch-zoom y arrastre."))
 S.append(B("<b>PDF</b>: renderizado página por página."))
 S.append(B("<b>Texto</b> (txt/csv/md/json/…): monospace, scrolleable."))
+S.append(P("Tope de 8 MB por archivo (viaja entero por SSH al celu); más grande, "
+           "conviene achicarlo o partirlo.", small))
 S.append(P("<i>Este mismo manual se generó y se compartió así.</i>", small))
 
 # --- 10. Marca --------------------------------------------------------------

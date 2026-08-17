@@ -445,10 +445,19 @@ Riesgos conocidos del modo (relevados de issues y doc oficial): flicker con tmux
 (este host tiene 3.4; cosmetico, se va con el upgrade), scroll a saltos (ajustable con
 /scroll-speed), y en PC la seleccion nativa del terminal pasa a necesitar Shift+arrastre.
 
-### Pendiente: documentar el Sel en el manual de uso
+### Resuelto: el manual al día con el uso real (ago-2026)
 
-`scripts/gen-manual.py` menciona el Sel en una línea; falta la explicación que importa,
-salida de una pregunta del usuario (ago-2026):
+`gen-manual.py` quedó actualizado con todo lo que la app hacía y el manual no contaba:
+la sección "Claude Code en el celular" (fullscreen por defecto, scroll en vivo, Ctrl+O,
+PgUp/PgDn, `/tui default`), la subsección de copia Sel vs nativa (el texto de abajo,
+portado), el interruptor "⚡ Dictado siempre encendido" y los colores del micrófono,
+pinch-zoom, renombrar pestañas (long-press), el diálogo de cierre matar/dejar viva,
+la fila oculta del `›` (Home/End/PgUp/PgDn), el consentimiento OSC 52 >100 KB, que
+confiar en una clave nueva reconecta todas las pestañas, y el tope de 8 MB del visor
+de documentos. La tabla de la barra usa ahora los íconos vectoriales reales
+(`scripts/manual-assets/ic_*.png`, variante negativo, generados de los VectorDrawable).
+
+Lo que motivó la subsección de copia, salido de una pregunta del usuario:
 
 - **Cuándo usar cada copia**: el long-press nativo selecciona sobre el búfer local de la
   app, y con tmux en el medio cada fila llega redibujada por separado — el motor nunca ve
