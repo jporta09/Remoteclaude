@@ -80,7 +80,7 @@ def ic(nombre, lado=0.5):
 
 
 _SYMS = {"→": "&#8594;", "✓": "&#10003;", "⟳": "&#10227;", "▸": "&#9656;",
-         "•": "&#8226;", "⇧": "&#8679;", "✕": "&#10005;", "⚡": "&#9889;"}
+         "•": "&#8226;", "⇧": "&#8679;", "✕": "&#10005;", "⚡": "&#9889;", "⇅": "&#8645;"}
 # Emoji de los botones de la app. Van en otra fuente que los símbolos de arriba porque
 # DejaVu no los tiene y Noto Emoji no tiene los otros.
 _EMOJI = {"🎤": "&#127908;", "🖥": "&#128421;", "📄": "&#128196;", "🔑": "&#128273;"}
@@ -335,19 +335,30 @@ S.append(P("No está publicado en la red: viaja tunelizado por tu propia conexi�
            small))
 
 # --- 9. Documentos ----------------------------------------------------------
-S.append(P("Visor de documentos", h1))
-S.append(P("El botón de la <b>hoja</b> muestra los documentos que se comparten desde la PC "
-           "(<font name='Mono' size='9'>~/RemoteMarvinDocs</font>). Se comparten con:"))
+S.append(P("Documentos", h1))
+S.append(P("El botón de la <b>hoja</b> abre los documentos, que van en <b>dos "
+           "direcciones</b>. Lo que la PC comparte con:"))
 S.append(C("marvin-share informe.pdf grafico.png datos.csv"))
-S.append(P("que viene con el plugin de Claude. Funciona también desde un server remoto al "
-           "que hayas entrado por SSH <i>desde la app</i>: el documento igual aterriza en la "
-           "PC que estás mirando."))
+S.append(P("(viene con el plugin de Claude, y funciona también desde un server remoto al "
+           "que hayas entrado por SSH <i>desde la app</i>: el documento igual aterriza en "
+           "la PC que estás mirando). Y lo que subís <b>desde el teléfono</b>:"))
+S.append(B("<b>Subir</b>: el botón <b>+</b> abre el selector de Android (se pueden "
+           "elegir varios). Los archivos caen en "
+           "<font name='Mono' size='9'>~/RemoteMarvinDocs/subidos/</font> del host — "
+           "separados de lo de Claude — y la lista los muestra en su propia sección. "
+           "Tope de 25 MB por archivo."))
+S.append(B("<b>Ordenar</b>: el botón <b>⇅</b> elige el criterio — nombre, tamaño, tipo, "
+           "fecha de creación o de modificación — y la dirección. Queda guardado. "
+           "“Creación” depende de que el disco del host la registre; si no, se usa "
+           "modificación."))
+S.append(B("<b>Borrar</b>: mantené apretada la tarjeta y confirmá. El borrado es "
+           "<b>en el host</b> y no se puede deshacer."))
 S.append(P("El visor es <b>nativo</b>:"))
 S.append(B("<b>Imágenes</b> (png/jpg/webp…): con pinch-zoom y arrastre."))
 S.append(B("<b>PDF</b>: renderizado página por página."))
 S.append(B("<b>Texto</b> (txt/csv/md/json/…): monospace, scrolleable."))
-S.append(P("Tope de 8 MB por archivo (viaja entero por SSH al celu); más grande, "
-           "conviene achicarlo o partirlo.", small))
+S.append(P("El visor abre archivos de hasta 8 MB (viajan enteros por SSH al celu); más "
+           "grandes se pueden subir igual, pero se miran desde la terminal.", small))
 S.append(P("<i>Este mismo manual se generó y se compartió así.</i>", small))
 
 # --- 10. Marca --------------------------------------------------------------
