@@ -121,8 +121,9 @@ class HostsActivity : AppCompatActivity() {
     private fun pasosDemo() = listOf(
         Tour.Paso(
             "Bienvenida a RemoteMarvin",
-            "RemoteMarvin es una terminal para controlar Claude en su PC desde el " +
-                "teléfono. Esta guía muestra las funciones básicas de cada pantalla: " +
+            "RemoteMarvin sistematiza la conexión con sus PC locales y servidores " +
+                "desde el teléfono, orientado al desarrollo de software con Claude " +
+                "Code. Esta guía muestra las funciones básicas de cada pantalla: " +
                 "toque en cualquier lugar para continuar.",
         ),
         Tour.Paso(
