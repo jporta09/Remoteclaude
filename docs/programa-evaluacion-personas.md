@@ -1,0 +1,510 @@
+# Programa de evaluación por perfiles — RemoteMarvin
+
+RemoteMarvin creció hasta ser una app con muchas superficies (terminal SSH+tmux, Tailscale
+embebido, visor noVNC, documentos bidireccionales, dictado por voz, plugin de skills, demo
+de primer uso) y hasta ahora la evaluó una sola persona: su autor. Este documento es un
+**programa de evaluación por perfiles**: qué profesional exploraría la app, con qué método
+formal, y qué tareas concretas correría. El objetivo es descubrir lo que una sola mirada no
+ve — y hacerlo de forma que ocho perfiles distintos produzcan hallazgos comparables y
+priorizables en un único backlog.
+
+Está escrito para ejecutarse de dos maneras (ver el apéndice de ejecución): como agentes
+Claude, uno por perfil, o con personas reales. No hay que correrlo entero: cada charter es
+autónomo.
+
+---
+
+## 1. Marco común
+
+Para que ocho perfiles heterogéneos no produzcan ocho formatos de reporte incompatibles,
+todos comparten tres cosas.
+
+### 1.1 La unidad de trabajo: el charter (SBTM)
+
+Del *Session-Based Test Management* de Bach. Cada exploración es una **sesión** con:
+
+- **Charter** — misión de 1 a 3 líneas, con la forma *"Explorar &lt;área&gt; con &lt;recurso/técnica&gt;
+  para descubrir &lt;tipo de información&gt;"*. Acotado pero no cerrado: deja lugar a la
+  exploración.
+- **Time-box** — 60 a 90 minutos (90 es el óptimo reportado). Si el área es más grande, se
+  parte en varias sesiones.
+- **Notas estructuradas** durante la ejecución: qué se probó, qué se encontró, en qué se fue
+  el tiempo (diseño/ejecución vs. investigar un bug vs. setup).
+- **Debrief PROOF** al cerrar, con quien coordina el programa:
+  - **P**ast — ¿qué pasó en la sesión?
+  - **R**esults — ¿qué se logró?
+  - **O**bstacles — ¿qué estorbó al buen testing?
+  - **O**utlook — ¿qué falta hacer?
+  - **F**eelings — ¿cómo se siente el explorador respecto de todo esto? (la intuición es
+    dato: "esto se siente frágil" merece una sesión de seguimiento).
+
+El charter es el artefacto más reutilizable del programa: la misma plantilla sirve para el
+QA que caza bugs, el pentester que sondea componentes con `adb`, el DevOps que sigue el
+README en una VM limpia y el UX que hace un walkthrough como una persona. Todos reportan en
+el mismo formato.
+
+### 1.2 La escala de severidad unificada
+
+Todo hallazgo —sea de usabilidad, un bug, una vulnerabilidad o un gap operativo— se puntúa
+con la **escala de Nielsen 0-4** cruzada con `probabilidad × impacto` del risk-based testing:
+
+| Sev | Nombre | Criterio |
+|----|--------|----------|
+| 0 | No es problema | Se registra y se descarta. |
+| 1 | Cosmético | Arreglar solo si sobra tiempo. |
+| 2 | Menor | Prioridad baja. |
+| 3 | Mayor | Prioridad alta; importante arreglar. |
+| 4 | Catástrofe | Imperativo antes de exponer la app a otros. |
+
+La severidad sale de **frecuencia** (¿cuántos usuarios lo pegan?) × **impacto** (¿fácil o
+imposible de superar?) × **persistencia** (¿una vez o molesta siempre?). Cuando hay varios
+evaluadores del mismo perfil, puntúan por separado y se promedia.
+
+### 1.3 El cierre
+
+Los hallazgos confirmados entran en la sección **"Lo que queda abierto"** de
+`docs/revision-integral.md`, que es el backlog vivo del proyecto — por la regla de
+superficies ya vigente (todo cambio se refleja en pendientes, manual, demo y skills). Este
+programa alimenta la primera de esas cuatro.
+
+### 1.4 Un punto que tres perfiles miran distinto
+
+Antes de las secciones conviene marcar el hallazgo transversal que ordena el programa. La
+**pantalla de aprobación de acciones del agente en el celular** (cuando Claude Code pide
+permiso para editar, correr un comando, etc., y el usuario decide desde el teléfono) es el
+mismo objeto para tres perfiles:
+
+- **UX** la ve como *visibilidad del estado del sistema* + *prevención de errores*: ¿el
+  usuario entiende qué está por aprobar?
+- **Seguridad** la ve como **ASI09 — Human-Agent Trust Exploitation** + *autonomía excesiva*:
+  ¿se puede engañar al humano para que apruebe algo dañino desde una pantalla chica?
+- **Arquitecto de IA** la ve como el eslabón donde el control humano se degrada: pantalla
+  chica, aprobación por tap, contexto reducido — justo cuando el agente tiene shell (≡ sudo).
+
+Es el candidato natural a severidad 4 y aparece, con lente propia, en tres de las ocho
+secciones. No es redundancia: es triangulación.
+
+---
+
+## 2. Los perfiles
+
+Cada sección trae **misión**, **método** (el marco formal que usa), **charters** en formato
+SBTM, y **qué produce**. Los charters están anclados a features reales de la app —
+verificables contra el repo (`RemoteControl.kt`, `HostKeys.kt`, la demo `Tour.kt`,
+`~/RemoteMarvinDocs/subidos/`, etc.).
+
+---
+
+### A. Usuario final no técnico
+
+**Misión.** Medir la calidad del onboarding **sin el sesgo del autor**: ¿alguien que solo
+sigue la demo y el manual llega a usar la app sin ayuda externa?
+
+**Método.** Onboarding puro. Métrica central: **TTFV** (time-to-first-value) — el "evento de
+valor" acá es *el primer prompt de Claude respondido desde el teléfono*. Complementos: tasa
+de completitud del onboarding, conteo de puntos de abandono. Regla de referencia del campo:
+si no hay valor genuino en los primeros ~15 minutos, la retención cae.
+
+**Charters.**
+
+1. *Explorar el primer arranque desde un teléfono virgen, siguiendo SOLO la demo guiada y el
+   manual PDF de Documentos, para descubrir hasta dónde se llega sin ayuda externa.* (90 min,
+   cronometrar cada hito: instalar → demo → agregar host → enrolar → primera conexión →
+   primer prompt respondido). **Éxito**: llega al primer prompt sin buscar ayuda afuera.
+   **Fallo**: se traba y tiene que preguntarle a alguien o leer el código.
+2. *Explorar la burbuja de bienvenida para descubrir si el usuario entiende QUÉ es la app.*
+   (15 min). Tras leer solo la primera burbuja, ¿puede explicar con sus palabras para qué
+   sirve? (Verifica el texto que ya se corrigió: "sistematiza la conexión con PCs locales y
+   servidores… orientado al desarrollo con Claude Code").
+3. *Explorar la puesta en marcha de la PC siguiendo la demo, para descubrir si el paso del
+   plugin y del setup del host son ejecutables sin conocimiento previo.* (60 min). Ojo: el
+   host requiere una terminal en la PC — ¿la demo asume que el usuario sabe abrir una?
+4. *Explorar la recuperación de un error temprano para descubrir si los mensajes guían.*
+   (45 min). Provocar los tropiezos típicos: PC apagada, clave no autorizada todavía, QR mal
+   escaneado. ¿El mensaje dice qué hacer, o es un callejón?
+
+**Qué produce.** Un TTFV con desglose por hito, la lista ordenada de puntos de abandono, y
+para cada uno la severidad. Es el perfil que más rápido detecta deriva entre la demo/manual
+y la realidad.
+
+---
+
+### B. UX / DevEx
+
+**Misión.** Evaluar la interfaz sin usuarios reales (revisión experta) y la fricción de uso
+diario: aprendibilidad, ergonomía del teclado, copiar/pegar, la demo, los feedback loops.
+
+**Método.** Las **10 heurísticas de Nielsen** como checklist de inspección; **cognitive
+walkthrough** (4 preguntas por cada paso: ¿intentará la acción correcta? ¿verá que está
+disponible? ¿la asociará con su meta? ¿verá progreso al ejecutarla?); heurísticas móviles
+**SMASH**; y un score perceptual con **UMUX-Lite** al cierre (2 ítems: "cumple mis
+requisitos" / "es fácil de usar"; convertible a SUS con `SUS = 0.65 × ((I1+I2−2) × (100/12))
++ 22.9`).
+
+**Charters.**
+
+1. *Cognitive walkthrough del primer arranque (enrolar QR → primera conexión SSH → primer
+   prompt) para descubrir bloqueos de aprendibilidad.* (90 min). Las 4 preguntas en cada
+   paso; un "no" en cualquiera es un hallazgo.
+2. *Explorar la ergonomía de la key row (Esc/Ctrl/Alt/Tab/flechas + fila Shift/Sel/Dictar)
+   para descubrir fricción de tecleo.* (60 min). La ergonomía del teclado es **la queja #1**
+   de todos los clientes SSH móviles del mercado. Verificar: ¿las teclas se aciertan con el
+   dedo (target ≥48dp)? ¿la fila tapa el prompt? ¿Shift+Tab funciona? ¿el chevron `›`
+   descubre Home/End/PgUp/PgDn? ¿se puede usar `vim`?
+3. *Explorar copiar/pegar con "Sel" vs. selección nativa para descubrir si el usuario elige
+   bien.* (45 min). Copiar un comando multilínea y pegarlo: con Sel llega entero (líneas
+   lógicas), con la nativa llega cortado. ¿La app enseña la diferencia o el usuario la
+   descubre a los golpes? (El manual ya lo documenta — ¿alcanza?).
+4. *Evaluar la demo de primer uso contra el consenso UX de onboarding para descubrir si
+   respeta las buenas prácticas.* (45 min). Checklist: ¿es skippeable? ¿re-lanzable
+   (long-press en "_hosts")? ¿hace trabajo real o es un tour de UI? ¿bloquea con modales? El
+   consenso es hostil a los tutoriales obligatorios; la de RemoteMarvin bloquea y narra —
+   ¿es demasiado?
+5. *Explorar los feedback loops del terminal para descubrir latencias que rompen el flow.*
+   (60 min). Medir: eco tecleo→pantalla, tiempo prompt→primer byte de Claude, tiempo de
+   reconexión tras cortar la red. La dimensión DevEx "feedback loops" aplicada.
+6. *Auditoría rápida de accesibilidad para descubrir barreras.* (45 min). Accessibility
+   Scanner + navegar cada pantalla con **TalkBack** una vez. Foco en el punto crítico de un
+   terminal: ¿TalkBack lee la salida de forma usable o un blob ilegible? Targets ≥48dp;
+   contraste del tema (los esquemas ANSI sobre negro casi nunca cumplen 4.5:1). El dictado
+   por voz cuenta como feature de accesibilidad — anotarlo a favor.
+
+**Qué produce.** Los hallazgos de heurística con severidad 0-4, el resultado del cognitive
+walkthrough (paso × pregunta), un score UMUX-Lite/SUS, y el mini-audit de a11y.
+
+---
+
+### C. Dev (código e integración)
+
+**Misión.** Mirar la app como quien la va a usar para programar de verdad y como quien podría
+tocar su código: calidad del canal remoto, del flujo de documentos, y carga cognitiva de la
+arquitectura.
+
+**Método.** Code review dirigido + **FedEx tour** (seguir un dato de punta a punta) + la
+dimensión DevEx **cognitive load**.
+
+**Charters.**
+
+1. *Explorar la lectura de un diff desde el celular para descubrir si se puede decidir con
+   contexto suficiente.* (60 min). Pedirle a Claude un cambio real, y desde el teléfono leer
+   el diff y aprobar/rechazar. La pantalla chica es la limitación estructural que reporta
+   todo el campo ("you just wish you had a bigger screen"). ¿Alcanza para decidir bien?
+2. *FedEx tour: seguir un documento subido desde el teléfono hasta `~/RemoteMarvinDocs/
+   subidos/` y de vuelta a la vista, para descubrir cortes en la cadena.* (45 min). Subir una
+   imagen y un binario; verificar que llegan intactos (el canal es stdin de un `cat` remoto),
+   que Claude los encuentra ("te subí X, mirala"), y que la sección "Subidos desde el celular"
+   los muestra.
+3. *Revisar el canal remoto (`RemoteControl.kt`) para descubrir debilidades de manejo de
+   errores y quoting.* (90 min). Leer `execResult` (¿distingue error de vacío?), el saneo de
+   nombres (`nombreInseguro` + `ShellQuote`), el patrón stdin de `uploadDoc`/`transcribe`.
+   ¿Hay caminos que se traguen el error? (El proyecto ya tiene historia de esto).
+4. *Explorar la carga cognitiva de la arquitectura para descubrir dónde se filtra la
+   complejidad.* (60 min). Contar cuántos conceptos hay que sostener a la vez
+   (Tailscale + SSH + tmux + Claude Code + skills + noVNC) y, cuando algo falla, cuántas capas
+   asoman en el mensaje. El campo reporta esto como el mayor freno de adopción ("a lot of
+   moving parts… impossible for anyone but me to understand").
+
+**Qué produce.** Hallazgos de code review con severidad, un mapa del flujo FedEx con sus
+puntos de corte, y una estimación cualitativa de carga cognitiva por escenario de fallo.
+
+---
+
+### D. QA exploratorio
+
+**Misión.** Romper la app con uso creativo y adversarial: estados raros, secuencias
+inválidas, degradación por tiempo/recursos, interrupciones móviles.
+
+**Método.** SBTM + **tours de Whittaker** (elegidos los de mayor rendimiento para esta app) +
+las heurísticas móviles **I SLICED UP FUN** de Kohl (foco en *Interruptions*, *Network*,
+*Store*, *Ergonomics*).
+
+**Charters (cada uno es un tour).**
+
+1. *Money tour: recorrer las features que la app anuncia (terminal persistente, dictado,
+   documentos bidireccionales, visor noVNC) para descubrir si cumplen lo prometido.* (90 min).
+   Es lo que un usuario paga/espera; empezar por acá.
+2. *Saboteur tour: minar la app cortando recursos a mitad de un run de Claude Code
+   (Tailscale, WiFi, el proceso tmux, la GPU del dictado) para descubrir pérdidas de estado.*
+   (90 min). La reconexión/roaming es la 2ª dimensión más discutida del mercado y donde hay
+   más desacuerdo real.
+3. *Rained-Out tour: cancelar operaciones a mitad de camino (el enrolamiento QR, una subida
+   de archivo grande, una sesión que conecta) para descubrir estados inconsistentes.* (60 min).
+4. *Couch Potato tour: aceptar todos los defaults sin configurar nada, para descubrir si el
+   camino de menor esfuerzo funciona.* (45 min).
+5. *Antisocial / Crime-Spree tour: alimentar datos ilegales (nombres de archivo hostiles con
+   comillas/rutas, secuencias de acciones en orden incorrecto) para descubrir manejo de
+   entradas.* (60 min). Complementa al pentester desde el lado funcional.
+6. *Interrupciones móviles (I SLICED UP FUN → Interruptions/Network): llamada entrante,
+   rotación de pantalla, notificación, app a background, Doze, transición WiFi↔datos, para
+   descubrir qué sobrevive.* (90 min). Batería con sesión activa 1 h; comportamiento tras
+   "clear all recent apps" (los OEMs agresivos matan foreground services).
+
+**Qué produce.** Un session sheet por tour con bugs, issues y el debrief PROOF; los bugs
+entran al backlog con severidad.
+
+---
+
+### E. DevOps senior (puesta en marcha)
+
+**Misión.** ¿El software es *instalable* sin sorpresas? Ergonomía de setup, idempotencia,
+camino de upgrade, desinstalación limpia, y si la documentación describe la realidad.
+
+**Método.** Fase **Analysis** de un PRR (Production Readiness Review de Google SRE) +
+**Guidebook tour** (verificar que la doc coincide con el comportamiento) + el checklist de
+ergonomía de software self-hosted.
+
+**Charters.**
+
+1. *Guidebook tour: instalar desde cero en una VM/host limpio siguiendo el README y la demo
+   AL PIE DE LA LETRA, para descubrir divergencias doc↔realidad.* (90 min). ¿Cuántos comandos
+   hasta funcionar? ¿Detecta prerequisitos (tmux, ssh, docker) o falla críptico? **Verifica
+   el gap que ya apareció una vez**: ¿la puesta en marcha incluye el paso de instalar el
+   plugin de Claude Code (`/plugin marketplace add` + `install`)? Sin él, el host queda
+   andando pero Claude no sabe usar la app.
+2. *Explorar la idempotencia corriendo `setup-host.sh` dos veces, para descubrir efectos
+   acumulativos.* (45 min). ¿Rompe algo? ¿Es declarativo (bloques con sentinelas) o
+   acumulativo? (El proyecto ya invirtió en esto — confirmarlo desde afuera).
+3. *Explorar el camino de upgrade para descubrir incompatibilidades app↔host.* (60 min).
+   Instalar una versión vieja del APK contra un host nuevo y viceversa. ¿Hay versionado?
+   ¿Migraciones? ¿Qué se rompe?
+4. *Explorar la desinstalación para descubrir basura huérfana.* (45 min). ¿Deja units de
+   systemd, claves en `authorized_keys`, un nodo de tailnet enrolado sin dueño? El riesgo de
+   "nodo huérfano" es específico del tailnet embebido.
+5. *Sostener la respuesta a "¿qué hace esto que un Termius + tmux sobre Tailscale no haga?"
+   para descubrir si la diferenciación se sostiene.* (30 min). El escéptico de HN ("what's
+   new? he estado haciendo ssh-on-the-phone forever") es el revisor más duro; hay que tener
+   respuesta medida.
+
+**Qué produce.** Un reporte estilo PRR: hallazgos por las 6 dimensiones que apliquen, con la
+lista de divergencias doc↔realidad como entregable estrella.
+
+---
+
+### F. SRE / operaciones (uso prolongado)
+
+**Misión.** Distinto del DevOps: no el setup sino el **uso sostenido**. Modos de falla,
+observabilidad, comportamiento ante cortes, recuperación.
+
+**Método.** Un **ORR** (Operational Readiness Review) por sus 6 dimensiones (arquitectura y
+dependencias, instrumentación/monitoreo, respuesta a emergencias, capacidad, gestión de
+cambios, performance) + **All-Nighter/Saboteur tours**.
+
+**Charters.**
+
+1. *All-Nighter tour: mantener una sesión tmux viva 24 h+ para descubrir fugas y degradación.*
+   (varias sesiones + observación pasiva). ¿Fugas de memoria/conexiones? ¿Consumo de batería?
+   ¿El foreground service sobrevive a "clear all" y a los OEMs agresivos (Xiaomi/Samsung)?
+   (Termux reporta hasta ~80% de batería sin wakelock — medir el equivalente acá).
+2. *Explorar los modos de falla y sus mensajes para descubrir silencios peligrosos.* (90 min).
+   Provocar cada uno y leer qué dice la app: PC suspendida, tmux muerto, key de Tailscale
+   expirada (el default de 180 días es "potentially catastrophic" si el host solo se alcanza
+   por tailnet), sin GPU para whisper, disco lleno. ¿Mensaje accionable o callejón?
+3. *Explorar la observabilidad para descubrir qué se puede diagnosticar.* (60 min). ¿Dónde
+   están los logs (app y host)? ¿Rotan? ¿Hay health check? ¿Señales para actuar rápido cuando
+   algo se cuelga?
+4. *Explorar la reconexión y el roaming (WiFi↔datos↔avión) para descubrir qué estado se
+   recupera.* (90 min). ¿Vuelve la sesión o solo la conexión? ¿Se recupera el scrollback tras
+   reattach? Comparar la *varianza percibida* de latencia contra el argumento pro-mosh (mosh
+   baja el promedio pero sube la varianza — SSH+tmux es la elección de RemoteMarvin, hay que
+   saber defenderla con datos).
+
+**Qué produce.** Un reporte ORR con el mapa de modos de falla (síntoma → mensaje actual →
+mensaje deseado) y las mediciones de recursos en uso prolongado.
+
+---
+
+### G. Seguridad ofensiva (pentester)
+
+**Misión.** Superficie de ataque de la app en el dispositivo y en el canal: custodia de la
+clave SSH, verificación de host key, componentes Android, clipboard, path traversal, modelo
+de confianza del tailnet.
+
+**Método.** **OWASP MASVS v2.1** (8 categorías) + perfiles **MASTG** (L1/L2/R) + **STRIDE**
+sobre un DFD con los trust boundaries de la app + el checklist de pentest de cliente SSH.
+*Trust boundaries de RemoteMarvin*: teléfono ↔ tailnet ↔ host; app ↔ otras apps Android
+(IPC/clipboard); Claude ↔ contenido no confiable (terminal, docs); usuario ↔ agente autónomo.
+
+**Charters.**
+
+1. *Explorar la custodia de la clave privada (MASVS-STORAGE/CRYPTO) para descubrir exposición.*
+   (90 min). ¿Está en el Android Keystore hardware-backed o en plaintext? ¿`allowBackup=false`
+   y `dataExtractionRules`? ¿Qué expone un teléfono robado/desbloqueado? Recordar el matiz: el
+   Keystore impide **extraer** la clave, no **usarla** — un atacante con el device desbloqueado
+   puede firmar aunque no pueda copiarla.
+2. *Explorar la verificación de host key (el TOFU de `HostKeys`) para descubrir MITM.* (60 min).
+   ¿Se pina en el primer contacto? ¿Advierte al cambiar la clave, o hay algún camino con
+   verificador promiscuo? (Es *la* falla clásica de clientes SSH; la app dice tener pinning en
+   las 5 rutas — confirmarlo, no creerlo).
+3. *Explorar los componentes exportados vía `adb` (MASVS-PLATFORM) para descubrir invocación
+   no autenticada.* (60 min). `AndroidManifest` completo: `exported="true"`, intent-filters
+   `BROWSABLE`, deep links, services y providers. ¿Se puede disparar una conexión o importar
+   credenciales sin confirmación del usuario?
+4. *Explorar clipboard, OSC 52, screenshots y logs para descubrir fugas.* (45 min). ¿La app
+   copia claves/tokens al portapapeles (legible por otras apps)? ¿El diálogo de consentimiento
+   OSC 52 >100 KB cubre el caso? ¿`FLAG_SECURE` en pantallas sensibles? ¿Se loguea la sesión o
+   la authkey de Tailscale a logcat?
+5. *Explorar la subida de documentos para descubrir path traversal.* (45 min). Nombres con
+   `../`, rutas absolutas, bytes raros; ¿se escribe fuera de `~/RemoteMarvinDocs/subidos/`? (La
+   app dice sanear con `nombreInseguro` — probar de romperlo).
+6. *Modelar el tailnet embebido (STRIDE + MASVS-NETWORK) para descubrir riesgos del plano de
+   confianza.* (90 min). ¿Dónde vive la auth key? ¿TTL/preauth? ¿Nodo separado o reusa el
+   existente? ¿ACLs y tags? ¿Qué queda al desinstalar (nodo huérfano en el tailnet)? ¿Coexiste
+   con la app oficial de Tailscale? ¿Qué declara sobre `VpnService` (tsnet userspace
+   probablemente lo evita)?
+
+**Plantilla de hallazgos.** El caso público `pocketshell` (cliente SSH Android con
+verificador de host key promiscuo en producción + APK debug-signed con keystore committeada)
+es el molde de "cómo se ve un hallazgo crítico acá". Verificar que RemoteMarvin no repite
+ninguno: firma de release, keystore fuera del repo, host key pinneada.
+
+**Qué produce.** Un reporte MASVS (control × cumple/no cumple/N-A) + el DFD con STRIDE por
+elemento, hallazgos con severidad y CVSS orientativo.
+
+---
+
+### H. Arquitecto de IA
+
+**Misión.** ¿El andamiaje agéntico es *diseñado* o accidental? Con el agravante de que el
+agente corre en la máquina personal del usuario con shell real (≡ sudo).
+
+**Método.** **OWASP Top 10 for Agentic Applications** (ASI01-10, foco en ASI09 y en
+*Excessive Agency*, que subió al puesto 3 del Top 10 LLM 2026) + evaluación de skills
+(progressive disclosure, calidad de triggers) + análisis de la superficie de prompt
+injection. Referencia contra la cual comparar: el modelo de seguridad oficial de Claude Code
+(permisos read-only por defecto, sandbox del bash tool, working-directory boundary, contexto
+aislado para web fetch, trust verification).
+
+**Charters.**
+
+1. *Explorar la pantalla de aprobación en el celular (ASI09 + autonomía excesiva) para
+   descubrir degradación del control humano.* (90 min). ¿Se lee el diff completo antes de
+   aprobar, o solo un resumen? ¿El "auto mode" está por defecto? ¿Hay kill switch accesible?
+   ¿La app respeta el permission-mode local o duplica decisiones ya tomadas en la PC? (Bug
+   documentado en el propio Claude Code remoto — verificar que RemoteMarvin no lo herede). Es
+   **el charter de severidad potencialmente 4** del programa.
+2. *Explorar la superficie de prompt injection para descubrir canales no confiables tratados
+   como instrucciones.* (90 min). Los dos vectores propios de la app: (a) los documentos que
+   el usuario sube desde el teléfono a `subidos/` (imágenes con texto, PDFs, CSVs) que Claude
+   después lee; (b) la salida de terminal (`cat`, `curl`, logs, mensajes de commit). ¿Se
+   tratan como *datos* o pueden inyectar instrucciones al agente? Un `curl` malicioso cuyo
+   output Claude procese es RCE con privilegios de confianza.
+3. *Evaluar la calidad de las skills del plugin para descubrir si aportan o son ruido.*
+   (60 min). ¿Cada skill *cambia el comportamiento por defecto* del agente, o es solo un
+   comando que hay que acordarse de invocar? (Las buenas desplazan lo que el agente produce
+   sin prompting constante). Dato de referencia: context files escritos por devs mejoran el
+   desempeño ~+4%, los autogenerados que duplican el README lo empeoran ~−3% (ETH Zürich) —
+   ¿las skills de RemoteMarvin aportan señal?
+4. *Evaluar los triggers de las skills para descubrir falsos positivos y coste de contexto.*
+   (45 min). ¿`share-doc` y el router disparan cuando deben? ¿Disparan cuando NO deben? ¿El
+   `description` front-loadea el trigger? ¿`/doctor` muestra desborde de presupuesto de
+   contexto? (Instalar demasiadas skills es "el error más común" por bloat).
+5. *Contrastar el dictado local contra el `/voice` oficial para descubrir el valor real.*
+   (30 min). El `/voice` de Claude Code **es cloud y no funciona por SSH** — justo el
+   escenario de RemoteMarvin. El whisper local en la GPU del host no es una alternativa peor:
+   es la única opción en ese contexto, y resuelve la privacidad. Verificar latencia (Whisper
+   es batch: no emite hasta que soltás), precisión en vocabulario técnico (rutas, `snake_case`,
+   comandos git) y que el audio no salga de la máquina.
+
+**Qué produce.** Un scorecard ASI01-10 (riesgo × mitigación presente/ausente), la evaluación
+de skills (aporta/ruido + triggers), y el mapa de superficie de inyección con las defensas
+existentes.
+
+---
+
+## 3. Apéndices
+
+### 3.1 Tabla maestra — dimensiones × perfil que las sondea
+
+Índice de cobertura: las ~30 dimensiones que emergen del campo real, con el perfil que las
+sondea primero. Sirve para ver que ninguna quede sin dueño y que ningún perfil quede vacío.
+
+| # | Dimensión | Perfil primario |
+|---|-----------|-----------------|
+| 1 | Ergonomía de teclado / key row | UX · Dev · QA |
+| 2 | Fidelidad de estado agente↔teléfono | Arquitecto IA · QA · Dev |
+| 3 | Aprobaciones / permisos remotos | Arquitecto IA · UX · Seguridad |
+| 4 | Persistencia y reconexión | SRE · QA · DevOps |
+| 5 | Batería y foreground service | SRE · QA |
+| 6 | Scrollback y copy/paste | UX · SRE · QA |
+| 7 | Modelo de confianza del tailnet | Seguridad · DevOps |
+| 8 | Custodia de claves en el teléfono | Seguridad |
+| 9 | Superficie de riesgo del agente | Seguridad · Arquitecto IA |
+| 10 | Latencia percibida del terminal | SRE · Dev |
+| 11 | noVNC: control de puntero | UX · QA |
+| 12 | noVNC: zoom y viewport | UX · QA |
+| 13 | noVNC: teclado y caracteres | QA · UX |
+| 14 | noVNC: rendimiento/codec | SRE · Dev |
+| 15 | Voz: latencia end-to-end | Arquitecto IA · UX |
+| 16 | Voz: precisión técnica | Arquitecto IA · Dev |
+| 17 | Voz: mecánica push-to-talk | UX · QA |
+| 18 | Voz: privacidad y offline | Seguridad · Arquitecto IA |
+| 19 | Notificaciones: señal vs ruido | UX · Dev |
+| 20 | Compartir documentos bidireccional | Dev · UX · QA |
+| 21 | Time-to-first-value del onboarding | Usuario final · DevOps · UX |
+| 22 | Calidad de mensajes de error | SRE · DevOps · Usuario final |
+| 23 | Demo guiada: skippeable y re-lanzable | UX · Usuario final |
+| 24 | Exactitud de la documentación | DevOps · Usuario final |
+| 25 | Plugin/skills: coste de contexto | Arquitecto IA · Dev |
+| 26 | Precio, cuenta y telemetría | Seguridad · DevOps |
+| 27 | Riesgo de abandono / bus factor | DevOps · Arquitecto IA |
+| 28 | Distribución Android / políticas | Seguridad · Dev |
+| 29 | Diferenciación vs "es solo ssh+tmux" | DevOps · Arquitecto IA |
+| 30 | Pantalla chica: revisar y decidir | UX · Dev · QA |
+
+### 3.2 Tres tensiones con conflicto (charters transversales de discusión)
+
+No son bug-hunting: son debates que el mercado no resolvió y donde RemoteMarvin tiene que
+tener una postura defendible. Sirven como charters de discusión, no de exploración.
+
+1. **Notificaciones — señal vs ruido.** La gente las pide y después las apaga por ruidosas.
+   Nadie resolvió la granularidad ideal: "avisame solo cuando el agente esté bloqueado *y* yo
+   no esté frente a la PC". ¿Qué hace RemoteMarvin hoy y qué debería hacer?
+2. **mosh vs ssh+tmux.** Mosh gana en roaming y echo local; pierde en varianza de latencia
+   percibida, puertos UDP bloqueados y falta de scrollback. RemoteMarvin eligió SSH+tmux sobre
+   Tailscale — un DevOps senior va a preguntar por qué, y la respuesta tiene que ser medida,
+   no dogmática.
+3. **Granularidad de aprobaciones.** Entre `--dangerously-skip-permissions` (inseguro desde
+   el teléfono, donde no ves bien qué aprobás) y aprobar todo a mano (inviable en móvil) no
+   hay punto medio bien resuelto. Anthropic lanzó "auto mode" con clasificador interno, pero
+   no se puede personalizar qué considera seguro. ¿Dónde se para RemoteMarvin?
+
+### 3.3 Cómo ejecutar el programa
+
+**Como agentes Claude.** Un subagente por perfil, cada uno con su sección de charters como
+prompt, y acceso a: el emulador (para la app), el host de referencia (para el lado servidor),
+el repo (para anclar hallazgos al código) y los docs. Cada agente devuelve su reporte en el
+formato de su sección + severidad. Se pueden correr en paralelo (son independientes) y
+consolidar los hallazgos en un backlog único. Los cuatro perfiles de más ROI para arrancar:
+**Usuario final** (barato, alto rendimiento en onboarding), **Seguridad** (una app de acceso
+remoto lo amerita), **Arquitecto de IA** (la pantalla de aprobación) y **QA** (los tours
+Saboteur/Interrupciones).
+
+**Con personas reales.** Cada perfil recibe su sección como guía, un formulario de debrief
+**PROOF**, y —si es UX o Usuario final— el cuestionario **UMUX-Lite** (2 ítems) al cierre.
+El coordinador junta los debriefs y puntúa con la escala unificada. Con 2-5 evaluadores por
+perfil se detecta el grueso de los problemas de cada dimensión.
+
+**El cierre, en ambos casos.** Los hallazgos confirmados entran en "Lo que queda abierto" de
+`docs/revision-integral.md`, priorizados por severidad. Si un hallazgo toca una feature
+visible, arrastra la regla de superficies (pendientes + manual + demo + skills).
+
+### 3.4 Fuentes de las metodologías
+
+- **UX**: Nielsen — 10 heurísticas, severidad, cognitive walkthrough, onboarding
+  (nngroup.com); heurísticas móviles SMASH (Inostroza et al.); SUS/UMUX-Lite (measuringu.com).
+- **QA**: SBTM (satisfice.com, Bach); tours de Whittaker (*Exploratory Software Testing*, 2009);
+  I SLICED UP FUN (kohl.ca).
+- **Seguridad**: OWASP MASVS/MASTG y MAS Checklist (mas.owasp.org); STRIDE
+  (owasp.org/www-community/Threat_Modeling_Process).
+- **DevOps/SRE**: PRR/ORR (sre.google/sre-book, sre.google/workbook).
+- **DevEx**: DevEx paper (queue.acm.org/detail.cfm?id=3595878); SPACE
+  (queue.acm.org/detail.cfm?id=3454124); DX Core 4 (getdx.com).
+- **Agentes**: OWASP Top 10 Agentic ASI01-10 (genai.owasp.org); modelo de seguridad y skills
+  de Claude Code (code.claude.com/docs/en/security, /skills, /plugins).
+- **A11y**: developer.android.com/guide/topics/ui/accessibility; WCAG 2.2 (w3.org/WAI).
+
+---
+
+*Los hallazgos de cualquier ejecución de este programa se consolidan en
+`docs/revision-integral.md` (sección "Lo que queda abierto"), que es el backlog vivo del
+proyecto.*
