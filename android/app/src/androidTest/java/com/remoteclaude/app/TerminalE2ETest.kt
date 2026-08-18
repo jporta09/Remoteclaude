@@ -132,6 +132,31 @@ class TerminalE2ETest {
     }
 
     /**
+     * WS-B: si el server tmux muere (reboot/OOM del host), al reconectar `tmux new -A` crea
+     * una sesión NUEVA vacía — antes eso pasaba mudo y parecía que no se perdió nada. Ahora
+     * la app avisa. Se simula matando el server tmux con la sesión ya conectada.
+     */
+    @Test fun avisaCuandoSePierdeLaSesion_alReiniciarseElHost() {
+        ActivityScenario.launch<MainActivity>(intentFor(fixturePort)).use { scenario ->
+            await(what = "sesión tmux creada") { fixture.tmuxSessions().contains("term 1") }
+            await(what = "la sesión activa esté CONECTADA antes de matar el server") {
+                var e: SshTerminalSession.Estado? = null
+                scenario.onActivity { a -> e = a.currentSessionForTest()?.estado }
+                e == SshTerminalSession.Estado.CONECTADO
+            }
+            fixture.killAllTmux()   // el server muere -> el cliente attached sale -> reconecta
+            // Se verifica el CALLBACK, no el texto en la terminal: tmux, al recrear la
+            // sesión, limpia la transcripción y borra el aviso del stream (por eso además
+            // hay un Toast). El callback es la señal confiable.
+            await(what = "el aviso de sesión perdida se disparó", timeoutMs = 60_000) {
+                var n = 0
+                scenario.onActivity { a -> n = a.sesionPerdidaCountForTest() }
+                n > 0
+            }
+        }
+    }
+
+    /**
      * WS-A (el sev-4 transversal): con la clave NO autorizada, la barra NO debe decir
      * "conectado". Antes se pintaba verde "conectado" del extra del Intent aunque la auth
      * fallara. Ahora la sesión llega a CAIDO y la barra dice "sin conexión".

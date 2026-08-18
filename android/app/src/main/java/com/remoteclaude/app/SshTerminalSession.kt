@@ -33,6 +33,10 @@ class SshTerminalSession(
     // barra se pintaba "conectado" del extra del Intent aunque la auth hubiera fallado o el
     // host estuviera caído. Corre en el hilo ssh-loop: el consumidor debe saltar a la UI.
     private val onEstadoCambio: (() -> Unit)? = null,
+    // La sesión tmux se recreó (el host se reinició): avisar visible. El texto en la
+    // terminal lo entierra el redibujo de tmux, así que se necesita un Toast. Pasa el
+    // nombre de la sesión para que la UI sólo avise por la pestaña activa.
+    private val onSesionPerdida: ((String) -> Unit)? = null,
 ) : TerminalSession(5000, client) {
 
     /** Estado real de la conexión SSH, leído por la UI. */
@@ -103,6 +107,14 @@ class SshTerminalSession(
                     cambiarEstado(Estado.CAIDO)
                     onAuthFailed?.invoke()
                     break
+                }
+                // Aviso de sesión perdida: si esto es una RECONEXIÓN y la sesión tmux ya no
+                // existe en el host, el server se reinició (reboot/OOM/kill) y `tmux new -A`
+                // va a crear una NUEVA vacía. Antes eso pasaba mudo en la misma pestaña y
+                // parecía que no se había perdido nada (una sesión de Claude de horas, ida).
+                if (attempt > 0 && !tmuxSesionVive(c)) {
+                    status("\r\n[la sesión anterior se perdió — el host se reinició. Esta es nueva.]\r\n")
+                    onSesionPerdida?.invoke(tmuxSession)
                 }
                 val s = c.openSession()
                 s.requestPTY("xterm-256color", cols, rows, 0, 0, null)
@@ -242,6 +254,19 @@ class SshTerminalSession(
         onNetworkAvailable() // romper el backoff si está esperando
         closeCurrent()
         ioExecutor.shutdownNow()
+    }
+
+    /** ¿La sesión tmux sigue viva en el host? Chequeo rápido no interactivo sobre la misma
+     *  conexión. Ante cualquier duda devuelve true (no avisar): mejor callar que un falso
+     *  "se perdió la sesión" que asuste sin motivo. */
+    private fun tmuxSesionVive(c: Connection): Boolean = try {
+        val chk = c.openSession()
+        chk.execCommand("tmux has-session -t " + ShellQuote.sq(tmuxSession) + " 2>/dev/null && echo VIVE")
+        val out = String(chk.stdout.readBytes(), Charsets.UTF_8)
+        chk.close()
+        out.contains("VIVE")
+    } catch (_: Exception) {
+        true
     }
 
     private fun status(message: String) {

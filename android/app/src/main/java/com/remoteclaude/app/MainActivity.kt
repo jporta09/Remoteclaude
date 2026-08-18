@@ -46,6 +46,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var keyPair: java.security.KeyPair
     private lateinit var barraHost: View
     private lateinit var barraLabel: TextView
+    private lateinit var barraReconectar: TextView
     private var demoPendiente = false
     private val prefs by lazy { getSharedPreferences("remotemarvin", Context.MODE_PRIVATE) }
     private val monoFont: Typeface by lazy { resources.getFont(R.font.mononoki) }
@@ -280,7 +281,26 @@ class MainActivity : AppCompatActivity() {
         onAuthFailed = { runOnUiThread { faltaAutorizar() } },
         onHostKeyChanged = { vieja, nueva -> runOnUiThread { cambioLaClave(vieja, nueva) } },
         onEstadoCambio = { runOnUiThread { alCambiarEstadoConexion() } },
+        onSesionPerdida = { nombre ->
+            runOnUiThread {
+                sesionPerdidaCount++   // observable para los tests (el texto en la terminal lo pisa tmux)
+                if (!isFinishing && !isDestroyed && tabs.sesionActiva?.tmuxSession == nombre) {
+                    Toast.makeText(
+                        this,
+                        "La sesión anterior se perdió (el host se reinició). Esta es nueva.",
+                        Toast.LENGTH_LONG,
+                    ).show()
+                }
+            }
+        },
     )
+
+    @Volatile private var sesionPerdidaCount = 0
+
+    /** Cuántas veces se avisó "sesión perdida". Para los tests (el texto en la terminal lo
+     *  borra el redibujo de tmux al recrear la sesión, así que se verifica el callback). */
+    @androidx.annotation.VisibleForTesting
+    fun sesionPerdidaCountForTest(): Int = sesionPerdidaCount
 
     /** El estado real de conexión cambió: refrescar la barra y, si recién se estableció la
      *  conexión, disparar la demo de la terminal (antes se disparaba al activar la pestaña,
@@ -303,6 +323,8 @@ class MainActivity : AppCompatActivity() {
         }
         barraLabel.text = "‹  $hostLabel$sufijo"
         barraLabel.setTextColor(color)
+        barraReconectar.visibility =
+            if (tabs.sesionActiva?.estado == SshTerminalSession.Estado.CAIDO) View.VISIBLE else View.GONE
     }
 
     /** La clave del host cambió: la conexión YA fue rechazada; acá sólo se decide qué hacer. */
@@ -387,6 +409,19 @@ class MainActivity : AppCompatActivity() {
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
         }
         addView(barraLabel, LinearLayout.LayoutParams(0, Paleta.WRAP, 1f))
+        // "Reconectar" aparece SOLO cuando la conexión cayó (auth/host-key): antes no había
+        // un botón claro para reintentar — el que existía ("Reenganchar") reattachea tmux,
+        // no reconecta SSH. Su propio click lo consume; el resto de la barra sigue volviendo.
+        barraReconectar = TextView(this@MainActivity).apply {
+            text = "↻ Reconectar"
+            typeface = monoFont
+            setTextColor(getColor(R.color.marvin_amber))
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+            setPadding(dp(10), 0, dp(10), 0)
+            visibility = View.GONE
+            setOnClickListener { tabs.reconectarActiva() }
+        }
+        addView(barraReconectar, LinearLayout.LayoutParams(Paleta.WRAP, Paleta.WRAP))
         addView(ImageView(this@MainActivity).apply {
             setImageResource(R.drawable.marvin_isologo_bar)
             adjustViewBounds = true
