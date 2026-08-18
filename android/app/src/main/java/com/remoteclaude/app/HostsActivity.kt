@@ -1,5 +1,7 @@
 package com.remoteclaude.app
 
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.graphics.Color
@@ -89,6 +91,18 @@ class HostsActivity : AppCompatActivity() {
             setOnClickListener { showVpnDialog() }
         }
         root.addView(vpnStatus)
+
+        // Guía rápida OFFLINE: rompe la dependencia circular del manual (que vive en
+        // Documentos y sólo abre CONECTADO, pero para conectar hay que autorizar la clave
+        // que el manual explica). Accesible sin conexión desde acá.
+        root.addView(TextView(this).apply {
+            text = "＄_ ¿Primera vez? Guía rápida (sin conexión)"
+            typeface = monoFont
+            setTextColor(getColor(R.color.marvin_green))
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+            setPadding(dp(20), 0, dp(20), dp(14))
+            setOnClickListener { showQuickstart() }
+        })
 
         list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         root.addView(ScrollView(this).apply { addView(list) },
@@ -455,6 +469,85 @@ class HostsActivity : AppCompatActivity() {
             }
             .setNegativeButton("Cancelar", null)
             .setOnDismissListener { snapshotEdicion = null; editDialog = null }
+            .show()
+    }
+
+    /**
+     * Guía rápida OFFLINE (WS-G). El manual detallado vive en Documentos, que sólo abre
+     * conectado; y conectar exige autorizar la clave que el manual explica. Esta guía da los
+     * pasos mínimos —con comandos copiables— sin necesidad de estar conectado.
+     */
+    private fun showQuickstart() {
+        val box = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(20), dp(8), dp(20), dp(8))
+        }
+        fun titulo(txt: String) = box.addView(TextView(this).apply {
+            text = txt
+            typeface = bodyFont
+            setTypeface(typeface, Typeface.BOLD)
+            setTextColor(Color.parseColor("#222222"))
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
+            setPadding(0, dp(14), 0, dp(4))
+        })
+        fun parrafo(txt: String) = box.addView(TextView(this).apply {
+            text = txt
+            setTextColor(Color.parseColor("#444444"))
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+        })
+        fun comando(cmd: String) {
+            box.addView(TextView(this).apply {
+                text = cmd
+                typeface = monoFont
+                setTextColor(Color.parseColor("#111111"))
+                setBackgroundColor(Color.parseColor("#F0F0F0"))
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+                setPadding(dp(12), dp(10), dp(12), dp(10))
+                val lp = LinearLayout.LayoutParams(MATCH, WRAP); lp.setMargins(0, dp(4), 0, dp(2))
+                layoutParams = lp
+            })
+            box.addView(TextView(this).apply {
+                text = "⧉ Copiar"
+                typeface = monoFont
+                setTextColor(getColor(R.color.marvin_green))
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+                setPadding(dp(4), dp(2), dp(4), dp(8))
+                setOnClickListener {
+                    getSystemService(ClipboardManager::class.java)
+                        ?.setPrimaryClip(ClipData.newPlainText("quickstart", cmd))
+                    Toast.makeText(this@HostsActivity, "Copiado", Toast.LENGTH_SHORT).show()
+                }
+            })
+        }
+
+        titulo("1 · En la PC: preparar el host (una sola vez)")
+        parrafo("Cloná el repo de RemoteMarvin y corré:")
+        comando("bash scripts/setup-host.sh\ndocker compose up -d --build")
+
+        titulo("2 · Autorizar el teléfono")
+        parrafo("Al agregar/conectar un host, la app muestra su clave SSH pública (ícono de "
+            + "llave). Copiala y pegala en la PC, en ~/.ssh/authorized_keys. La clave privada "
+            + "nunca sale del teléfono (Android Keystore).")
+
+        titulo("3 · (Opcional) Conectar desde cualquier red — Tailscale")
+        parrafo("En la PC generá un QR de un solo uso y escanealo desde la línea “VPN” de "
+            + "esta pantalla. No hace falta IP fija ni abrir puertos.")
+        comando("./scripts/ts-link-qr.sh")
+
+        titulo("4 · Agregar el host y conectar")
+        parrafo("Tocá “+ Agregar host”: nombre, host/IP, puerto y tu usuario de la PC "
+            + "(no root). Después tocá la tarjeta para conectar.")
+
+        titulo("5 · Enseñarle las skills a Claude")
+        parrafo("Dentro de Claude Code, en la PC:")
+        comando("/plugin marketplace add /ruta/al/repo\n/plugin install remotemarvin@remotemarvin")
+
+        parrafo("\nEl manual completo queda en Documentos una vez que conectás.")
+
+        AlertDialog.Builder(this)
+            .setTitle("Guía rápida")
+            .setView(ScrollView(this).apply { addView(box) })
+            .setPositiveButton("Entendido", null)
             .show()
     }
 
