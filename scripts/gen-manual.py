@@ -321,8 +321,10 @@ S.append(P("La pantalla de inicio lista tus PCs. “+ Agregar host” da de alta
            "<font name='Mono' size='9'>sudo</font> puntual). Mantené apretado para editar o borrar."))
 S.append(P("Autorizar el teléfono", h2))
 S.append(P("La app genera su propia clave SSH en el <b>Android Keystore</b> (la privada "
-           "nunca sale del teléfono). Para habilitarla, tocá el ícono de la <b>llave</b>, "
-           "copiá el texto y pegalo en el host:"))
+           "nunca sale del teléfono). Para habilitarla, tocá el ícono de la <b>llave</b>. "
+           "El diálogo ofrece <b>“Copiar comando”</b> —un comando listo para pegar en la PC "
+           "que agrega la clave a authorized_keys y le pone los permisos correctos en un "
+           "solo paso— o <b>“Copiar solo la clave”</b> si preferís hacerlo a mano en:"))
 S.append(C("~/.ssh/authorized_keys"))
 S.append(P("La identidad del host", h2))
 S.append(P("La primera vez que conectás, la app <b>memoriza la clave del host</b>. Si más "

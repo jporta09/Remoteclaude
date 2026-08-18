@@ -18,7 +18,9 @@ import android.view.View
 import android.view.WindowManager
 import android.view.inputmethod.InputMethodManager
 import android.widget.ImageView
+import android.widget.Button
 import android.widget.LinearLayout
+import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
@@ -358,11 +360,8 @@ class MainActivity : AppCompatActivity() {
         val pub = KeyStoreSsh.openSshPublicKey("remoteclaude-app")
         AlertDialog.Builder(this)
             .setTitle("Falta autorizar este dispositivo")
-            .setMessage(
-                "El host $user@$host:$port rechazó la clave de la app.\n\n" +
-                    "Agregala a ~/.ssh/authorized_keys en el host:\n\n$pub"
-            )
-            .setNeutralButton("Copiar clave") { _, _ -> copiarAlPortapapeles(pub) }
+            .setView(vistaAutorizacion("El host $user@$host:$port rechazó la clave de la app. " +
+                "Autorizá el teléfono en el host —el comando lo hace en un solo pegado:", pub))
             .setPositiveButton("Reintentar") { _, _ ->
                 dialogoAuthVisible = false
                 // Ídem: la autorización de la clave es del host, no de una pestaña.
@@ -376,11 +375,51 @@ class MainActivity : AppCompatActivity() {
     private fun mostrarClavePublica() {
         val pub = KeyStoreSsh.openSshPublicKey("remoteclaude-app")
         AlertDialog.Builder(this)
-            .setTitle("Clave pública (agregar a authorized_keys)")
-            .setMessage(pub)
-            .setPositiveButton("Copiar") { _, _ -> copiarAlPortapapeles(pub) }
-            .setNegativeButton("Cerrar", null)
+            .setTitle("Autorizar este dispositivo en el host")
+            .setView(vistaAutorizacion("Pegá el comando en la PC (agrega la clave a " +
+                "authorized_keys y le pone los permisos correctos), o copiá sólo la clave:", pub))
+            .setPositiveButton("Cerrar", null)
             .show()
+    }
+
+    /** El comando listo-para-pegar que autoriza el teléfono en el host en un solo paso: crea
+     *  ~/.ssh con permisos, agrega la clave y deja authorized_keys en 600. Antes el diálogo
+     *  sólo daba la clave cruda y había que recordar el resto (sev-3 "autorización sin comando"). */
+    private fun comandoAutorizar(pub: String) =
+        "mkdir -p ~/.ssh && chmod 700 ~/.ssh && " +
+            "echo '$pub' >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys"
+
+    /** Vista compartida de los diálogos de autorización: explicación + la clave (seleccionable)
+     *  + dos botones de copia (el comando completo, recomendado, y sólo la clave). */
+    private fun vistaAutorizacion(encabezado: String, pub: String): View {
+        fun dpx(v: Int) =
+            TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, v.toFloat(), resources.displayMetrics).toInt()
+        val box = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dpx(20), dpx(8), dpx(20), dpx(8))
+        }
+        box.addView(TextView(this).apply {
+            text = encabezado
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+        })
+        box.addView(TextView(this).apply {
+            text = pub
+            setTextIsSelectable(true)
+            typeface = Typeface.MONOSPACE
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 11f)
+            setPadding(0, dpx(10), 0, dpx(12))
+        })
+        box.addView(Button(this).apply {
+            text = "⧉ Copiar comando (pegá en la PC)"
+            isAllCaps = false
+            setOnClickListener { copiarAlPortapapeles(comandoAutorizar(pub)) }
+        })
+        box.addView(Button(this).apply {
+            text = "⧉ Copiar solo la clave"
+            isAllCaps = false
+            setOnClickListener { copiarAlPortapapeles(pub) }
+        })
+        return ScrollView(this).apply { addView(box) }
     }
 
     // --- layout y utilidades ---------------------------------------------------
