@@ -109,6 +109,11 @@ class HostsActivity : AppCompatActivity() {
         root.addView(botonAgregar)
 
         setContentView(root)
+
+        // Si giraron la pantalla con el diálogo abierto, reabrirlo con lo que había tipeado.
+        savedInstanceState?.getBundle("editHost")?.let { box ->
+            root.post { showEditDialog(restore = box) }
+        }
     }
 
     override fun onResume() {
@@ -143,9 +148,9 @@ class HostsActivity : AppCompatActivity() {
         ),
         Tour.Paso(
             "Agregar un host",
-            "Toque este botón para registrar su PC o servidor: nombre, IP y usuario. " +
-                "La tarjeta creada se toca para conectar, y se mantiene presionada " +
-                "para editar o eliminar.",
+            "Toque este botón para registrar su PC o servidor: nombre, IP y usuario " +
+                "(su usuario normal, no root). La tarjeta creada se toca para conectar, " +
+                "y se mantiene presionada para editar o eliminar.",
             blanco = { botonAgregar },
         ),
         Tour.Paso(
@@ -310,18 +315,60 @@ class HostsActivity : AppCompatActivity() {
             }.show()
     }
 
-    private fun showEditDialog(existing: Host?) {
-        fun field(hint: String, value: String, number: Boolean = false) = EditText(this).apply {
+    // Diálogo de alta/edición abierto: se rastrea para sobrevivir a rotación. Android
+    // recrea la Activity al girar y se llevaba puesto lo tipeado (sev-2). snapshotEdicion()
+    // toma una foto de los campos en onSaveInstanceState y onCreate reabre el diálogo.
+    private var editDialog: AlertDialog? = null
+    private var snapshotEdicion: (() -> Bundle)? = null
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        snapshotEdicion?.invoke()?.let { outState.putBundle("editHost", it) }
+    }
+
+    override fun onDestroy() {
+        // Cerrar el diálogo antes de que se destruya la Activity evita el "leaked window"
+        // (el estado ya quedó en onSaveInstanceState y se reabre en onCreate).
+        editDialog?.dismiss()
+        editDialog = null
+        super.onDestroy()
+    }
+
+    private fun showEditDialog(existing: Host? = null, restore: Bundle? = null) {
+        val idActual = restore?.getString("id")?.ifBlank { null } ?: existing?.id
+        val esEdicion = idActual != null
+
+        val box = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(8), dp(4), dp(8), dp(4))
+        }
+        // Label persistente (el hint desaparecía al tipear: sev-2 "campos sin label").
+        fun etiqueta(txt: String) = box.addView(TextView(this).apply {
+            text = txt
+            setTextColor(Color.parseColor("#666666"))
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+            setPadding(dp(16), dp(10), dp(16), dp(2))
+        })
+        fun campo(value: String, hint: String, number: Boolean = false) = EditText(this).apply {
             this.hint = hint
             setText(value)
             setSingleLine()
+            setSelectAllOnFocus(true)   // tocar un campo precargado selecciona todo para reemplazar fácil
             if (number) inputType = InputType.TYPE_CLASS_NUMBER
             setPadding(dp(16), dp(12), dp(16), dp(12))
+            box.addView(this)
         }
-        val label = field("Nombre (ej: Mi PC)", existing?.label ?: "")
-        val hostname = field("Host / IP (ej: remoteclaude)", existing?.hostname ?: "")
-        val port = field("Puerto", existing?.port?.toString() ?: "22", number = true)
-        val user = field("Usuario", existing?.user ?: "root")
+
+        etiqueta("Nombre")
+        val label = campo(restore?.getString("label") ?: existing?.label ?: "", "ej: Mi PC")
+        etiqueta("Host / IP")
+        val hostname = campo(restore?.getString("hostname") ?: existing?.hostname ?: "", "ej: remoteclaude")
+        etiqueta("Puerto")
+        val port = campo(restore?.getString("port") ?: existing?.port?.toString() ?: "22", "22", number = true)
+        etiqueta("Usuario")
+        // Default vacío + placeholder: la app promete "sin root" y precargar "root" empujaba
+        // al máximo privilegio (sev-3). Vacío obliga a tipear el usuario real de la PC.
+        val user = campo(restore?.getString("user") ?: existing?.user ?: "", "tu usuario en la PC (no root)")
 
         // Dictado: el modo vive en el HOST (~/.config/marvin/stt-mode), no acá. Al abrir
         // se consulta el estado real por SSH; al guardar, si cambió, se aplica.
@@ -330,17 +377,23 @@ class HostsActivity : AppCompatActivity() {
             isEnabled = false
             setPadding(dp(16), dp(12), dp(16), dp(12))
         }
+        box.addView(stt)
         var sttInitial: Boolean? = null   // estado consultado (null = desconocido)
-        if (existing != null) {
+        if (esEdicion) {
+            val qHost = restore?.getString("hostname") ?: existing?.hostname ?: ""
+            val qPort = (restore?.getString("port") ?: existing?.port?.toString())?.toIntOrNull() ?: 22
+            val qUser = restore?.getString("user") ?: existing?.user ?: ""
+            // Al reabrir por rotación NO piso lo que el usuario ya haya tocado en el switch.
+            val restaurando = restore != null
             thread {
                 val st = try {
-                    RemoteControl(this, existing.hostname, existing.port, existing.user,
+                    RemoteControl(this, qHost, qPort, qUser,
                         KeyStoreSsh.getOrCreateKeyPair()).sttMode("status")
                 } catch (_: Exception) { "" }
                 runOnUiThread {
                     if (st.contains("modo:")) {
                         sttInitial = st.contains("modo: always")
-                        stt.isChecked = sttInitial == true
+                        if (!restaurando) stt.isChecked = sttInitial == true
                         stt.isEnabled = true
                     } else {
                         stt.text = "⚡ Dictado siempre encendido (host inaccesible o sin dictado)"
@@ -351,24 +404,34 @@ class HostsActivity : AppCompatActivity() {
             stt.isEnabled = true   // host nuevo: se intenta aplicar al guardar
         }
 
-        val box = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(dp(8), dp(4), dp(8), dp(4))
-            addView(label); addView(hostname); addView(port); addView(user); addView(stt)
+        // Foto de los campos para sobrevivir a rotación.
+        snapshotEdicion = {
+            Bundle().apply {
+                idActual?.let { putString("id", it) }
+                putString("label", label.text.toString())
+                putString("hostname", hostname.text.toString())
+                putString("port", port.text.toString())
+                putString("user", user.text.toString())
+            }
         }
-        AlertDialog.Builder(this)
-            .setTitle(if (existing == null) "Nuevo host" else "Editar host")
+
+        editDialog = AlertDialog.Builder(this)
+            .setTitle(if (!esEdicion) "Nuevo host" else "Editar host")
             .setView(ScrollView(this).apply { addView(box) })
             .setPositiveButton("Guardar") { _, _ ->
                 val l = label.text.toString().trim()
                 val h = hostname.text.toString().trim()
-                if (l.isEmpty() || h.isEmpty()) return@setPositiveButton
+                val u = user.text.toString().trim()
+                if (l.isEmpty() || h.isEmpty() || u.isEmpty()) {
+                    Toast.makeText(this, "Completá nombre, host y usuario", Toast.LENGTH_LONG).show()
+                    return@setPositiveButton
+                }
                 val host = Host(
-                    id = existing?.id ?: System.nanoTime().toString(),
+                    id = idActual ?: System.nanoTime().toString(),
                     label = l,
                     hostname = h,
                     port = port.text.toString().toIntOrNull() ?: 22,
-                    user = user.text.toString().trim().ifEmpty { "root" },
+                    user = u,
                 )
                 HostStore.upsert(this, host)
                 refresh()
@@ -391,6 +454,7 @@ class HostsActivity : AppCompatActivity() {
                 }
             }
             .setNegativeButton("Cancelar", null)
+            .setOnDismissListener { snapshotEdicion = null; editDialog = null }
             .show()
     }
 

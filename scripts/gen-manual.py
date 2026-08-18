@@ -316,7 +316,9 @@ S.append(B("El botón te habla con el color: <b>rojo</b> = grabando, <b>verde</b
 # --- 7. Hosts ---------------------------------------------------------------
 S.append(P("Hosts y autorización", h1))
 S.append(P("La pantalla de inicio lista tus PCs. “+ Agregar host” da de alta uno "
-           "(nombre, host/IP, puerto, usuario). Mantené apretado para editar o borrar."))
+           "(nombre, host/IP, puerto, usuario). El <b>usuario</b> es tu usuario normal de "
+           "la PC, <b>no root</b>: la app trabaja sin privilegios (root solo con "
+           "<font name='Mono' size='9'>sudo</font> puntual). Mantené apretado para editar o borrar."))
 S.append(P("Autorizar el teléfono", h2))
 S.append(P("La app genera su propia clave SSH en el <b>Android Keystore</b> (la privada "
            "nunca sale del teléfono). Para habilitarla, tocá el ícono de la <b>llave</b>, "
