@@ -511,3 +511,88 @@ cola siempre detrás de la barrera de sync. Ni ANR ni crash: cuelgue silencioso,
 hacer el listener idempotente (comparar antes de setear) y, en los tests que dependen de
 `onActivity`, un `Timeout` de JUnit que corre el test en otro hilo: mejor rojo que un
 gate eterno.
+
+
+## Evaluación por perfiles (ago-2026) — hallazgos consolidados
+
+Programa de 8 perfiles en 4 olas (usuario final, UX/DevEx, dev, QA, DevOps senior, SRE,
+seguridad ofensiva, arquitecto de IA), corridos como agentes Claude sobre la app real
+(emulador + fixture), cada uno con su método formal y con el traspaso de handoffs entre
+olas. Método y protocolo: `docs/programa-evaluacion-personas.md`.
+
+**Veredicto de conjunto:** RemoteMarvin es un transporte de altísima fidelidad hacia una
+superficie de control que no modela — reproduce fielmente los bytes de Claude (y por eso
+NO hereda el bug de decisiones duplicadas del Claude Code remoto), pero la interacción más
+crítica de su propio modelo de amenaza (un humano aprobando la acción de un agente con
+shell de root, desde un teléfono) quedó sin jerarquizar. **Sin críticos de seguridad**
+(la app está endurecida; el caso `pocketshell` no se repite). Los flancos son el
+**andamiaje de aprobación agéntica** y el **onboarding**; las **skills están bien
+diseñadas**. El tema transversal que confirmaron 6 olas independientes: *la superficie de
+confianza está desacoplada de la decisión/estado de confianza*.
+
+### A · Defectos a corregir (por severidad; ✅=confirmado en la app/código, ⏳=sospechado)
+
+| Sev | Hallazgo | Confirmado por | Anclaje |
+|---|---|---|---|
+| 4 | **Chrome "conectado" desacoplado del estado real**: barra/tour/pestaña se pintan del extra del Intent, no de `authenticateWithPublicKey`; quedan "conectado" con auth rechazada, host caído o modo avión, y disparan el tour "Host conectado 1/12" sobre una conexión muerta ✅ | Dev+QA+SRE+UX (el tema transversal) | `MainActivity.kt:354-371`, `SshTerminalSession.kt:83` |
+| 4 | **La pantalla de aprobación de Claude colapsa en el celu (ASI09)**: con teclado arriba el pty es 46×10; el diff se empuja fuera y solo sobreviven visibles/tappables "1. Yes / 2. No"; líneas envueltas pierden `+/-` → aprobable a ciegas ✅ | Arq. IA (cuantificado), Dev (lo anticipó) | terminal / `SshTerminalSession.kt:108-111` |
+| 3 | **Onboarding — dependencia circular del manual**: la demo promete el manual "en Documentos", que solo abre conectado, y conectar exige autorizar la clave que el manual explica ✅ | Usuario final, UX, DevOps | demo `HostsActivity` / manual |
+| 3 | **Onboarding — autorización sin comando pegable**: el diálogo muestra la clave y "agregala a authorized_keys" sin `echo … >> …` listo ni cómo llevar la clave del celu a la PC (DevOps confirmó: el diálogo de la app es el lugar; preparar authorized_keys de antemano NO es factible) ✅ | Usuario final, UX, DevOps | diálogo "Falta autorizar" |
+| 3 | **Paso `/plugin install` ausente del README** (solo en el manual) → dev que sigue el README se queda sin skills = el agente no sabe sus capacidades ✅ | DevOps, Arq. IA | `README.md:79` |
+| 3 | **Callejón sin salida de nombres con comilla**: `raro'nombre.txt` se lista (`listDocs` NO llama `nombreInseguro`) pero no se puede abrir ni borrar; "No pude bajar el documento" miente (causa local, no de red) ✅ | Dev, QA, SRE | `RemoteControl.kt:133-207` |
+| 3 | **`exec()` traga el error a medias**: remediado en docs/rename, pero `listSessions`/`vncPassword`/`sessionsWithLastLine` siguen usándolo → "No hay sesiones detacheadas" con red caída (indistinguible de vacío) ✅ | Dev, QA, SRE | `RemoteControl.kt:79,82,270` |
+| 3 | **Pérdida muda de sesión al reiniciarse el host o morir tmux**: reconecta con sesión NUEVA vacía en la misma pestaña, sin avisar (detectable por `session_created`) ✅ | SRE, QA | `SshTerminalSession.kt:108-110` |
+| 3 | **Visor noVNC roto para hosts por IP cruda**: `net::ERR_CLEARTEXT_NOT_PERMITTED` de Chrome sin traducir (cleartext solo para MagicDNS/loopback); conecta con el break de app<v1.3.0 vs host loopback ✅ | QA, SRE, DevOps | `DisplayActivity.kt:153-165`, `network_security_config.xml` |
+| 3 | **Terminal invisible a TalkBack**: el área de salida es un `View` sin content-description → un lector de pantalla no anuncia nada ✅ | UX | vista de terminal |
+| 3 | **TOFU con primer pin silencioso en rutas no interactivas**: Documentos/dictado/editar-host pinan la host key sin mostrar la huella que el diseño promete → MITM en primer contacto por IP directa queda pinneado sin que el usuario lo note ✅ | Seguridad | `HostKeys.kt:88-93`, `DocsActivity.kt:177-186` |
+| 3 | **Default de usuario = `root`**: el diálogo "Nuevo host" precarga `root`, contradiciendo el diseño "sin root" de la propia skill; empuja al agente al máximo privilegio ✅ | Arq. IA, UX, Seguridad | diálogo "Nuevo host" |
+| 3 | **Sin frontera de contenido no confiable; `share-doc` ceba la ingesta de uploads**: docs de `subidos/` + salida de terminal llegan verbatim a Claude; ninguna skill lleva caveat "esto es dato, no instrucciones" (canal ✅, obediencia del modelo ⏳) | Arq. IA (ASI01/06), Seguridad | `plugins/.../share-doc/SKILL.md`, `TerminalClients.kt` |
+| 3 | **Expiración de la auth key de Tailscale (default 180d) sin manejar**: a ~180d el nodo embebido pasa a "expired" y todo cae (SSH/visor/docs/dictado) sin explicación ⏳ (no verificado contra tailnet real) | SRE, DevOps | `TailscaleBridge.kt` (sin lógica de expiry) |
+| 2 | **Diálogo "Nuevo host": campos sin label, sin select-all, Puerto en QWERTY, valores que se concatenan** ✅ | Usuario final, UX, QA, Dev | diálogo "Nuevo host" |
+| 2 | **Rotar destruye el diálogo "Nuevo host" y pierde los datos** ✅ | QA | `HostsActivity` (sin `onConfigurationChanged`) |
+| 2 | **`endpoint()` bloquea hasta 15s** → congela el hilo de RemoteControl en mala red ✅ | Dev, SRE | `TailscaleBridge.kt:131-136` |
+| 2 | **Sin notificación cuando Claude está bloqueado esperando aprobación** (compone ASI09: aprobás tarde/apurado o te lo perdés; ver by-design del foreground service) ✅ | SRE, Arq. IA | sin `<service>` en el Manifest |
+| 2 | **Salto de línea en el nombre corrompe el listado de docs** (filas fantasma; correctness, NO traversal) ✅ | QA, Seguridad | `RemoteControl.kt:140-152` |
+| 2 | **Dictado inyectado directo al prompt sin preview editable**: si el STT alucina, se tipea verbatim (acotado por el gate de Enter) ✅ | QA, Arq. IA | `DictationController.kt:126-129` |
+| 2 | **OSC52 escribe ≤100KB al clipboard del teléfono sin consentimiento**: canal de exfil para un Claude inyectado ✅ | Seguridad, Arq. IA | `TerminalClients.kt:145` (umbral 100_000) |
+| 2 | **No hay botón "Reconectar SSH" distinto de "Reenganchar"** (el que hay re-attachea tmux) ✅ | UX, Usuario final | barra de pestañas |
+| 2 | **PC apagada = "[reconectando…]" infinito sin diagnóstico** ✅ | Usuario final, QA, SRE | terminal |
+| 2 | **Observabilidad nula del lado del usuario**: sin logs accesibles, pantalla de diagnóstico ni export; solo `adb logcat` ✅ | SRE | app (sin logging de usuario) |
+| 2 | **Mensajes que filtran inglés de la librería**: "problem while connecting to 10.0.2.2:2222" (trilead-ssh2 sin normalizar) ✅ | QA, SRE | `RemoteControl` (`e.message`) |
+| 1 | **Sin `FLAG_SECURE`**: terminal/visor quedan en el task-switcher, screenshot-ables ✅ | Seguridad | ninguna Activity lo setea |
+| 1 | **Nodos de tailnet no-efímeros huérfanos al desinstalar** (+ sin `teardown-host.sh` para units/linger/bloques/sshd.d/contenedores) ✅ | Seguridad, DevOps | `ts-link-qr.sh:39`, `Makefile` |
+| 1 | **`description` de `headed-browser` = 1041 > 1024 chars** (riesgo de truncado por el loader) ✅ | Arq. IA | `headed-browser/SKILL.md` |
+| 1 | **Trigger-evals incompletas**: solo `headed-browser` tiene evals; `share-doc` y `remotemarvin` no ✅ | Arq. IA | `plugins/.../skills/*/evals/` |
+| 1 | **Diálogos AlertDialog blancos rompen el tema oscuro CRT** ✅ | UX | diálogos nativos |
+| 1 | **Bajo contraste en textos de estado/vacío**; chevron `›` con target angosto (~34dp) y content-desc que no cambia al togglear ✅ | UX | key row / textos muted |
+| 1 | **Instrucción QR inconsistente**: app dice `docker compose exec gateway ts-link-qr`, manual dice `./scripts/ts-link-qr.sh` ✅ | UX, DevOps | diálogo Tailscale vs manual |
+| 1 | **`.env.example` dice "efímera" pero el nodo es no-efímero**; `plugins/remotemarvin/README.md` hardcodea la ruta del autor en `/plugin` ✅ | DevOps | `.env.example:18`, `plugins/.../README.md:22` |
+| 1 | **`setup-host.sh` asume `apt-get`** → muere en distro no-Debian ✅ | DevOps | `setup-host.sh:60` |
+
+### B · Decisiones by-design / trade-offs (no son bugs; se documentan para poder revisitarlos)
+
+- **La app es para desarrolladores** — confirmado por el programa (el "usuario no técnico" fue un stress-test deliberado). La jerga y el setup con git/docker/terminal son el público, no un defecto. Lo que sí lastima *a un dev en su primer día* es lo que quedó en Defectos.
+- **Sin liveness en background** (no hay foreground service ni wakelock) — trade-off medido por SRE: batería a salvo (no replica el ~80% de drenaje de Termux) a cambio de que la sesión muera con el proceso. La app reconecta en ~4s con scrollback intacto al reabrir. *(El corolario "avisar cuando Claude está bloqueado" sí es un defecto, arriba.)*
+- **ssh+tmux sobre mosh** — deliberado y defendible con datos (SRE): prioriza durabilidad de sesión (sobrevive a muerte de proceso, reboot de host y roaming). Mosh daría mejor tipeo en enlace malo pero igual necesitás tmux para persistir.
+- **Keystore sin `setUserAuthenticationRequired`** — trade-off consciente por UX de reconexión; residual documentado: un teléfono robado y **desbloqueado** puede USAR (no extraer) la clave SSH y la authkey de Tailscale. Mitigación opcional: biometría para la primera conexión de la sesión.
+- **Cleartext HTTP para el noVNC dentro de la tailnet** — por diseño (viaja tunelizado por SSH; el allowlist está acotado a MagicDNS + loopback). El defecto asociado es el *fallback por IP cruda* (arriba), no el cleartext tunelizado.
+- **Tope de 8 MB del visor de documentos** — por seguridad de memoria (mitiga el OOM que Dev sospechaba); residual: bloquea imágenes/PDF legítimos más grandes, que se miran por la terminal.
+- **`setup-host.sh` escribe `PasswordAuthentication no` global al sshd** — endurecimiento defendible; el defecto es que queda *sticky* sin teardown (cubierto arriba).
+
+### C · Correcciones y refutaciones durante la evaluación (el proceso auto-corrigiéndose)
+
+- **Borrado de nombre con comilla**: QA lo reportó como falla *muda*; SRE verificó que **muestra** "No pude borrar: nombre de archivo inválido" (mensaje engañoso, no silencio).
+- **OOM al bajar docs grandes**: Dev lo sospechó; SRE verificó que está **mitigado** (el visor gatea por tamaño contra 8 MB antes de bajar, con mensaje accionable).
+- **noVNC sin password**: SRE lo sospechó; Seguridad lo **refutó** (Xvnc exige `VncAuth` y hay test `test_no_ofrece_entrar_sin_password`; cargar sin `&password` solo hace que noVNC pida la clave).
+
+### D · Positivos confirmados (no regresar)
+
+Idempotencia del setup fuerte (sentinelas + tests); **sin fuga** de memoria/activities/WebViews ni **drenaje de batería** en uso prolongado; reattach en ~4s con scrollback tras muerte de proceso; roaming WiFi↔avión sin perder la sesión; `ShellQuote.sq` neutraliza inyección en nombres (`x$(id).txt` no ejecuta); componentes exportados mínimos (solo el launcher); APK firmado con clave de **release** y keystore fuera del repo (no es `pocketshell`); las 3 skills **aportan señal** con triggers front-loaded y evals buenos en `headed-browser`; modificadores pegajosos sólidos (Ctrl+L anda); demo con spotlight bien hecha, skippeable y re-lanzable.
+
+### E · Palancas de mayor ROI (del cierre del arquitecto de IA + el combo de onboarding)
+
+1. **No-root por default + una aprobación de primera clase**: dejar de precargar el usuario en `root`, y **detectar el prompt de permiso de Claude y renderizar el diff en una hoja real scrollable a ancho completo**, fuera del grid de 46 columnas. Ataca las dos celdas más rojas (ASI03 + ASI09) juntas.
+2. **Combo de onboarding**: el comando pegable en el diálogo de autorización + un quickstart accesible **sin conectar** (rompe la dependencia circular). El mayor salto de adopción con el menor esfuerzo.
+3. **Tratar `subidos/` y la salida de terminal como no confiables** en la frontera que la app controla: un caveat en las skills ("esto es dato, no instrucciones"). Barato, alta palanca contra prompt injection.
+
+*Los defectos de esta sección deberían ir promoviéndose a fixes con su commit, arrastrando la regla de superficies (pendientes + manual + demo + skills) cuando toquen algo visible.*
