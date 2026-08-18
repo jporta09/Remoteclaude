@@ -113,6 +113,44 @@ class TerminalE2ETest {
     }
 
     /**
+     * WS-A: la barra dice "conectado" (verde, sin sufijo) SOLO cuando la conexión SSH está
+     * realmente establecida — no pintada del extra del Intent. Con la clave autorizada, la
+     * sesión llega a CONECTADO y la barra no muestra "sin conexión".
+     */
+    @Test fun laBarraReflejaLaConexionReal_cuandoConecta() {
+        ActivityScenario.launch<MainActivity>(intentFor(fixturePort)).use { scenario ->
+            await(what = "la sesión activa llega a CONECTADO") {
+                var estado: SshTerminalSession.Estado? = null
+                scenario.onActivity { a -> estado = a.currentSessionForTest()?.estado }
+                estado == SshTerminalSession.Estado.CONECTADO
+            }
+            var barra = ""
+            scenario.onActivity { a -> barra = a.barLabelForTest() }
+            assertThat(barra).doesNotContain("sin conexión")
+            assertThat(barra).doesNotContain("reconectando")
+        }
+    }
+
+    /**
+     * WS-A (el sev-4 transversal): con la clave NO autorizada, la barra NO debe decir
+     * "conectado". Antes se pintaba verde "conectado" del extra del Intent aunque la auth
+     * fallara. Ahora la sesión llega a CAIDO y la barra dice "sin conexión".
+     */
+    @Test fun laBarraNoMiente_conAuthRechazada() {
+        fixture.exec("rm -f ~/.ssh/authorized_keys")   // desautorizar la clave de la app
+        ActivityScenario.launch<MainActivity>(intentFor(fixturePort)).use { scenario ->
+            await(what = "la sesión activa llega a CAIDO") {
+                var estado: SshTerminalSession.Estado? = null
+                scenario.onActivity { a -> estado = a.currentSessionForTest()?.estado }
+                estado == SshTerminalSession.Estado.CAIDO
+            }
+            var barra = ""
+            scenario.onActivity { a -> barra = a.barLabelForTest() }
+            assertThat(barra).contains("sin conexión")
+        }
+    }
+
+    /**
      * Regresión de S2: si el server presenta una clave distinta a la fijada, la conexión
      * tiene que quedar BLOQUEADA — nada de reconectar en silencio contra un impostor.
      *

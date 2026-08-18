@@ -45,6 +45,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var control: RemoteControl
     private lateinit var keyPair: java.security.KeyPair
     private lateinit var barraHost: View
+    private lateinit var barraLabel: TextView
     private var demoPendiente = false
     private val prefs by lazy { getSharedPreferences("remotemarvin", Context.MODE_PRIVATE) }
     private val monoFont: Typeface by lazy { resources.getFont(R.font.mononoki) }
@@ -131,14 +132,7 @@ class MainActivity : AppCompatActivity() {
                 terminalView.attachSession(sesion)
                 terminalView.onScreenUpdated()
                 terminalView.requestFocus()
-                // La demo arranca recién acá: con la primera pestaña activa la barra ya
-                // está poblada y todos los blancos existen.
-                if (demoPendiente) {
-                    demoPendiente = false
-                    terminalView.post {
-                        Tour.lanzar(this, "terminal", pasosDemo()) { mostrarTeclado() }
-                    }
-                }
+                pintarBarra()   // al cambiar de pestaña, la barra refleja SU estado
             },
             acciones = object : TabsController.Acciones {
                 override fun abrirVisor() = abrirOtraPantalla(DisplayActivity::class.java)
@@ -269,6 +263,10 @@ class MainActivity : AppCompatActivity() {
     @androidx.annotation.VisibleForTesting
     fun screenText(): String = tabs.sesionActiva?.emulator?.screen?.transcriptText.orEmpty()
 
+    /** Texto actual de la barra de host (con el estado real). Para los tests instrumentados. */
+    @androidx.annotation.VisibleForTesting
+    fun barLabelForTest(): String = if (::barraLabel.isInitialized) barraLabel.text.toString() else ""
+
     // --- identidad del host ----------------------------------------------------
     // Los dos diálogos que siguen son decisiones de seguridad, y por eso los hace la activity
     // y sólo la terminal: los caminos de fondo (documentos, dictado, visor) fallan sin
@@ -281,7 +279,31 @@ class MainActivity : AppCompatActivity() {
         this, host, port, user, keyPair, nombre, clients.sesion,
         onAuthFailed = { runOnUiThread { faltaAutorizar() } },
         onHostKeyChanged = { vieja, nueva -> runOnUiThread { cambioLaClave(vieja, nueva) } },
+        onEstadoCambio = { runOnUiThread { alCambiarEstadoConexion() } },
     )
+
+    /** El estado real de conexión cambió: refrescar la barra y, si recién se estableció la
+     *  conexión, disparar la demo de la terminal (antes se disparaba al activar la pestaña,
+     *  aunque la auth hubiera fallado — mostraba "Host conectado" sobre una conexión muerta). */
+    private fun alCambiarEstadoConexion() {
+        pintarBarra()
+        if (demoPendiente && tabs.sesionActiva?.estado == SshTerminalSession.Estado.CONECTADO) {
+            demoPendiente = false
+            terminalView.post { Tour.lanzar(this, "terminal", pasosDemo()) { mostrarTeclado() } }
+        }
+    }
+
+    /** Pinta la barra según el estado REAL de la pestaña activa (no del extra del Intent). */
+    private fun pintarBarra() {
+        val (sufijo, color) = when (tabs.sesionActiva?.estado) {
+            SshTerminalSession.Estado.CONECTADO -> "" to Paleta.ACCENT
+            SshTerminalSession.Estado.RECONECTANDO -> " · reconectando…" to getColor(R.color.marvin_amber)
+            SshTerminalSession.Estado.CAIDO -> " · sin conexión" to Paleta.REC_FG
+            else -> " · conectando…" to getColor(R.color.marvin_amber)   // CONECTANDO o null
+        }
+        barraLabel.text = "‹  $hostLabel$sufijo"
+        barraLabel.setTextColor(color)
+    }
 
     /** La clave del host cambió: la conexión YA fue rechazada; acá sólo se decide qué hacer. */
     private fun cambioLaClave(vieja: String, nueva: String) {
@@ -350,7 +372,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    /** Barra superior: a qué host estás conectado, y volver al menú. */
+    /** Barra superior: a qué host estás conectado (con estado REAL), y volver al menú. */
     private fun barraDeHost(): View = LinearLayout(this).apply {
         orientation = LinearLayout.HORIZONTAL
         gravity = Gravity.CENTER_VERTICAL
@@ -358,12 +380,13 @@ class MainActivity : AppCompatActivity() {
         setPadding(dp(12), dp(8), dp(12), dp(8))
         contentDescription = "Volver a la lista de hosts"
         setOnClickListener { finish() }
-        addView(TextView(this@MainActivity).apply {
+        barraLabel = TextView(this@MainActivity).apply {
             text = "‹  $hostLabel"
             typeface = monoFont
             setTextColor(Paleta.ACCENT)
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
-        }, LinearLayout.LayoutParams(0, Paleta.WRAP, 1f))
+        }
+        addView(barraLabel, LinearLayout.LayoutParams(0, Paleta.WRAP, 1f))
         addView(ImageView(this@MainActivity).apply {
             setImageResource(R.drawable.marvin_isologo_bar)
             adjustViewBounds = true

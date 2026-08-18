@@ -29,7 +29,23 @@ class SshTerminalSession(
     client: TerminalSessionClient,
     private val onAuthFailed: (() -> Unit)? = null,   // clave no autorizada -> avisar a la UI
     private val onHostKeyChanged: ((old: String, new: String) -> Unit)? = null,
+    // El estado REAL de la conexión, para que el chrome (barra, tour) no mienta. Antes la
+    // barra se pintaba "conectado" del extra del Intent aunque la auth hubiera fallado o el
+    // host estuviera caído. Corre en el hilo ssh-loop: el consumidor debe saltar a la UI.
+    private val onEstadoCambio: (() -> Unit)? = null,
 ) : TerminalSession(5000, client) {
+
+    /** Estado real de la conexión SSH, leído por la UI. */
+    enum class Estado { CONECTANDO, CONECTADO, RECONECTANDO, CAIDO }
+
+    @Volatile var estado: Estado = Estado.CONECTANDO
+        private set
+
+    private fun cambiarEstado(nuevo: Estado) {
+        if (estado == nuevo) return
+        estado = nuevo
+        onEstadoCambio?.invoke()
+    }
 
     private val appCtx = ctx.applicationContext
 
@@ -61,6 +77,7 @@ class SshTerminalSession(
     private fun connectLoop() {
         var attempt = 0
         while (!userClosed) {
+            cambiarEstado(if (attempt == 0) Estado.CONECTANDO else Estado.RECONECTANDO)
             status(if (attempt == 0) "Conectando a $user@$host:$port ...\r\n" else "\r\n[reconectando…]\r\n")
             try {
                 // Si el Tailscale embebido está activo, se conecta al forward local
@@ -83,6 +100,7 @@ class SshTerminalSession(
                 if (!c.authenticateWithPublicKey(user, keyPair)) {
                     status("\r\n[autenticación SSH falló — la clave no está autorizada]\r\n")
                     userClosed = true
+                    cambiarEstado(Estado.CAIDO)
                     onAuthFailed?.invoke()
                     break
                 }
@@ -112,6 +130,7 @@ class SshTerminalSession(
                 sshSession = s
                 stdin = s.stdin
                 attempt = 0
+                cambiarEstado(Estado.CONECTADO)
 
                 // Keepalive: tráfico periódico para que el NAT/firewall (sobre todo en redes
                 // corporativas) no descarte el mapeo y la conexión no quede "half-open". Si el
@@ -149,6 +168,7 @@ class SshTerminalSession(
                         "  Puede ser una reinstalación del server… o alguien interceptando.\r\n"
                 )
                 userClosed = true
+                cambiarEstado(Estado.CAIDO)
                 onHostKeyChanged?.invoke(old, new)
             }
             if (userClosed) break
