@@ -470,14 +470,10 @@ tener una postura defendible. Sirven como charters de discusión, no de explorac
 
 ### 3.3 Cómo ejecutar el programa
 
-**Como agentes Claude.** Un subagente por perfil, cada uno con su sección de charters como
-prompt, y acceso a: el emulador (para la app), el host de referencia (para el lado servidor),
-el repo (para anclar hallazgos al código) y los docs. Cada agente devuelve su reporte en el
-formato de su sección + severidad. Se pueden correr en paralelo (son independientes) y
-consolidar los hallazgos en un backlog único. Los cuatro perfiles de más ROI para arrancar:
-**Usuario final** (barato, alto rendimiento en onboarding), **Seguridad** (una app de acceso
-remoto lo amerita), **Arquitecto de IA** (la pantalla de aprobación) y **QA** (los tours
-Saboteur/Interrupciones).
+**Como agentes Claude.** Un subagente por perfil. Pero no es "correrlos todos en paralelo":
+tienen un orden que importa y una mecánica de traspaso que los convierte en un relevo en vez
+de ocho revisiones aisladas. Todo eso está en la **sección 4 (Protocolo de ejecución con
+agentes)**.
 
 **Con personas reales.** Cada perfil recibe su sección como guía, un formulario de debrief
 **PROOF**, y —si es UX o Usuario final— el cuestionario **UMUX-Lite** (2 ítems) al cierre.
@@ -502,6 +498,166 @@ visible, arrastra la regla de superficies (pendientes + manual + demo + skills).
 - **Agentes**: OWASP Top 10 Agentic ASI01-10 (genai.owasp.org); modelo de seguridad y skills
   de Claude Code (code.claude.com/docs/en/security, /skills, /plugins).
 - **A11y**: developer.android.com/guide/topics/ui/accessibility; WCAG 2.2 (w3.org/WAI).
+
+---
+
+## 4. Protocolo de ejecución con agentes
+
+Esta sección es para cuando el programa se corre con agentes Claude (un subagente por perfil).
+Responde cuatro preguntas: en qué **orden**, con qué **contexto**, con qué **instrucción**, y
+cómo cada agente **construye sobre lo que encontraron los anteriores** sin dejar de tener
+libertad para investigar por su cuenta.
+
+### 4.1 El principio de orden: la frescura es un recurso que se agota
+
+La observación que ordena todo: **algunos métodos exigen ojos frescos, y los ojos frescos no
+se recuperan.** Un agente que ya leyó el código, el backlog y el informe de seguridad no
+puede después *experimentar auténticamente* "no entiendo qué hace este botón". La ingenuidad
+del primer uso es un one-shot: se gasta una sola vez.
+
+De ahí la regla: **la ingenuidad decrece y el contexto crece, monótonamente.** Se ordenan los
+perfiles del que menos contexto necesita al que más, de modo que cada uno corra con exactamente
+la frescura que su método requiere. Esto parte el programa en dos tiers.
+
+**Tier ojos frescos** (contexto mínimo, NO leen el código fuente ni el backlog):
+1. **Usuario final** — cero contexto previo. Solo la app publicada, la demo y el manual. Es el
+   recurso más perecedero: se gasta primero, y en su forma más pura.
+2. **UX / DevEx** — experto en heurísticas, pero el cognitive walkthrough del primer arranque
+   necesita frescura. Conoce Nielsen; no debe conocer el código.
+3. **DevOps senior** — su primer charter (Guidebook tour) es seguir el README *como está
+   escrito*: haberse leído el código antes contaminaría el "¿la doc dice la verdad?". Es la
+   bisagra entre los dos tiers.
+
+**Tier informado** (contexto acumulado, cadena de dependencia real):
+4. **Dev** — necesita el repo a fondo (code review). Produce el *mapa del código* que reusan
+   los tres que siguen.
+5. **QA** — ancla bugs al código (usa el mapa de Dev) y produce el *catálogo de lo que se
+   rompe*.
+6. **SRE** — extiende el catálogo de QA a uso prolongado + observabilidad.
+7. **Seguridad** — usa el mapa de Dev (dónde vive el saneo, el quoting, el host-key) y los
+   crashes de QA (crash → info disclosure). Produce las *fronteras de confianza*.
+8. **Arquitecto de IA** — el capstone: usa las fronteras de Seguridad, el canal de Dev y el
+   encuadre de la pantalla de aprobación de UX.
+
+**Aristas de dependencia** (quién alimenta a quién; las que son secuenciales de verdad):
+
+```
+Usuario final ─┬─► UX ──────────────► Arq. IA
+               └─► DevOps ──► (mapa operativo a todos)
+Dev ──┬─► QA ──┬─► SRE
+      │        └─► Seguridad ─► Arq. IA
+      └─► Seguridad
+UX ───────────────► Seguridad, Arq. IA   (encuadre de la pantalla de aprobación)
+```
+
+**Paralelismo permitido:** dentro del tier fresco, Usuario final va estrictamente primero;
+UX y DevOps pueden solaparse. En el tier informado, Dev abre y después QA/SRE pueden correr
+en paralelo; Seguridad espera a Dev+QA; IA cierra. No hay que serializar todo — solo respetar
+las aristas.
+
+### 4.2 Qué contexto recibe cada agente
+
+El contexto NO es "todo para todos": darle el backlog al Usuario final le arruina la
+ingenuidad; no darle el repo a Seguridad lo deja ciego. La matriz:
+
+| Perfil | App | Repo código | Host oráculo | APK/adb | `revision-integral.md` | Manual PDF | Briefing de olas previas |
+|--------|-----|-------------|--------------|---------|------------------------|-----------|--------------------------|
+| Usuario final | ✅ | ❌ | ❌ | ❌ | ❌ | ✅ | ninguno |
+| UX / DevEx | ✅ | ❌ | ❌ | ❌ | solo tras su walkthrough | ✅ | Usuario final |
+| DevOps | ✅ | ✅ (docs primero) | ✅ | ❌ | tras el Guidebook tour | ✅ | Usuario final, UX |
+| Dev | ✅ | ✅ | ✅ | ❌ | ✅ | ✅ | DevOps |
+| QA | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | Dev, DevOps |
+| SRE | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | QA, DevOps |
+| Seguridad | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | Dev, QA |
+| Arq. IA | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | Seguridad, Dev, UX |
+
+Dos aclaraciones que hacen la diferencia:
+
+- **El "briefing de olas previas" es un digest, no los informes completos.** Volcarle a un
+  agente los reportes enteros de los anteriores le infla el contexto y lo *sesga* (empieza a
+  buscar lo que ya se encontró en vez de lo suyo). El coordinador destila de cada informe solo
+  (a) los hallazgos de severidad ≥ 3 y (b) las *handoff notes* (ver §4.4) relevantes a ese rol.
+  Media carilla, no diez.
+- **La restricción de frescura es una instrucción explícita, no un olvido.** Al Usuario final
+  se le *prohíbe* leer el código; a UX se le dice "hacé tu walkthrough primero, después podés
+  mirar el backlog". Sin esa prohibición, un agente curioso lee todo y pierde el valor de su
+  rol.
+
+### 4.3 La plantilla de instrucción
+
+Cada prompt de agente se arma con siete bloques. Los invariantes están en todos; las partes
+`<variables>` salen de la sección del perfil (§2) y de la matriz (§4.2).
+
+1. **Identidad y mentalidad.** *"Sos un/a `<rol senior>` haciendo una revisión alineada con
+   `<método: MASVS / Nielsen / ORR / OWASP ASI…>`. Tu trabajo no es elogiar la app: es
+   encontrar lo que su autor no ve."* El encuadre importa — un pentester al que le pedís
+   "revisá la seguridad" es más blando que uno al que le decís "asumí que hay una falla y
+   encontrala".
+2. **Restricción de frescura.** Qué leer y qué NO, y cuándo (de la matriz). Explícito.
+3. **Tus charters.** La lista de la sección del perfil, en formato SBTM (misión + time-box +
+   qué descubrir). Con permiso de agregar charters propios si el método lo pide.
+4. **Briefing de olas previas.** El digest (§4.4). Con la aclaración: *"esto es contexto, no
+   una lista de lo que tenés que confirmar; tu trabajo es lo tuyo."*
+5. **Mandato de investigación** (§4.5). Libertad explícita para buscar en web/papers/docs.
+6. **Contrato de salida.** Hallazgos con **severidad 0-4** (§1.2) + justificación; el debrief
+   **PROOF** (§1.1); y la **handoff note** (§4.4). Además: distinguir siempre *"lo confirmé
+   contra la app/host real"* de *"lo sospecho / no pude verificar"* — un hallazgo sin verificar
+   se marca como tal, no se infla.
+7. **Reglas anti-alucinación.** Verificar contra la app y el host reales, no contra la
+   suposición. No inventar features: si algo no existe, es un hallazgo ("esperaba X, no está"),
+   no una alucinación. Anclar cada hallazgo a un archivo/pantalla/comando concreto.
+
+### 4.4 La mecánica de traspaso: la handoff note
+
+Lo que convierte ocho revisiones aisladas en un relevo. Además de sus hallazgos, cada agente
+produce una **handoff note**: mirando hacia adelante, *"cosas que vi de reojo pero que no me
+correspondían, y que el próximo rol debería mirar"*. Ejemplos del tipo de traspaso que emerge:
+
+- Usuario final → *"me trabé enrolando el QR, no entendí de dónde sacar el código; que UX mire
+  ese paso con lupa."*
+- Dev → Seguridad: *"el saneo de nombres vive en `RemoteControl.nombreInseguro`; no lo audité
+  a fondo, es tu terreno."*
+- QA → SRE: *"maté el proceso tmux a mitad de un run y la app quedó mostrando 'conectado'; no
+  esperé a ver si se recupera sola — probalo en tu ventana de uso prolongado."*
+- UX → Arq. IA: *"la pantalla de aprobación muestra el comando pero no el diff completo; para
+  vos eso es ASI09, para mí era visibilidad del estado."*
+
+El coordinador destila las handoff notes en el briefing del agente siguiente (§4.2). Es el
+combustible del relevo: cada ola arranca sabiendo dónde apuntar sin que se le dicte qué
+encontrar.
+
+### 4.5 Mandato de investigación
+
+Cada agente tiene **libertad explícita para buscar en la web, papers y documentación** y
+afilar tanto su método como sus hallazgos — no solo aplicar lo que ya está en el playbook.
+Los puntos de partida por rol están en §3.4, pero el mandato es más amplio:
+
+- Buscar el **estado del arte** de su método (¿salió una versión nueva de MASVS? ¿un checklist
+  de a11y móvil más completo? ¿un tour de Whittaker que encaje mejor con esta app?).
+- Buscar **incidentes comparables** (el caso `pocketshell` para Seguridad, los bugs del Claude
+  Code remoto para IA/QA) como plantilla de "cómo se ve un hallazgo real acá".
+- Buscar **contra-argumentos** a las decisiones de diseño de la app (el debate mosh vs ssh+tmux,
+  la crítica de context-files autogenerados) para no validar por default.
+
+Y una regla de retorno: **si un agente encuentra un artefacto mejor que el que trae el playbook**
+(un método más fino, un checklist más completo), lo trae de vuelta y el playbook se actualiza.
+Por la regla de superficies, el propio documento es una superficie viva.
+
+### 4.6 Orquestación concreta
+
+- **Coordinador** (el loop principal, o quien corra el programa): lanza cada ola, recibe los
+  informes, destila las handoff notes en el briefing de la ola siguiente, y mantiene el backlog
+  único ordenado por severidad.
+- **Olas.** Ola 1: Usuario final (solo). Ola 2: UX + DevOps (se solapan). Ola 3: Dev (abre),
+  luego QA + SRE. Ola 4: Seguridad, luego Arq. IA. No se serializa lo que es independiente,
+  pero se respetan las aristas de §4.1.
+- **Arranque de máximo ROI**, si no se corre todo: **Usuario final** (barato, revienta el
+  onboarding), **Seguridad** (una app de acceso remoto lo amerita), **Arquitecto de IA** (la
+  pantalla de aprobación, el hallazgo transversal) y **QA** (Saboteur + interrupciones). Cuatro
+  agentes cubren las dimensiones de más peso; el resto se agrega según lo que aparezca.
+- **Cierre.** Los hallazgos confirmados entran en "Lo que queda abierto" de
+  `docs/revision-integral.md`, priorizados por severidad; los que tocan features visibles
+  arrastran la regla de superficies (pendientes + manual + demo + skills).
 
 ---
 
