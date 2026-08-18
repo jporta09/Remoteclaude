@@ -93,6 +93,9 @@ class SshTerminalSession(
                         appCtx, host, port,
                         onNew = { fp -> status("\r\n[clave del host fijada — $fp]\r\n") },
                         onMismatch = { old, new -> keyChanged = old to new },
+                        // La terminal es la ÚNICA ruta que fija la primera clave: muestra la
+                        // huella por onNew, así confiar es una decisión visible del usuario.
+                        permitePin = true,
                     ),
                     15000, 15000,
                 )

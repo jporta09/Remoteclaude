@@ -39,6 +39,11 @@ class LiveDictationE2ETest {
         fixture = FixtureSsh(host, port)
         fixture.authorize(KeyStoreSsh.openSshPublicKey("remoteclaude-app"))
         HostKeys.forget(ctx, host, port)
+        // WS-I: LiveDictation es no interactivo y ya no fija la primera clave. En el uso real la
+        // terminal la fija antes; se simula con un RemoteControl al mismo host/puerto (el pin es
+        // compartido por host/puerto).
+        RemoteControl(ctx, host, port, FixtureSsh.USER, KeyStoreSsh.getOrCreateKeyPair())
+            .confiarEnClaveDelHost()
         parciales.clear()
     }
 

@@ -19,8 +19,27 @@ class RemoteControl(
 ) {
     private val appCtx = ctx.applicationContext
 
-    /** Verificador de clave de host. Este camino NO pregunta: si cambió, falla. */
+    /** Verificador de clave de host. Camino NO interactivo: no pregunta y NO fija la primera
+     *  clave (permitePin=false) — si no hay pin previo, falla-cerrado. La confianza inicial la
+     *  establece la terminal, que muestra la huella. */
     private fun verifier() = HostKeys.verifier(appCtx, host, port)
+
+    /**
+     * Sólo tests: establece la confianza inicial en la clave del host como lo haría la
+     * TERMINAL (la única ruta que puede fijar la primera clave). Los E2E de documentos/dictado
+     * conectan sin pasar por la terminal, así que simulan ese paso previo. En producción no se
+     * usa: Documentos/dictado se abren desde una terminal ya conectada (y por ende ya pineada).
+     */
+    @androidx.annotation.VisibleForTesting
+    fun confiarEnClaveDelHost() {
+        val (h, p) = TailscaleBridge.endpoint(host, port)
+        val c = Connection(h, p)
+        try {
+            c.connect(HostKeys.verifier(appCtx, host, port, permitePin = true), 10000, 10000)
+        } finally {
+            try { c.close() } catch (_: Exception) {}
+        }
+    }
     /** Salida de un comando remoto: distingue "no hay nada" de "falló". */
     data class Exec(val out: String, val ok: Boolean, val error: String? = null) {
         val failed get() = !ok

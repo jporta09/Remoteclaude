@@ -38,6 +38,9 @@ class DictationE2ETest {
         fixture.authorize(KeyStoreSsh.openSshPublicKey("remoteclaude-app"))
         HostKeys.forget(ctx, host, port)
         control = RemoteControl(ctx, host, port, FixtureSsh.USER, KeyStoreSsh.getOrCreateKeyPair())
+        // WS-I: los caminos no interactivos ya no fijan la primera clave; la terminal lo haría
+        // antes en el uso real. Se simula ese paso para que el dictado conecte.
+        control.confiarEnClaveDelHost()
     }
 
     @After fun tearDown() {

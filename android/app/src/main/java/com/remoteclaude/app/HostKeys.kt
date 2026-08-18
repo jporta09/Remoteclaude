@@ -73,6 +73,11 @@ object HostKeys {
      *   Los caminos no interactivos (documentos, dictado, visor) no pasan nada acá: fallan
      *   y listo. Sólo la terminal pregunta, para que la decisión de confiar sea explícita
      *   y no la dispare una tarea de fondo.
+     * @param permitePin si puede FIJAR la primera clave (TOFU). Sólo la terminal —que muestra
+     *   la huella por [onNew]— debe hacerlo. Los caminos no interactivos van con `false`:
+     *   fallan-cerrado en el primer contacto en vez de pinear en silencio. Si no, un MITM en
+     *   el primer contacto por IP directa quedaba fijado sin que el usuario viera nada (H-1).
+     *   La confianza inicial se establece SIEMPRE por la terminal; el resto sólo compara.
      */
     fun verifier(
         ctx: Context,
@@ -80,6 +85,7 @@ object HostKeys {
         port: Int,
         onNew: ((String) -> Unit)? = null,
         onMismatch: ((old: String, new: String) -> Unit)? = null,
+        permitePin: Boolean = false,
     ) = ServerHostKeyVerifier { _, _, algo, key ->
         val k = entry(host, port, algo)
         val p = prefs(ctx)
@@ -87,9 +93,15 @@ object HostKeys {
         val now = Base64.encodeToString(key, Base64.NO_WRAP)
         when (decide(seen, now)) {
             Decision.PIN -> {
-                p.edit().putString(k, now).apply()
-                onNew?.invoke(fingerprint(key))
-                true
+                if (!permitePin) {
+                    // Ruta no interactiva en primer contacto: NO fijar en silencio.
+                    onMismatch?.invoke("(ninguna)", fingerprint(key))
+                    false
+                } else {
+                    p.edit().putString(k, now).apply()
+                    onNew?.invoke(fingerprint(key))
+                    true
+                }
             }
             Decision.MATCH -> true
             Decision.MISMATCH -> {

@@ -41,6 +41,9 @@ class DocsE2ETest {
         ctx.getSharedPreferences("remotemarvin", android.content.Context.MODE_PRIVATE)
             .edit().putBoolean("tour_off", true).commit()
         control = RemoteControl(ctx, host, port, FixtureSsh.USER, KeyStoreSsh.getOrCreateKeyPair())
+        // Los caminos no interactivos ya NO fijan la primera clave (WS-I). En el uso real, la
+        // terminal la fija antes; acá simulamos ese paso para que los tests de docs conecten.
+        control.confiarEnClaveDelHost()
     }
 
     @After fun tearDown() {
@@ -203,6 +206,22 @@ class DocsE2ETest {
         val e = runCatching { muerto.sessionsWithLastLine() }.exceptionOrNull()
         assertThat(e).isNotNull()
         assertThat(e!!.message).isNotEmpty()
+    }
+
+    /**
+     * WS-I (H-1): un camino NO interactivo (Documentos) NO puede FIJAR la clave del host en el
+     * primer contacto. Si lo hiciera en silencio, un MITM en el primer contacto por IP directa
+     * quedaría pinneado sin que el usuario viera nunca la huella. La confianza inicial la
+     * establece la terminal (que muestra la huella); acá, sin pin previo, debe fallar-cerrado y
+     * NO dejar ninguna clave fijada.
+     */
+    @Test fun documentosNoFijaLaClaveEnSilencio_enPrimerContacto() {
+        HostKeys.forget(ctx, host, port)   // primer contacto: sin clave fijada
+        assertThat(HostKeys.hasPinned(ctx, host, port)).isFalse()
+
+        val e = runCatching { control.listDocs() }.exceptionOrNull()
+        assertThat(e).isNotNull()                                   // falla-cerrado
+        assertThat(HostKeys.hasPinned(ctx, host, port)).isFalse()  // y NO fijó nada
     }
 
     @Test fun siElHostNoResponde_seDistingueDeNoTenerDocumentos() {
