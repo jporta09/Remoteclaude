@@ -534,14 +534,14 @@ confianza está desacoplada de la decisión/estado de confianza*.
 
 | Sev | Hallazgo | Confirmado por | Anclaje |
 |---|---|---|---|
-| 4 | **Chrome "conectado" desacoplado del estado real**: barra/tour/pestaña se pintan del extra del Intent, no de `authenticateWithPublicKey`; quedan "conectado" con auth rechazada, host caído o modo avión, y disparan el tour "Host conectado 1/12" sobre una conexión muerta ✅ | Dev+QA+SRE+UX (el tema transversal) | `MainActivity.kt:354-371`, `SshTerminalSession.kt:83` |
+| 4 | **✔ RESUELTO (WS-A)** · **Chrome "conectado" desacoplado del estado real**: barra/tour/pestaña se pintan del extra del Intent, no de `authenticateWithPublicKey`; quedan "conectado" con auth rechazada, host caído o modo avión, y disparan el tour "Host conectado 1/12" sobre una conexión muerta ✅ | Dev+QA+SRE+UX (el tema transversal) | `MainActivity.kt:354-371`, `SshTerminalSession.kt:83` |
 | 4 | **La pantalla de aprobación de Claude colapsa en el celu (ASI09)**: con teclado arriba el pty es 46×10; el diff se empuja fuera y solo sobreviven visibles/tappables "1. Yes / 2. No"; líneas envueltas pierden `+/-` → aprobable a ciegas ✅ | Arq. IA (cuantificado), Dev (lo anticipó) | terminal / `SshTerminalSession.kt:108-111` |
 | 3 | **Onboarding — dependencia circular del manual**: la demo promete el manual "en Documentos", que solo abre conectado, y conectar exige autorizar la clave que el manual explica ✅ | Usuario final, UX, DevOps | demo `HostsActivity` / manual |
 | 3 | **Onboarding — autorización sin comando pegable**: el diálogo muestra la clave y "agregala a authorized_keys" sin `echo … >> …` listo ni cómo llevar la clave del celu a la PC (DevOps confirmó: el diálogo de la app es el lugar; preparar authorized_keys de antemano NO es factible) ✅ | Usuario final, UX, DevOps | diálogo "Falta autorizar" |
 | 3 | **Paso `/plugin install` ausente del README** (solo en el manual) → dev que sigue el README se queda sin skills = el agente no sabe sus capacidades ✅ | DevOps, Arq. IA | `README.md:79` |
 | 3 | **Callejón sin salida de nombres con comilla**: `raro'nombre.txt` se lista (`listDocs` NO llama `nombreInseguro`) pero no se puede abrir ni borrar; "No pude bajar el documento" miente (causa local, no de red) ✅ | Dev, QA, SRE | `RemoteControl.kt:133-207` |
 | 3 | **`exec()` traga el error a medias**: remediado en docs/rename, pero `listSessions`/`vncPassword`/`sessionsWithLastLine` siguen usándolo → "No hay sesiones detacheadas" con red caída (indistinguible de vacío) ✅ | Dev, QA, SRE | `RemoteControl.kt:79,82,270` |
-| 3 | **Pérdida muda de sesión al reiniciarse el host o morir tmux**: reconecta con sesión NUEVA vacía en la misma pestaña, sin avisar (detectable por `session_created`) ✅ | SRE, QA | `SshTerminalSession.kt:108-110` |
+| 3 | **✔ RESUELTO (WS-B)** · **Pérdida muda de sesión al reiniciarse el host o morir tmux**: reconecta con sesión NUEVA vacía en la misma pestaña, sin avisar (detectable por `session_created`) ✅ | SRE, QA | `SshTerminalSession.kt:108-110` |
 | 3 | **Visor noVNC roto para hosts por IP cruda**: `net::ERR_CLEARTEXT_NOT_PERMITTED` de Chrome sin traducir (cleartext solo para MagicDNS/loopback); conecta con el break de app<v1.3.0 vs host loopback ✅ | QA, SRE, DevOps | `DisplayActivity.kt:153-165`, `network_security_config.xml` |
 | 3 | **Terminal invisible a TalkBack**: el área de salida es un `View` sin content-description → un lector de pantalla no anuncia nada ✅ | UX | vista de terminal |
 | 3 | **TOFU con primer pin silencioso en rutas no interactivas**: Documentos/dictado/editar-host pinan la host key sin mostrar la huella que el diseño promete → MITM en primer contacto por IP directa queda pinneado sin que el usuario lo note ✅ | Seguridad | `HostKeys.kt:88-93`, `DocsActivity.kt:177-186` |
@@ -555,8 +555,8 @@ confianza está desacoplada de la decisión/estado de confianza*.
 | 2 | **Salto de línea en el nombre corrompe el listado de docs** (filas fantasma; correctness, NO traversal) ✅ | QA, Seguridad | `RemoteControl.kt:140-152` |
 | 2 | **Dictado inyectado directo al prompt sin preview editable**: si el STT alucina, se tipea verbatim (acotado por el gate de Enter) ✅ | QA, Arq. IA | `DictationController.kt:126-129` |
 | 2 | **OSC52 escribe ≤100KB al clipboard del teléfono sin consentimiento**: canal de exfil para un Claude inyectado ✅ | Seguridad, Arq. IA | `TerminalClients.kt:145` (umbral 100_000) |
-| 2 | **No hay botón "Reconectar SSH" distinto de "Reenganchar"** (el que hay re-attachea tmux) ✅ | UX, Usuario final | barra de pestañas |
-| 2 | **PC apagada = "[reconectando…]" infinito sin diagnóstico** ✅ | Usuario final, QA, SRE | terminal |
+| 2 | **✔ RESUELTO (WS-B)** · **No hay botón "Reconectar SSH" distinto de "Reenganchar"** (el que hay re-attachea tmux) ✅ | UX, Usuario final | barra de pestañas |
+| 2 | **◑ PARCIAL (WS-A: la barra ya dice "reconectando…"/"sin conexión"; falta colapsar el texto repetido)** · **PC apagada = "[reconectando…]" infinito sin diagnóstico** ✅ | Usuario final, QA, SRE | terminal |
 | 2 | **Observabilidad nula del lado del usuario**: sin logs accesibles, pantalla de diagnóstico ni export; solo `adb logcat` ✅ | SRE | app (sin logging de usuario) |
 | 2 | **Mensajes que filtran inglés de la librería**: "problem while connecting to 10.0.2.2:2222" (trilead-ssh2 sin normalizar) ✅ | QA, SRE | `RemoteControl` (`e.message`) |
 | 1 | **Sin `FLAG_SECURE`**: terminal/visor quedan en el task-switcher, screenshot-ables ✅ | Seguridad | ninguna Activity lo setea |
