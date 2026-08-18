@@ -189,6 +189,22 @@ class DocsE2ETest {
         throw AssertionError("timeout esperando: $que")
     }
 
+    /**
+     * WS-C: el reenganche debe distinguir "no me pude conectar" de "no hay sesiones".
+     * Antes `sessionsWithLastLine` usaba `exec()` que se tragaba el error → ambos casos
+     * daban lista vacía y el menú mostraba "No hay sesiones detacheadas" en los dos.
+     */
+    @Test fun sessionsWithLastLine_distingueNoConectarDeSinSesiones() {
+        // Sin server tmux: lista vacía, NO lanza (es "no hay nada", legítimo).
+        fixture.exec("tmux kill-server 2>/dev/null; true")
+        assertThat(control.sessionsWithLastLine()).isEmpty()
+        // Host inalcanzable (puerto muerto): LANZA con motivo (distinto de "no hay nada").
+        val muerto = RemoteControl(ctx, host, 1, FixtureSsh.USER, KeyStoreSsh.getOrCreateKeyPair())
+        val e = runCatching { muerto.sessionsWithLastLine() }.exceptionOrNull()
+        assertThat(e).isNotNull()
+        assertThat(e!!.message).isNotEmpty()
+    }
+
     @Test fun siElHostNoResponde_seDistingueDeNoTenerDocumentos() {
         // El hallazgo B2: con exec() tragándose el error, un host caído devolvía lista vacía
         // y la pantalla decía "Sin documentos en ~/RemoteMarvinDocs del host" — o sea que un

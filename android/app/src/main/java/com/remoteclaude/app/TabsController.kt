@@ -251,9 +251,22 @@ class TabsController(
     private fun menuReenganche() {
         thread {
             val abiertas = tabs.map { it.session.tmuxSession }.toSet()
-            val items = control.sessionsWithLastLine().filter { it.first !in abiertas }
+            // Distingue "no me pude conectar" de "no hay sesiones": antes ambos caían en el
+            // mismo Toast "No hay sesiones detacheadas" (sessionsWithLastLine se tragaba el
+            // error de red). Ahora lanza y acá se muestra el motivo real.
+            var motivo: String? = null
+            val items = try {
+                control.sessionsWithLastLine().filter { it.first !in abiertas }
+            } catch (e: Exception) {
+                motivo = e.message ?: "no pude conectarme al host"
+                emptyList()
+            }
             act.runOnUiThread {
                 if (act.isFinishing || act.isDestroyed) return@runOnUiThread
+                if (motivo != null) {
+                    Toast.makeText(act, "No pude consultar el host: $motivo", Toast.LENGTH_LONG).show()
+                    return@runOnUiThread
+                }
                 if (items.isEmpty()) {
                     Toast.makeText(act, "No hay sesiones detacheadas", Toast.LENGTH_SHORT).show()
                     return@runOnUiThread

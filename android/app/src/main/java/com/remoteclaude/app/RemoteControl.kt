@@ -1,6 +1,7 @@
 package com.remoteclaude.app
 
 import android.content.Context
+import com.trilead.ssh2.ChannelCondition
 import com.trilead.ssh2.Connection
 import java.security.KeyPair
 
@@ -45,14 +46,34 @@ class RemoteControl(
             val s = conn.openSession()
             s.execCommand(command)
             val out = String(s.stdout.readBytes(), Charsets.UTF_8)
+            // El EOF del stdout puede llegar ANTES que el paquete de exit-status: sin esperar,
+            // `s.exitStatus` volvía null en comandos rápidos (ej. `rm` de un archivo que no
+            // existe) y el rc null se tomaba como éxito, ocultando el fallo. Esperar la
+            // condición EXIT_STATUS lo vuelve confiable (los callers deciden error/éxito por él).
+            s.waitForCondition(ChannelCondition.EXIT_STATUS, 3000)
             val rc = s.exitStatus
             s.close()
             if (rc != null && rc != 0) Exec(out, false, "el host devolvió código $rc")
             else Exec(out, true)
         } catch (e: Exception) {
-            Exec("", false, e.message ?: "no se pudo conectar al host")
+            Exec("", false, motivoLegible(e))
         } finally {
             try { c?.close() } catch (_: Exception) {}
+        }
+    }
+
+    /** Traduce el error de la librería SSH (trilead, en inglés) a algo accionable en
+     *  español. Antes se filtraba tal cual ("There was a problem while connecting to …"). */
+    private fun motivoLegible(e: Exception): String {
+        val m = e.message ?: return "no se pudo conectar al host"
+        return if (m.contains("problem while connecting", true) ||
+            m.contains("Connection refused", true) ||
+            m.contains("timeout", true) || m.contains("timed out", true) ||
+            m.contains("No route to host", true)
+        ) {
+            "no me pude conectar al host (¿está encendido? ¿en la misma red o VPN?)"
+        } else {
+            m
         }
     }
 
@@ -194,7 +215,7 @@ class RemoteControl(
             if (rc != null && rc != 0) Exec(out, false, "el host devolvió código $rc")
             else Exec(out, true)
         } catch (e: Exception) {
-            Exec("", false, e.message ?: "no se pudo conectar al host")
+            Exec("", false, motivoLegible(e))
         } finally {
             try { c.close() } catch (_: Exception) {}
         }
@@ -267,7 +288,12 @@ class RemoteControl(
         val script = "tmux ls -F '#{session_name}' 2>/dev/null | while IFS= read -r s; do " +
             "line=\$(tmux capture-pane -p -J -t \"\$s\" 2>/dev/null | sed -nE 's/.*[#\$] +([^[:space:]].*)\$/\\1/p' | tail -1); " +
             "printf '%s\\t%s\\n' \"\$s\" \"\$line\"; done"
-        return exec(script).lineSequence()
+        // LANZA si no se pudo llegar al host: con exec() (que se tragaba el error) el menú
+        // de reenganche mostraba "No hay sesiones detacheadas" tanto con red caída como sin
+        // sesiones — indistinguibles. Ahora el caller distingue "no conecté" de "no hay nada".
+        val r = execResult(script)
+        if (r.failed) throw IllegalStateException(r.error ?: "no pude conectarme al host")
+        return r.out.lineSequence()
             .mapNotNull {
                 val p = it.split('\t', limit = 2)
                 when {
