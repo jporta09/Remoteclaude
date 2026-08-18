@@ -115,7 +115,7 @@ class HostsActivity : AppCompatActivity() {
         super.onResume()
         refresh()
         updateVpnStatus()
-        vpnStatus.post { Tour.lanzar(this, "hosts", pasosDemo()) }
+        vpnStatus.post { Tour.lanzar(this, "hosts2", pasosDemo()) }
     }
 
     private fun pasosDemo() = listOf(
@@ -133,6 +133,13 @@ class HostsActivity : AppCompatActivity() {
                 "SSH, tmux y los servicios; el manual completo quedará luego " +
                 "disponible en Documentos.",
             codigo = "bash scripts/setup-host.sh\ndocker compose up -d --build",
+        ),
+        Tour.Paso(
+            "Las skills de Claude",
+            "Dentro de Claude Code, en la PC, instale el plugin de RemoteMarvin: le " +
+                "enseña a Claude a usar la app — compartir documentos al teléfono, " +
+                "encontrar lo que usted sube y correr el navegador visible.",
+            codigo = "/plugin marketplace add /ruta/al/repo\n/plugin install remotemarvin@remotemarvin",
         ),
         Tour.Paso(
             "Agregar un host",
@@ -159,7 +166,7 @@ class HostsActivity : AppCompatActivity() {
             .setMessage("¿Repetir la demostración de primer uso?")
             .setPositiveButton("Repetir") { _, _ ->
                 Tour.reiniciar(this)
-                Tour.lanzar(this, "hosts", pasosDemo())
+                Tour.lanzar(this, "hosts2", pasosDemo())
             }
             .setNegativeButton("Cancelar", null)
             .show()

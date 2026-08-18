@@ -32,7 +32,7 @@ class TourE2ETest {
     private val prefs get() = ctx.getSharedPreferences("remotemarvin", Context.MODE_PRIVATE)
 
     @Before fun setUp() {
-        prefs.edit().remove("tour_hosts").remove("tour_off").commit()
+        prefs.edit().remove("tour_hosts2").remove("tour_off").commit()
     }
 
     @After fun tearDown() {
@@ -55,7 +55,7 @@ class TourE2ETest {
 
             esc.onActivity { a -> textoExacto(overlay(a)!!, "Omitir demo")!!.performClick() }
             esperar("que Omitir cierre la demo") { overlay(esc) == null }
-            assertThat(prefs.getBoolean("tour_hosts", false)).isTrue()
+            assertThat(prefs.getBoolean("tour_hosts2", false)).isTrue()
         }
 
         // Vista una vez, no vuelve a aparecer.

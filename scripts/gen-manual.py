@@ -207,6 +207,11 @@ S.append(P("Una sola vez, en el repo:"))
 S.append(C("bash scripts/setup-host.sh   # sshd solo-clave, tmux y daemons\n"
            "cp .env.example .env         # completá TS_AUTHKEY\n"
            "docker compose up -d --build"))
+S.append(P("Y dentro de <b>Claude Code</b>, instalá el plugin de RemoteMarvin — le enseña "
+           "a Claude a usar la app (compartir documentos al teléfono, encontrar lo que "
+           "subís, correr el navegador visible):"))
+S.append(C("/plugin marketplace add <ruta-del-repo>\n"
+           "/plugin install remotemarvin@remotemarvin"))
 S.append(P("Para vincular el celu por QR necesitás un <b>OAuth client</b> de Tailscale "
            "(no vence) cargado en el <font name='Mono' size='9'>.env</font> "
            "(<font name='Mono' size='9'>TS_OAUTH_CLIENT_ID/SECRET</font>, tag "
