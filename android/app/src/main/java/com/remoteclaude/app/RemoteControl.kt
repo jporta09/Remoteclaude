@@ -152,6 +152,10 @@ class RemoteControl(
         val mtime: Long,
         val btime: Long,
         val subido: Boolean,
+        // false si el nombre tiene caracteres que la app no maneja (comilla, salto de línea,
+        // barra): se lista igual —el usuario ve que el archivo existe— pero deshabilitado, en
+        // vez de aparecer como una tarjeta que al tocar miente "no pude bajar" (causa local).
+        val soportado: Boolean = true,
     )
 
     private fun rutaDoc(name: String, subido: Boolean) =
@@ -171,13 +175,15 @@ class RemoteControl(
      * El `true` final mantiene rc=0 cuando `subidos/` todavía no existe.
      */
     fun listDocs(): List<Doc> {
+        // Registros terminados en NUL (\0), NO en \n: un nombre con salto de línea ya no parte
+        // el registro en filas fantasma. Los campos siguen separados por TAB.
         val r = execResult(
-            "find ~/RemoteMarvinDocs -maxdepth 1 -type f -printf '%f\\t%s\\t%T@\\t%W@\\tc\\n' 2>/dev/null; " +
-                "find ~/RemoteMarvinDocs/subidos -maxdepth 1 -type f -printf '%f\\t%s\\t%T@\\t%W@\\ts\\n' 2>/dev/null; " +
+            "find ~/RemoteMarvinDocs -maxdepth 1 -type f -printf '%f\\t%s\\t%T@\\t%W@\\tc\\0' 2>/dev/null; " +
+                "find ~/RemoteMarvinDocs/subidos -maxdepth 1 -type f -printf '%f\\t%s\\t%T@\\t%W@\\ts\\0' 2>/dev/null; " +
                 "true"
         )
         if (r.failed) throw IllegalStateException(r.error ?: "no pude conectarme al host")
-        return r.out.lineSequence().mapNotNull {
+        return r.out.split('\u0000').mapNotNull {
             val p = it.split('\t')
             if (p.size >= 5 && p[0].isNotBlank())
                 Doc(
@@ -187,6 +193,8 @@ class RemoteControl(
                     // %W@ da 0 (o -1 en finds viejos) si el FS no registra btime
                     btime = (p[3].substringBefore('.').toLongOrNull() ?: 0L).coerceAtLeast(0L),
                     subido = p[4] == "s",
+                    // Mismo saneo que read/delete: si no lo pasa, se lista deshabilitado.
+                    soportado = !nombreInseguro(p[0]),
                 )
             else null
         }.toList()

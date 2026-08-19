@@ -332,8 +332,8 @@ class DocsActivity : AppCompatActivity() {
             setPadding(dp(16), dp(14), dp(16), dp(14))
             val lp = LinearLayout.LayoutParams(MATCH, WRAP); lp.setMargins(dp(16), dp(5), dp(16), dp(5))
             layoutParams = lp
-            setOnClickListener { open(doc) }
-            setOnLongClickListener { menuDeDoc(doc); true }
+            setOnClickListener { if (doc.soportado) open(doc) else avisoNoSoportado() }
+            setOnLongClickListener { if (doc.soportado) menuDeDoc(doc) else avisoNoSoportado(); true }
         }
         card.addView(TextView(this).apply {
             text = iconFor(doc.name)
@@ -344,13 +344,15 @@ class DocsActivity : AppCompatActivity() {
         col.addView(TextView(this).apply {
             text = doc.name
             typeface = bodyFont
-            setTextColor(getColor(R.color.marvin_fg))
+            // Nombre no soportado: atenuado, para que se vea que existe pero no es accionable.
+            setTextColor(getColor(if (doc.soportado) R.color.marvin_fg else R.color.marvin_muted))
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
         })
         col.addView(TextView(this).apply {
-            text = "${humanSize(doc.size)} · ${humanDate(doc.mtime)}"
+            text = if (doc.soportado) "${humanSize(doc.size)} · ${humanDate(doc.mtime)}"
+                   else "nombre no soportado — renombralo en el host"
             typeface = monoFont
-            setTextColor(getColor(R.color.marvin_muted))
+            setTextColor(getColor(if (doc.soportado) R.color.marvin_muted else R.color.marvin_amber))
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
         })
         card.addView(col, LinearLayout.LayoutParams(0, WRAP, 1f))
@@ -381,6 +383,19 @@ class DocsActivity : AppCompatActivity() {
                 }
             }
             .setNegativeButton("Cancelar", null)
+            .show()
+    }
+
+    /** El nombre tiene caracteres que la app no maneja (comilla, salto de línea, barra): se
+     *  explica la causa LOCAL, en vez de dejar que al abrir mienta "no pude bajar" (causa de red). */
+    private fun avisoNoSoportado() {
+        AlertDialog.Builder(this)
+            .setTitle("Nombre no soportado")
+            .setMessage(
+                "Ese archivo tiene caracteres que la app todavía no maneja (comilla, salto de " +
+                    "línea o barra). Renombralo en el host y va a aparecer normal."
+            )
+            .setPositiveButton("Entendido", null)
             .show()
     }
 

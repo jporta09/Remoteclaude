@@ -47,7 +47,7 @@ class DocsE2ETest {
     }
 
     @After fun tearDown() {
-        runCatching { fixture.exec("rm -rf /tmp/canario ~/RemoteMarvinDocs/hostil* ~/RemoteMarvinDocs/mini.pdf ~/RemoteMarvinDocs/borrame-raiz.txt ~/RemoteMarvinDocs/subidos 2>/dev/null; true") }
+        runCatching { fixture.exec("rm -rf /tmp/canario ~/RemoteMarvinDocs/hostil* ~/RemoteMarvinDocs/con* ~/RemoteMarvinDocs/mini.pdf ~/RemoteMarvinDocs/borrame-raiz.txt ~/RemoteMarvinDocs/subidos 2>/dev/null; true") }
     }
 
     @Test fun listaLosDocumentosQueElHostComparte() {
@@ -115,6 +115,31 @@ class DocsE2ETest {
         assertThat(canario).isEqualTo("limpio")
         // Y el intento de traversal no borró el archivo real de la raíz.
         assertThat(fixture.exec("cat ~/RemoteMarvinDocs/notas.txt").trim()).isEqualTo("contenido de prueba")
+    }
+
+    /**
+     * Fase 1: un nombre no soportado (comilla) se LISTA pero marcado `soportado=false` (no como
+     * callejón sin salida), y un nombre con salto de línea NO genera filas fantasma (el listado es
+     * NUL-delimited, no newline-delimited).
+     */
+    @Test fun listDocs_marcaNoSoportadoYNoParteConSaltosDeLinea() {
+        // el fixture ya siembra "raro'nombre.txt" (comilla)
+        // creamos uno con salto de línea real en el nombre (comillas preservan el \n)
+        fixture.exec("touch \"\$HOME/RemoteMarvinDocs/\$(printf 'con\\nsalto.txt')\"")
+
+        val docs = control.listDocs()
+
+        // la comilla se lista, pero marcada no-soportada
+        val comilla = docs.firstOrNull { it.name.contains("raro") && it.name.contains("nombre") }
+        assertThat(comilla).isNotNull()
+        assertThat(comilla!!.soportado).isFalse()
+
+        // el salto de línea NO produce una fila fantasma "salto.txt"
+        assertThat(docs.map { it.name }).doesNotContain("salto.txt")
+        // el archivo con salto se lista entero (una sola fila) y marcado no-soportado
+        val conSalto = docs.firstOrNull { it.name.contains("con") && it.name.contains("salto") }
+        assertThat(conSalto).isNotNull()
+        assertThat(conSalto!!.soportado).isFalse()
     }
 
     @Test fun leeElContenidoDeUnDocumento() {
