@@ -109,8 +109,7 @@ class MainActivity : AppCompatActivity() {
             sesionActiva = { tabs.sesionActiva },
             teclado = { if (::keypad.isInitialized) keypad else null },
             mostrarTeclado = { mostrarTeclado() },
-            copiar = { copiarAlPortapapeles(it) },
-            alCambiarTexto = { aprobacion.alCambiarTexto() },
+            alCambiarTexto = { aprobacion.alCambiarTexto(); actualizarA11yTerminal() },
         )
         terminalView.apply {
             setTerminalViewClient(clients.vistaCliente)
@@ -119,6 +118,11 @@ class MainActivity : AppCompatActivity() {
             setTextSize(clients.fuenteInicialPx())
             setTypeface(Typeface.MONOSPACE)
             setBackgroundColor(Paleta.KEYPAD_BG)   // evita el flash negro al abrir
+            // A11y: el motor de terminal (GPL) no expone nada a TalkBack, así que desde acá lo
+            // hacemos enfocable y le damos una content-description con la salida. Sin esto un
+            // lector de pantalla no anunciaba NADA del área de terminal.
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_YES
+            contentDescription = "Terminal — salida del host"
         }
 
         val burbuja = crearBurbujaDictado()
@@ -287,6 +291,22 @@ class MainActivity : AppCompatActivity() {
     }
 
     fun screenText(): String = tabs.sesionActiva?.emulator?.screen?.transcriptText.orEmpty()
+
+    private val a11yManager by lazy {
+        getSystemService(android.view.accessibility.AccessibilityManager::class.java)
+    }
+
+    /** A11y: refleja la salida reciente en la content-description de la terminal, para que un
+     *  lector de pantalla la lea al enfocar (el motor GPL no lo expone). Sólo hace el trabajo si
+     *  hay un lector activo — si no, construir screenText() en cada cambio sería un costo al pedo. */
+    private fun actualizarA11yTerminal() {
+        if (a11yManager?.isTouchExplorationEnabled != true) return
+        val t = screenText()
+        terminalView.contentDescription =
+            if (t.isBlank()) "Terminal — salida del host"
+            else if (t.length > 1500) "…" + t.takeLast(1500)
+            else t
+    }
 
     @androidx.annotation.VisibleForTesting
     fun activarCtrlKeypadForTest() { keypad.activarCtrlParaTest() }

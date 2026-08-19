@@ -1,7 +1,10 @@
 package com.remoteclaude.app
 
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.view.KeyEvent
 import android.view.MotionEvent
+import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import com.termux.terminal.TerminalSession
@@ -22,10 +25,18 @@ class TerminalClients(
     private val sesionActiva: () -> SshTerminalSession?,
     private val teclado: () -> KeypadView?,
     private val mostrarTeclado: () -> Unit,
-    private val copiar: (String) -> Unit,
     // WS-F: cada cambio de texto de la sesión activa alimenta al watcher de aprobación.
     private val alCambiarTexto: (() -> Unit)? = null,
 ) {
+
+    /** OSC 52 lo dispara el HOST, no el usuario: se copia con un aviso ATRIBUIDO al host (no el
+     *  genérico "Copiado" que el usuario asocia a su propia acción), para que una copia
+     *  inesperada —p.ej. un Claude inyectado escribiendo el portapapeles— se note. */
+    private fun copiarDelHost(text: String) {
+        act.getSystemService(ClipboardManager::class.java)
+            ?.setPrimaryClip(ClipData.newPlainText("terminal", text))
+        Toast.makeText(act, "El host copió ${text.length} car. al portapapeles", Toast.LENGTH_SHORT).show()
+    }
     // En float, no en Int: ver Zoom.kt. Con Int los incrementos chicos del pellizco se
     // truncaban y la fuente sólo sabía achicarse.
     private var fuente = act.sp(15f).toFloat()
@@ -56,11 +67,11 @@ class TerminalClients(
                         "El host quiere copiar ${text.length / 1024} KB al portapapeles del teléfono."
                     )
                     .setNegativeButton("Descartar", null)
-                    .setPositiveButton("Copiar") { _, _ -> copiar(text) }
+                    .setPositiveButton("Copiar") { _, _ -> copiarDelHost(text) }
                     .show()
                 return
             }
-            copiar(text)
+            copiarDelHost(text)
         }
 
         override fun onPasteTextFromClipboard(session: TerminalSession?) {
@@ -146,7 +157,8 @@ class TerminalClients(
     }
 
     companion object {
-        /** A partir de acá, OSC 52 pide confirmación en vez de copiar solo. */
-        const val OSC52_CONFIRMAR_SOBRE = 100_000
+        /** A partir de acá, OSC 52 pide confirmación en vez de copiar con aviso. Bajo (20 KB):
+         *  un volcado grande al portapapeles casi nunca es un yank normal de tmux. */
+        const val OSC52_CONFIRMAR_SOBRE = 20_000
     }
 }

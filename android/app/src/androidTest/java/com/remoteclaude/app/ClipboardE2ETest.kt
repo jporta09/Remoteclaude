@@ -52,6 +52,26 @@ class ClipboardE2ETest {
 
     @After fun tearDown() { runCatching { fx.killAllTmux() } }
 
+    @Test fun unOsc52Chico_copiaAlPortapapeles() {
+        // Debajo del umbral: se copia (con aviso atribuido al host), verificamos el contenido.
+        ActivityScenario.launch<MainActivity>(intent()).use { scenario ->
+            await(what = "sesión creada") { fx.tmuxSessions().contains("term 1") }
+            val marca = "MARVIN_OSC52_OK"
+            val cmd = "printf '\\033]52;c;%s\\a' \"\$(printf %s '$marca' | base64 -w0)\"\n"
+            scenario.onActivity { a ->
+                val b = cmd.toByteArray(); a.currentSessionForTest()?.write(b, 0, b.size)
+            }
+            await(what = "el host escribió el portapapeles") {
+                var got = ""
+                scenario.onActivity { a ->
+                    got = a.getSystemService(android.content.ClipboardManager::class.java)
+                        ?.primaryClip?.getItemAt(0)?.text?.toString().orEmpty()
+                }
+                got == marca
+            }
+        }
+    }
+
     @Test fun unOsc52Gigante_pideConfirmacion() {
         ActivityScenario.launch<MainActivity>(intent()).use { scenario ->
             await(what = "sesión creada") { fx.tmuxSessions().contains("term 1") }
