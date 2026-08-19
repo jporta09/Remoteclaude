@@ -1,8 +1,16 @@
 package com.remoteclaude.app
 
+import android.Manifest
 import android.app.Dialog
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
+import android.content.Intent
+import android.content.pm.PackageManager
 import android.graphics.Color
 import android.graphics.Typeface
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.util.TypedValue
@@ -89,10 +97,14 @@ class AprobacionController(
     private val act: AppCompatActivity,
     private val sesionActiva: () -> SshTerminalSession?,
     private val screenText: () -> String,
+    // F7: si la app NO está en primer plano no se puede mostrar el Dialog (la ventana está
+    // parada); en su lugar se avisa por notificación y la hoja se muestra al volver.
+    private val enPrimerPlano: () -> Boolean = { true },
 ) {
     private val handler = Handler(Looper.getMainLooper())
     private var dialog: Dialog? = null
     private var firmaMostrada: String? = null
+    private var firmaNotificada: String? = null
     private val revisarRunnable = Runnable { revisar() }
 
     /** La terminal cambió: re-evaluar (debounced) si hay/desaparece un prompt de aprobación. */
@@ -113,10 +125,21 @@ class AprobacionController(
             // el prompt se fue (Claude siguió, o se respondió por la terminal): cerrar la hoja
             cerrar()
             firmaMostrada = null
+            cancelarAviso()
             return
         }
-        if (prompt.firma == firmaMostrada) return   // el mismo que ya está mostrado/resuelto
-        mostrar(prompt)
+        if (enPrimerPlano()) {
+            // La app está adelante: mostrar la hoja y no dejar ninguna notificación colgada.
+            cancelarAviso()
+            if (prompt.firma == firmaMostrada) return   // el mismo que ya está mostrado/resuelto
+            mostrar(prompt)
+        } else {
+            // En segundo plano no se puede mostrar un Dialog (crashea con BadToken): avisar por
+            // notificación. NO se toca firmaMostrada, así al volver la hoja sí se muestra.
+            if (prompt.firma == firmaNotificada) return
+            firmaNotificada = prompt.firma
+            notificar(prompt)
+        }
     }
 
     private fun mostrar(p: AprobacionParser.Prompt) {
@@ -196,11 +219,67 @@ class AprobacionController(
             s.write(b, 0, b.size)
         }
         cerrar()   // firmaMostrada queda para no re-mostrar hasta que el prompt cambie
+        cancelarAviso()
     }
 
     private fun cerrar() {
         try { dialog?.dismiss() } catch (_: Exception) {}
         dialog = null
+    }
+
+    // --- F7: aviso por notificación cuando la app está en segundo plano ------------------
+
+    private val notifManager get() = act.getSystemService(NotificationManager::class.java)
+
+    /** La app volvió a primer plano: bajar la notificación (la hoja la reemplaza) y re-evaluar
+     *  para mostrar la hoja del prompt que estaba pendiente. */
+    fun alPrimerPlano() {
+        cancelarAviso()
+        alCambiarTexto()
+    }
+
+    private fun puedeNotificar(): Boolean =
+        Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+            act.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) ==
+            PackageManager.PERMISSION_GRANTED
+
+    private fun asegurarCanal() {
+        val canal = NotificationChannel(
+            CANAL, "Aprobaciones de Claude", NotificationManager.IMPORTANCE_HIGH,
+        ).apply {
+            description = "Avisa cuando Claude queda esperando que apruebes algo y la app no está abierta."
+        }
+        notifManager?.createNotificationChannel(canal)
+    }
+
+    private fun notificar(p: AprobacionParser.Prompt) {
+        if (!puedeNotificar()) return   // sin permiso, degrada en silencio (la hoja aparece al volver)
+        asegurarCanal()
+        // singleTop + REORDER_TO_FRONT: reusa la MainActivity viva (con su sesión y su prompt),
+        // no arranca otra. Al volver, onResume -> alPrimerPlano() muestra la hoja.
+        val intent = Intent(act, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT
+        }
+        val pi = PendingIntent.getActivity(
+            act, 0, intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        val n = Notification.Builder(act, CANAL)
+            .setSmallIcon(R.drawable.ic_notif)
+            .setContentTitle("Claude espera tu aprobación")
+            .setContentText(p.pregunta)
+            .setStyle(Notification.BigTextStyle().bigText(p.pregunta))
+            .setCategory(Notification.CATEGORY_MESSAGE)
+            .setContentIntent(pi)
+            .setAutoCancel(true)
+            .setOnlyAlertOnce(true)
+            .build()
+        notifManager?.notify(NOTIF_ID, n)
+    }
+
+    private fun cancelarAviso() {
+        try { notifManager?.cancel(NOTIF_ID) } catch (_: Exception) {}
+        firmaNotificada = null
     }
 
     // --- test hooks ---
@@ -209,4 +288,13 @@ class AprobacionController(
 
     @androidx.annotation.VisibleForTesting
     fun elegirParaTest(numero: Int) = act.runOnUiThread { elegir(numero) }
+
+    @androidx.annotation.VisibleForTesting
+    fun avisoActivoParaTest(): Boolean =
+        notifManager?.activeNotifications?.any { it.id == NOTIF_ID } == true
+
+    companion object {
+        private const val CANAL = "aprobacion"
+        private const val NOTIF_ID = 4207
+    }
 }

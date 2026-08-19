@@ -1,5 +1,6 @@
 package com.remoteclaude.app
 
+import android.Manifest
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -9,6 +10,7 @@ import android.graphics.Rect
 import android.graphics.Typeface
 import android.net.ConnectivityManager
 import android.net.Network
+import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.util.TypedValue
@@ -44,6 +46,10 @@ class MainActivity : AppCompatActivity() {
     private lateinit var dictado: DictationController
     private lateinit var clients: TerminalClients
     private lateinit var aprobacion: AprobacionController
+
+    /** F7: si la app está adelante (entre onResume y onPause). El controlador de aprobación lo
+     *  consulta: adelante muestra la hoja; atrás avisa por notificación. */
+    @Volatile private var enPrimerPlano = false
 
     private lateinit var control: RemoteControl
     private lateinit var keyPair: java.security.KeyPair
@@ -102,6 +108,7 @@ class MainActivity : AppCompatActivity() {
             // SIN unir líneas: transcriptText (el de screenText) junta las filas con espacios
             // y el prompt queda en UNA línea; el parser necesita cada opción en su renglón.
             screenText = { tabs.sesionActiva?.emulator?.screen?.transcriptTextWithoutJoinedLines.orEmpty() },
+            enPrimerPlano = { enPrimerPlano },
         )
         clients = TerminalClients(
             act = this,
@@ -174,6 +181,7 @@ class MainActivity : AppCompatActivity() {
         connectivity.registerDefaultNetworkCallback(networkCallback, Handler(mainLooper))
         vigilarTecladoDelSistema()
         tabs.restaurarOCrear()
+        pedirPermisoNotificaciones()
 
         terminalView.requestFocus()
         if (!demoPendiente) terminalView.post { mostrarTeclado() }
@@ -257,11 +265,34 @@ class MainActivity : AppCompatActivity() {
         ),
     )
 
+    override fun onResume() {
+        super.onResume()
+        enPrimerPlano = true
+        // Volvimos adelante: bajar cualquier aviso y mostrar la hoja del prompt pendiente.
+        if (::aprobacion.isInitialized) aprobacion.alPrimerPlano()
+    }
+
+    override fun onPause() {
+        enPrimerPlano = false
+        super.onPause()
+    }
+
     override fun onDestroy() {
         try { connectivity.unregisterNetworkCallback(networkCallback) } catch (_: Exception) {}
         dictado.soltar()
         tabs.cerrarTodas()
         super.onDestroy()
+    }
+
+    /** Pide el permiso de notificaciones (Android 13+) una sola vez, para poder avisar cuando
+     *  Claude quede esperando aprobación con la app en segundo plano. Best-effort: si se niega,
+     *  la hoja igual aparece al volver a la app. */
+    private fun pedirPermisoNotificaciones() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
+        if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) ==
+            PackageManager.PERMISSION_GRANTED
+        ) return
+        requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), REQ_NOTIF)
     }
 
     override fun onRequestPermissionsResult(
@@ -324,9 +355,27 @@ class MainActivity : AppCompatActivity() {
     @androidx.annotation.VisibleForTesting
     fun aprobacionElegirForTest(numero: Int) { if (::aprobacion.isInitialized) aprobacion.elegirParaTest(numero) }
 
+    /** F7: los tests corren con la activity RESUMED; esto simula que la app pasó a segundo plano
+     *  (y de vuelta) para verificar que un prompt nuevo se avise por notificación en vez de por
+     *  la hoja, y que al volver el aviso se baje y la hoja aparezca. Al volver replica onResume. */
+    @androidx.annotation.VisibleForTesting
+    fun simularSegundoPlanoParaTest(atras: Boolean) {
+        enPrimerPlano = !atras
+        if (!atras && ::aprobacion.isInitialized) aprobacion.alPrimerPlano()
+    }
+
+    @androidx.annotation.VisibleForTesting
+    fun avisoAprobacionActivoForTest(): Boolean =
+        ::aprobacion.isInitialized && aprobacion.avisoActivoParaTest()
+
     /** Texto actual de la barra de host (con el estado real). Para los tests instrumentados. */
     @androidx.annotation.VisibleForTesting
     fun barLabelForTest(): String = if (::barraLabel.isInitialized) barraLabel.text.toString() else ""
+
+    companion object {
+        /** Código del pedido de permiso POST_NOTIFICATIONS (Android 13+). */
+        private const val REQ_NOTIF = 72
+    }
 
     // --- identidad del host ----------------------------------------------------
     // Los dos diálogos que siguen son decisiones de seguridad, y por eso los hace la activity

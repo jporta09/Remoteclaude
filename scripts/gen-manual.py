@@ -302,6 +302,9 @@ S.append(P("Cuando Claude pide permiso para correr un comando o aplicar un cambi
            "completo (scrollable, no recortado por el teclado) y <b>botones grandes</b> con "
            "cada opción. Tocar una opción es lo mismo que elegirla en la terminal. Si preferís, "
            "“Ver en la terminal” cierra la hoja y respondés a mano."))
+S.append(B("Si la app está en <b>segundo plano</b> cuando Claude queda esperando, te llega una "
+           "<b>notificación</b> (“Claude espera tu aprobación”). Tocala y la app se abre con la "
+           "hoja lista. La primera vez, Android te pide permiso para notificarte."))
 
 # --- 7. Dictado -------------------------------------------------------------
 S.append(P("Dictado por voz", h1))

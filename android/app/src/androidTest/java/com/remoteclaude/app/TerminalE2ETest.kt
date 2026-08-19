@@ -233,6 +233,41 @@ class TerminalE2ETest {
     }
 
     /**
+     * F7: si Claude queda esperando aprobación con la app en SEGUNDO PLANO, en vez de la hoja
+     * (que no se puede mostrar con la ventana parada) se postea una notificación. Al volver a
+     * primer plano el aviso se baja y la hoja aparece. Así no se aprueba tarde ni se lo pierde.
+     */
+    @Test fun promptEnSegundoPlano_avisaPorNotificacion_yLaHojaApareceAlVolver() {
+        // POST_NOTIFICATIONS (Android 13+) ya viene concedido por MarvinTestRunner, así que el
+        // aviso puede postearse (y el diálogo de permiso no pausa la activity).
+        ActivityScenario.launch<MainActivity>(intentFor(fixturePort)).use { scenario ->
+            await(what = "sesión tmux creada") { fixture.tmuxSessions().contains("term 1") }
+            // La app se va a segundo plano ANTES de que aparezca el prompt.
+            scenario.onActivity { a -> a.simularSegundoPlanoParaTest(true) }
+            scenario.onActivity { a ->
+                val cmd = ("printf '\\033[?1049h\\033[2J\\033[HDo you want to proceed?" +
+                    "\\r\\n 1. Yes\\r\\n 2. No\\r\\n'; read -rsn1 k; printf '\\033[?1049l'; " +
+                    "echo \"\$k\" > /tmp/marvin_pick_bg\n").toByteArray()
+                a.currentSessionForTest()?.write(cmd, 0, cmd.size)
+            }
+            // Atrás: se avisa por notificación y la hoja NO se abre.
+            await(what = "aviso de aprobación posteado") {
+                var v = false; scenario.onActivity { a -> v = a.avisoAprobacionActivoForTest() }; v
+            }
+            scenario.onActivity { a -> assertThat(a.aprobacionVisibleForTest()).isFalse() }
+            // Al volver a primer plano: el aviso se baja y la hoja aparece.
+            scenario.onActivity { a -> a.simularSegundoPlanoParaTest(false) }
+            await(what = "la hoja aparece al volver") {
+                var v = false; scenario.onActivity { a -> v = a.aprobacionVisibleForTest() }; v
+            }
+            await(what = "el aviso se canceló al volver") {
+                var v = true; scenario.onActivity { a -> v = a.avisoAprobacionActivoForTest() }; !v
+            }
+            scenario.onActivity { a -> a.aprobacionElegirForTest(2) }   // responder para desbloquear el read
+        }
+    }
+
+    /**
      * WS-A: la barra dice "conectado" (verde, sin sufijo) SOLO cuando la conexión SSH está
      * realmente establecida — no pintada del extra del Intent. Con la clave autorizada, la
      * sesión llega a CONECTADO y la barra no muestra "sin conexión".

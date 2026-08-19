@@ -22,7 +22,7 @@ android {
         targetSdk = 34
         versionCode = 18
         versionName = "1.12.0"
-        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        testInstrumentationRunner = "com.remoteclaude.app.MarvinTestRunner"
         // Producción: sólo arm64 (es lo que corre en el teléfono). El AAR además trae
         // x86_64, que se incluye únicamente en debug para que el emulador corra NATIVO
         // en vez de bajo traducción ARM — ver test/e2e/README.md.

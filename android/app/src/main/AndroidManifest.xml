@@ -8,6 +8,8 @@
     <uses-permission android:name="android.permission.CAMERA" />
     <!-- Dictado por voz push-to-talk (el STT corre en el host, acá solo se graba) -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <!-- Avisar (Android 13+) cuando Claude queda esperando una aprobación con la app en segundo plano -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-feature android:name="android.hardware.camera" android:required="false" />
 
     <!-- allowBackup=false: las prefs guardan la config de hosts y (cifrada) la auth key
