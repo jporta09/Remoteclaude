@@ -96,6 +96,9 @@ class KeypadView(ctx: Context, private val io: Io) : LinearLayout(ctx) {
     fun vistaSel(): View? = botonSel
     fun vistaMic(): View? = botonMic
 
+    @androidx.annotation.VisibleForTesting
+    fun activarCtrlParaTest() { if (!ctrlActivo) alternarCtrl() }
+
     /** Suelta Ctrl y Alt: se llama después de consumir un carácter modificado. */
     fun soltarModificadores() {
         if (ctrlActivo) alternarCtrl()

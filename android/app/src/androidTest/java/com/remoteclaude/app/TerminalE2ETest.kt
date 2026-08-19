@@ -1,6 +1,7 @@
 package com.remoteclaude.app
 
 import android.content.Intent
+import android.view.KeyEvent
 import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -136,6 +137,34 @@ class TerminalE2ETest {
                 visto.contains("Do you want to proceed?")
             }
             assertThat(visto).contains("1. Yes")
+        }
+    }
+
+    /**
+     * Los modificadores pegajosos del keypad se propagan a las teclas ESPECIALES: con Ctrl
+     * activo, tocar End manda al host la secuencia modificada `ESC[1;5F`, no un End pelado.
+     * Antes `enviarTecla` hardcodeaba keyMod=0 y el host nunca veía el Ctrl (por eso Ctrl+End
+     * "no hacía nada" en Claude). El host lee 6 bytes crudos y los compara en hex.
+     */
+    @Test fun ctrlMasTeclaEspecial_llegaAlHostConElModificador() {
+        fixture.exec("rm -f /tmp/marvin_seq")
+        ActivityScenario.launch<MainActivity>(intentFor(fixturePort)).use { scenario ->
+            await(what = "sesión tmux creada") { fixture.tmuxSessions().contains("term 1") }
+            scenario.onActivity { a ->
+                a.screenText()
+                val cmd = ("IFS= read -rsn6 s; printf %s \"\$s\" | od -An -tx1 | tr -d ' \\n' " +
+                    "> /tmp/marvin_seq\n").toByteArray()
+                a.currentSessionForTest()?.write(cmd, 0, cmd.size)
+            }
+            Thread.sleep(2000)   // que el `read` del host ya esté esperando la tecla
+            scenario.onActivity { a ->
+                a.activarCtrlKeypadForTest()
+                a.enviarTeclaEspecialForTest(KeyEvent.KEYCODE_MOVE_END)   // Ctrl+End
+            }
+            // ESC [ 1 ; 5 F  = 1b 5b 31 3b 35 46
+            await(what = "el host recibió Ctrl+End como ESC[1;5F") {
+                fixture.exec("cat /tmp/marvin_seq 2>/dev/null").trim() == "1b5b313b3546"
+            }
         }
     }
 

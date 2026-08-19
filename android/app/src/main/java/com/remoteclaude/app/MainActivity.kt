@@ -130,7 +130,7 @@ class MainActivity : AppCompatActivity() {
         )
 
         keypad = KeypadView(this, object : KeypadView.Io {
-            override fun enviarTecla(keyCode: Int) { terminalView.handleKeyCode(keyCode, 0) }
+            override fun enviarTecla(keyCode: Int) = enviarTeclaEspecial(keyCode)
             override fun escribir(bytes: ByteArray) { tabs.sesionActiva?.write(bytes, 0, bytes.size) }
             override fun modoSeleccion(activo: Boolean) = alCambiarSeleccion(activo)
             override fun tocaronMicrofono(ev: MotionEvent) = dictado.alTocarMicrofono(ev)
@@ -275,7 +275,24 @@ class MainActivity : AppCompatActivity() {
 
     /** Contenido visible de la terminal. Lo usan los tests instrumentados. */
     @androidx.annotation.VisibleForTesting
+    /** Manda una tecla especial (End, Home, PgUp/Dn, flechas…) propagando los modificadores
+     *  pegajosos del keypad. Sin esto Ctrl+End/etc. salían pelados (keyMod=0) y el host nunca
+     *  veía el modificador. handleKeyCode usa el bitmask de termux (KEYMOD_*), no el metaState. */
+    private fun enviarTeclaEspecial(keyCode: Int) {
+        var mod = 0
+        if (keypad.ctrlActivo) mod = mod or com.termux.terminal.KeyHandler.KEYMOD_CTRL
+        if (keypad.altActivo) mod = mod or com.termux.terminal.KeyHandler.KEYMOD_ALT
+        terminalView.handleKeyCode(keyCode, mod)
+        keypad.soltarModificadores()   // one-shot, igual que el camino de caracteres
+    }
+
     fun screenText(): String = tabs.sesionActiva?.emulator?.screen?.transcriptText.orEmpty()
+
+    @androidx.annotation.VisibleForTesting
+    fun activarCtrlKeypadForTest() { keypad.activarCtrlParaTest() }
+
+    @androidx.annotation.VisibleForTesting
+    fun enviarTeclaEspecialForTest(keyCode: Int) = enviarTeclaEspecial(keyCode)
 
     @androidx.annotation.VisibleForTesting
     fun aprobacionVisibleForTest(): Boolean = ::aprobacion.isInitialized && aprobacion.hojaVisibleParaTest()
