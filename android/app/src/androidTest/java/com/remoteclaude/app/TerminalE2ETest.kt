@@ -61,6 +61,7 @@ class TerminalE2ETest {
             .edit()
             .remove("tabs_${hostId(fixturePort)}").remove("active_${hostId(fixturePort)}")
             .remove("tabs_${hostId(rotatedPort)}").remove("active_${hostId(rotatedPort)}")
+            .remove("tabs_e2e-reconx").remove("active_e2e-reconx")
             .putBoolean("tour_off", true)
             .commit()
     }
@@ -165,6 +166,33 @@ class TerminalE2ETest {
             await(what = "el host recibió Ctrl+End como ESC[1;5F") {
                 fixture.exec("cat /tmp/marvin_seq 2>/dev/null").trim() == "1b5b313b3546"
             }
+        }
+    }
+
+    /**
+     * F5: "[reconectando…]" se anuncia UNA sola vez por episodio, no en cada intento del backoff
+     * (con la PC apagada llenaba la terminal). Se apunta a un puerto MUERTO para que la conexión
+     * falle y reintente varias veces, y se cuenta cuántas veces aparece el aviso.
+     */
+    @Test fun reconectando_seAnunciaUnaSolaVez_noEnCadaIntento() {
+        val intent = Intent(ctx, MainActivity::class.java).apply {
+            putExtra("hostname", fixtureHost)
+            putExtra("port", 1)                 // puerto muerto: connect falla y reintenta
+            putExtra("user", FixtureSsh.USER)
+            putExtra("hostId", "e2e-reconx")
+            putExtra("label", "E2E")
+        }
+        ActivityScenario.launch<MainActivity>(intent).use { scenario ->
+            await(what = "aparece [reconectando…]") {
+                var t = ""; scenario.onActivity { a -> t = a.screenText() }
+                t.contains("reconectando")
+            }
+            // dar tiempo a varios intentos más (backoff 1s,2s,3s…): sin el fix se repetiría.
+            Thread.sleep(8000)
+            var visto = ""
+            scenario.onActivity { a -> visto = a.screenText() }
+            val veces = visto.split("reconectando").size - 1
+            assertThat(veces).isEqualTo(1)
         }
     }
 

@@ -56,6 +56,10 @@ class SshTerminalSession(
     /** Si la clave del host cambió, guarda (vieja, nueva) para cortar y avisar. */
     @Volatile private var keyChanged: Pair<String, String>? = null
 
+    // Para no repetir "[reconectando…]" en cada intento del backoff: se anuncia una vez y se
+    // resetea al reconectar con éxito.
+    @Volatile private var reconexionAnunciada = false
+
     @Volatile private var userClosed = false
     @Volatile private var cols = 80
     @Volatile private var rows = 24
@@ -82,7 +86,15 @@ class SshTerminalSession(
         var attempt = 0
         while (!userClosed) {
             cambiarEstado(if (attempt == 0) Estado.CONECTANDO else Estado.RECONECTANDO)
-            status(if (attempt == 0) "Conectando a $user@$host:$port ...\r\n" else "\r\n[reconectando…]\r\n")
+            // "[reconectando…]" se imprimía en CADA intento del loop → con la PC apagada
+            // llenaba la terminal de líneas repetidas. Ahora se anuncia UNA vez por episodio
+            // de reconexión (el flag se resetea al reconectar). La barra ya muestra el estado.
+            if (attempt == 0) {
+                status("Conectando a $user@$host:$port ...\r\n")
+            } else if (!reconexionAnunciada) {
+                status("\r\n[reconectando…]\r\n")
+                reconexionAnunciada = true
+            }
             try {
                 // Si el Tailscale embebido está activo, se conecta al forward local
                 // (127.0.0.1:xxxx -> host:port por la tailnet); si no, directo.
@@ -145,6 +157,7 @@ class SshTerminalSession(
                 sshSession = s
                 stdin = s.stdin
                 attempt = 0
+                reconexionAnunciada = false   // el próximo corte volverá a anunciar una vez
                 cambiarEstado(Estado.CONECTADO)
 
                 // Keepalive: tráfico periódico para que el NAT/firewall (sobre todo en redes

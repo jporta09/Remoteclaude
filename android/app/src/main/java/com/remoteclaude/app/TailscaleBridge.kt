@@ -23,6 +23,9 @@ object TailscaleBridge {
     @Volatile private var started = false
     @Volatile private var initialized = false
     @Volatile private var lastError: String? = null
+    // Si ya esperamos el timeout completo sin que el nodo levante (mala red / nodo trabado),
+    // las llamadas siguientes NO vuelven a colgar 15s cada una: esperan poco y caen al directo.
+    @Volatile private var esperaExpiro = false
     private var readyLatch = CountDownLatch(1)
     private val forwards = HashMap<String, Int>()
     private var nextPort = 21000
@@ -118,6 +121,7 @@ object TailscaleBridge {
             // Sin esto, tras re-escanear el QR el cache seguía devolviendo los puertos
             // del nodo VIEJO (ya cerrado): la app decía "conectado" y NADA funcionaba.
             forwards.clear(); enabled = false; initialized = false
+            esperaExpiro = false   // nodo nuevo: darle de nuevo los 15s completos
             readyLatch = CountDownLatch(1)
         }
         init(ctx)
@@ -130,7 +134,14 @@ object TailscaleBridge {
      */
     fun endpoint(host: String, port: Int): Pair<String, Int> {
         if (!enabled) return host to port
-        try { readyLatch.await(15, TimeUnit.SECONDS) } catch (_: Exception) {}
+        if (!started) {
+            // Primera vez: hasta 15s para que el nodo levante. Si ya expiró antes, sólo 1s
+            // (fail-fast): en mala red la pantalla de docs/dictado no se congela 15s por llamada.
+            val espera = if (esperaExpiro) 1L else 15L
+            try {
+                if (!readyLatch.await(espera, TimeUnit.SECONDS) && !started) esperaExpiro = true
+            } catch (_: Exception) {}
+        }
         if (!started) return host to port   // fallback si el nodo no levantó
         return "127.0.0.1" to localPort(host, port)
     }
