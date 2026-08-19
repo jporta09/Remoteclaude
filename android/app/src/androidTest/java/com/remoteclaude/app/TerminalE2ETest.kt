@@ -113,6 +113,33 @@ class TerminalE2ETest {
     }
 
     /**
+     * WS-F (SPIKE): ¿`screenText()` (emulator.screen.transcriptText) captura el prompt de
+     * aprobación de Claude Code cuando corre en PANTALLA ALTERNADA (lo que hace
+     * CLAUDE_CODE_NO_FLICKER=1)? El riesgo era que transcriptText leyera sólo el buffer
+     * principal. Se simula: entrar a alt-screen (ESC[?1049h), pintar un prompt y, mientras
+     * sigue ahí (sleep), leer el buffer. Si aparece, la hoja estructurada de WS-F es viable.
+     */
+    @Test fun spikeWSF_transcriptTextCapturaElPromptEnPantallaAlternada() {
+        ActivityScenario.launch<MainActivity>(intentFor(fixturePort)).use { scenario ->
+            await(what = "sesión tmux creada") { fixture.tmuxSessions().contains("term 1") }
+            scenario.onActivity { a ->
+                a.screenText()   // fuerza init del emulador
+                // ESC[?1049h = pantalla alternada; ESC[2J limpia; ESC[H cursor arriba; luego el
+                // prompt. El sleep mantiene el alt-screen activo mientras leemos.
+                val cmd = ("printf '\\033[?1049h\\033[2J\\033[HDo you want to proceed?" +
+                    "\\r\\n 1. Yes\\r\\n 2. No\\r\\n'; sleep 8\n").toByteArray()
+                a.currentSessionForTest()?.write(cmd, 0, cmd.size)
+            }
+            var visto = ""
+            await(what = "el prompt del alt-screen aparece en screenText()") {
+                scenario.onActivity { a -> visto = a.screenText() }
+                visto.contains("Do you want to proceed?")
+            }
+            assertThat(visto).contains("1. Yes")
+        }
+    }
+
+    /**
      * WS-A: la barra dice "conectado" (verde, sin sufijo) SOLO cuando la conexión SSH está
      * realmente establecida — no pintada del extra del Intent. Con la clave autorizada, la
      * sesión llega a CONECTADO y la barra no muestra "sin conexión".
