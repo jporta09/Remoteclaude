@@ -32,6 +32,7 @@ class DisplayActivity : AppCompatActivity() {
 
     private lateinit var web: WebView
     private lateinit var zoomLayer: View
+    private lateinit var errorOverlay: TextView   // mensaje traducido cuando la WebView no carga
     private lateinit var btnFit: TextView     // Pantalla (ajustada)
     private lateinit var btnDesk: TextView    // Escritorio
     private lateinit var btnZoom: TextView
@@ -85,7 +86,35 @@ class DisplayActivity : AppCompatActivity() {
                     error: android.webkit.WebResourceError?,
                 ) {
                     // sólo el documento principal; los sub-recursos no deben disparar fallback
-                    if (request?.isForMainFrame == true) fallbackToDirect()
+                    if (request?.isForMainFrame != true) return
+                    val desc = error?.description?.toString().orEmpty()
+                    when {
+                        // Android bloquea HTTP en claro salvo loopback/MagicDNS. Cuando el visor
+                        // cae al endpoint DIRECTO por IP cruda (Tailscale apagado + túnel SSH
+                        // imposible, host viejo), Chrome tira ERR_CLEARTEXT_NOT_PERMITTED. Antes
+                        // eso mostraba la página de error cruda de Chrome, incomprensible.
+                        desc.contains("CLEARTEXT") -> mostrarErrorVisor(
+                            "No pude abrir el visor por HTTP directo a la IP del host: Android " +
+                                "bloquea el tráfico en claro fuera de la tailnet.\n\n" +
+                                "Activá Tailscale (línea “VPN” en la pantalla de hosts) para verlo " +
+                                "por la tailnet, o actualizá el host para publicar noVNC en loopback " +
+                                "(así viaja tunelizado por SSH). Después volvé a abrir el visor."
+                        )
+                        // Primer fallo POR EL TÚNEL (127.0.0.1): se reintenta una vez por el
+                        // endpoint directo. Si ya estábamos directos, no hay a dónde caer.
+                        !triedDirect && novncHost == "127.0.0.1" -> fallbackToDirect()
+                        else -> mostrarErrorVisor(
+                            "No pude cargar el visor ($desc). Verificá que el navegador headed " +
+                                "esté corriendo en el host (run-visible.sh) y tocá ↻ para reintentar."
+                        )
+                    }
+                }
+
+                override fun onPageStarted(view: WebView?, url: String?, favicon: android.graphics.Bitmap?) {
+                    // Cada intento arranca sin el mensaje: si falla, onReceivedError lo vuelve a
+                    // mostrar. (No se puede limpiar en onPageFinished: eso también corre DESPUÉS
+                    // de un load fallido y borraría el error apenas aparecido.)
+                    errorOverlay.visibility = View.GONE
                 }
             }
         }
@@ -96,9 +125,20 @@ class DisplayActivity : AppCompatActivity() {
             setOnTouchListener { _, ev -> onZoomTouch(ev) }
         }
 
+        errorOverlay = TextView(this).apply {
+            visibility = View.GONE
+            setBackgroundColor(PETROL)
+            setTextColor(FG)
+            typeface = monoFont
+            gravity = Gravity.CENTER
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+            setPadding(dp(28), dp(28), dp(28), dp(28))
+        }
+
         val root = FrameLayout(this).apply { setBackgroundColor(PETROL) }
         root.addView(web, FrameLayout.LayoutParams(MATCH, MATCH))
         root.addView(zoomLayer, FrameLayout.LayoutParams(MATCH, MATCH))
+        root.addView(errorOverlay, FrameLayout.LayoutParams(MATCH, MATCH))
         root.addView(buildTopBar(), FrameLayout.LayoutParams(MATCH, WRAP, Gravity.TOP))
         root.addView(buildBottomSheet(), FrameLayout.LayoutParams(MATCH, WRAP, Gravity.BOTTOM))
         setContentView(root)
@@ -161,6 +201,16 @@ class DisplayActivity : AppCompatActivity() {
                 if (isFinishing || isDestroyed) return@runOnUiThread
                 web.loadUrl(url())
             }
+        }
+    }
+
+    /** Muestra un mensaje legible encima del visor cuando la WebView no puede cargar (en vez
+     *  de la página de error cruda de Chrome). Se corre en el hilo de UI. */
+    private fun mostrarErrorVisor(texto: String) {
+        runOnUiThread {
+            if (isFinishing || isDestroyed) return@runOnUiThread
+            errorOverlay.text = texto
+            errorOverlay.visibility = View.VISIBLE
         }
     }
 
@@ -371,6 +421,14 @@ class DisplayActivity : AppCompatActivity() {
 
     private fun dp(v: Int) =
         TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, v.toFloat(), resources.displayMetrics).toInt()
+
+    /** ¿Está visible el mensaje de error traducido? (WS-J: en vez de la página cruda de Chrome). */
+    @androidx.annotation.VisibleForTesting
+    fun errorVisibleParaTest() = errorOverlay.visibility == View.VISIBLE
+
+    /** Texto actual del mensaje de error del visor (para los tests). */
+    @androidx.annotation.VisibleForTesting
+    fun errorTextoParaTest() = errorOverlay.text?.toString().orEmpty()
 
     companion object {
         private const val FB_W = 1920f
