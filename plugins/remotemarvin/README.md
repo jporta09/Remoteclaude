@@ -19,7 +19,7 @@ Invocadas como `remotemarvin:remotemarvin`, `remotemarvin:share-doc`,
 ## Instalar (desde el repo, marketplace local)
 
 ```
-/plugin marketplace add /home/jporta/proyectos/Remoteclaude
+/plugin marketplace add <ruta-del-repo>
 /plugin install remotemarvin@remotemarvin
 ```
 

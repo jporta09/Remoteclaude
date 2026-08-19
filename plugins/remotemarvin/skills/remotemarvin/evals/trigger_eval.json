@@ -1,0 +1,22 @@
+[
+  {"query": "qué puede hacer la app de RemoteMarvin?", "should_trigger": true},
+  {"query": "cómo uso RemoteMarvin para laburar desde el celu?", "should_trigger": true},
+  {"query": "qué features tiene remoteclaude además de la terminal?", "should_trigger": true},
+  {"query": "cómo vinculo el celular a la tailnet con el QR de la app?", "should_trigger": true},
+  {"query": "cómo configuro RemoteMarvin en un host nuevo?", "should_trigger": true},
+  {"query": "qué es el visor de la app y para qué sirve?", "should_trigger": true},
+  {"query": "la app puede recibir archivos que subo desde el teléfono? cómo?", "should_trigger": true},
+  {"query": "explicame las capacidades de la app que uso desde el celular", "should_trigger": true},
+  {"query": "che la app esta de RemoteMarvin, cómo la aprovecho mejor?", "should_trigger": true},
+  {"query": "cómo hago para trabajar con Claude desde el celu con la app?", "should_trigger": true},
+  {"query": "corré los tests del proyecto", "should_trigger": false},
+  {"query": "hacé un commit con lo que cambiamos y pusheá", "should_trigger": false},
+  {"query": "explicame qué es la recursión con un ejemplo", "should_trigger": false},
+  {"query": "qué hora es en Tokio ahora?", "should_trigger": false},
+  {"query": "arreglá el null pointer que tira el login", "should_trigger": false},
+  {"query": "instalá las dependencias con npm install", "should_trigger": false},
+  {"query": "cómo funciona el handshake de TCP?", "should_trigger": false},
+  {"query": "escribime un README para este repo", "should_trigger": false},
+  {"query": "buscá en la web la documentación de React hooks", "should_trigger": false},
+  {"query": "renombrá la variable `tmp` en todo el archivo", "should_trigger": false}
+]

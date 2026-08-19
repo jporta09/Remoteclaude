@@ -57,8 +57,22 @@ fi
 [ -e /dev/net/tun ] || sudo modprobe tun || true
 
 echo "==> sshd + tmux + jq + qrencode"
-sudo apt-get update
-sudo apt-get install -y openssh-server tmux jq qrencode
+# Multi-distro: antes asumía apt-get y moría en no-Debian. El paquete de sshd cambia de nombre
+# por familia (openssh-server en Debian/RHEL, openssh en Arch).
+if command -v apt-get >/dev/null 2>&1; then
+    sudo apt-get update
+    sudo apt-get install -y openssh-server tmux jq qrencode
+elif command -v dnf >/dev/null 2>&1; then
+    sudo dnf install -y openssh-server tmux jq qrencode
+elif command -v pacman >/dev/null 2>&1; then
+    sudo pacman -Sy --needed --noconfirm openssh tmux jq qrencode
+elif command -v zypper >/dev/null 2>&1; then
+    sudo zypper install -y openssh tmux jq qrencode
+else
+    echo "!! no reconozco el gestor de paquetes de esta distro."
+    echo "   Instalá a mano: sshd (openssh-server/openssh), tmux, jq, qrencode — y volvé a correr."
+    exit 1
+fi
 
 echo "==> sshd: solo por clave (sin password)"
 sudo tee /etc/ssh/sshd_config.d/remotemarvin.conf >/dev/null <<'EOF'

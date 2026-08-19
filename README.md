@@ -48,6 +48,14 @@ docker compose up -d --build   # contenedores: tailscale (red) + display (visor)
 Después, autorizá el celular: en la app, botón **🔑** → copiás la clave pública → la pegás
 en `~/.ssh/authorized_keys` del host.
 
+En **Claude Code**, en el host (una vez) — instalá el plugin para que Claude sepa usar la app
+(compartir documentos al celu, abrir el visor, correr browsers headed visibles):
+
+```
+/plugin marketplace add <ruta-del-repo>
+/plugin install remotemarvin@remotemarvin
+```
+
 En el **celular**:
 
 1. **Instalá el APK.** Bajá el último `RemoteMarvin-vX.Y.Z.apk` de

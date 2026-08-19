@@ -1,0 +1,22 @@
+[
+  {"query": "armame un gráfico de barras con las ventas del trimestre y pasámelo al celu así lo miro", "should_trigger": true},
+  {"query": "generá un PDF con el informe de resultados y dejámelo en Documentos para verlo desde el teléfono", "should_trigger": true},
+  {"query": "dibujame un diagrama de la arquitectura del sistema y mostrámelo en el celular", "should_trigger": true},
+  {"query": "hacé un csv con los datos que sacaste del scraping y mandámelo así lo abro desde el celu", "should_trigger": true},
+  {"query": "convertí este svg a png y pasámelo que lo quiero ver en el teléfono", "should_trigger": true},
+  {"query": "che te subí una captura de pantalla desde el celu, fijate qué error muestra", "should_trigger": true},
+  {"query": "generá un reporte en markdown de los tests que fallaron y que lo pueda mirar desde el celular", "should_trigger": true},
+  {"query": "armá un plot de la distribución de latencias y mostrámelo", "should_trigger": true},
+  {"query": "te mandé una foto del pizarrón desde el teléfono, transcribime lo que dice", "should_trigger": true},
+  {"query": "hacé una imagen con el mockup de la pantalla de login y pasámela al visor", "should_trigger": true},
+  {"query": "generá el código del endpoint de login en Python", "should_trigger": false},
+  {"query": "armá los tests unitarios para el módulo de pagos", "should_trigger": false},
+  {"query": "hacé un build de release del proyecto", "should_trigger": false},
+  {"query": "escribime una función que ordene la lista por fecha", "should_trigger": false},
+  {"query": "mostrame el log de errores acá en la terminal", "should_trigger": false},
+  {"query": "guardá esto en un archivo temporal para el build, no lo necesito ver", "should_trigger": false},
+  {"query": "refactorizá el archivo main.py que quedó largo", "should_trigger": false},
+  {"query": "corré el linter y arreglá lo que marque", "should_trigger": false},
+  {"query": "explicame cómo funciona el algoritmo de Dijkstra", "should_trigger": false},
+  {"query": "hacé un commit con estos cambios y pusheá", "should_trigger": false}
+]
