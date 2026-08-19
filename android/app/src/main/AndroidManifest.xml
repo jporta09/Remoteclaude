@@ -53,6 +53,11 @@
             android:exported="false"
             android:configChanges="orientation|screenSize|keyboardHidden" />
 
+        <!-- Pantalla de diagnóstico (F8): timeline de eventos de conexión -->
+        <activity
+            android:name=".DiagnosticoActivity"
+            android:exported="false" />
+
         <!-- Visor de documentos compartidos (host:~/RemoteMarvinDocs) -->
         <activity
             android:name=".DocsActivity"

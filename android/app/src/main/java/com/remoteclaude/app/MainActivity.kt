@@ -546,8 +546,14 @@ class MainActivity : AppCompatActivity() {
         gravity = Gravity.CENTER_VERTICAL
         setBackgroundColor(Paleta.CHEV_BG)
         setPadding(dp(12), dp(8), dp(12), dp(8))
-        contentDescription = "Volver a la lista de hosts"
+        contentDescription = "Volver a la lista de hosts. Mantené apretado para el diagnóstico de conexión."
         setOnClickListener { finish() }
+        // F8: toque largo → pantalla de diagnóstico (timeline de conexión). Es una función de
+        // troubleshooting, por eso va escondida en un long-press y no ocupa lugar en la barra.
+        setOnLongClickListener {
+            startActivity(Intent(this@MainActivity, DiagnosticoActivity::class.java))
+            true
+        }
         barraLabel = TextView(this@MainActivity).apply {
             text = "‹  $hostLabel"
             typeface = monoFont

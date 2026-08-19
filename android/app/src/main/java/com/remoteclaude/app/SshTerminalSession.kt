@@ -48,6 +48,14 @@ class SshTerminalSession(
     private fun cambiarEstado(nuevo: Estado) {
         if (estado == nuevo) return
         estado = nuevo
+        // F8: timeline de conexión. cambiarEstado dedup por sí solo (RECONECTANDO se registra
+        // una vez por episodio aunque el backoff reintente varias veces).
+        val nivel = when (nuevo) {
+            Estado.CAIDO -> Diagnostico.Nivel.ERROR
+            Estado.RECONECTANDO -> Diagnostico.Nivel.AVISO
+            else -> Diagnostico.Nivel.INFO
+        }
+        Diagnostico.registrar(nivel, "conexión", "$host:$port — ${nuevo.name.lowercase()}")
         onEstadoCambio?.invoke()
     }
 
@@ -103,7 +111,12 @@ class SshTerminalSession(
                 c.connect(
                     HostKeys.verifier(
                         appCtx, host, port,
-                        onNew = { fp -> status("\r\n[clave del host fijada — $fp]\r\n") },
+                        onNew = { fp ->
+                            status("\r\n[clave del host fijada — $fp]\r\n")
+                            Diagnostico.registrar(
+                                Diagnostico.Nivel.INFO, "clave-host", "$host:$port — clave fijada ($fp)",
+                            )
+                        },
                         onMismatch = { old, new -> keyChanged = old to new },
                         // La terminal es la ÚNICA ruta que fija la primera clave: muestra la
                         // huella por onNew, así confiar es una decisión visible del usuario.
@@ -118,6 +131,10 @@ class SshTerminalSession(
                 if (userClosed) { try { c.close() } catch (_: Exception) {}; break }
                 if (!c.authenticateWithPublicKey(user, keyPair)) {
                     status("\r\n[autenticación SSH falló — la clave no está autorizada]\r\n")
+                    Diagnostico.registrar(
+                        Diagnostico.Nivel.ERROR, "auth",
+                        "$host:$port — la clave de la app no está autorizada para $user",
+                    )
                     userClosed = true
                     cambiarEstado(Estado.CAIDO)
                     onAuthFailed?.invoke()
@@ -129,6 +146,10 @@ class SshTerminalSession(
                 // parecía que no se había perdido nada (una sesión de Claude de horas, ida).
                 if (attempt > 0 && !tmuxSesionVive(c)) {
                     status("\r\n[la sesión anterior se perdió — el host se reinició. Esta es nueva.]\r\n")
+                    Diagnostico.registrar(
+                        Diagnostico.Nivel.AVISO, "sesión",
+                        "$host:$port — la sesión tmux anterior se perdió (el host se reinició)",
+                    )
                     onSesionPerdida?.invoke(tmuxSession)
                 }
                 val s = c.openSession()
@@ -183,8 +204,15 @@ class SshTerminalSession(
                     if (n <= 0) break     // -1 = fin; 0 no debería pasar, pero no lo tratamos como dato
                     onTransportInput(buf, 0, n)
                 }
-            } catch (_: Exception) {
-                // cayó la conexión; se reintenta abajo
+            } catch (e: Exception) {
+                // cayó la conexión; se reintenta abajo. Sólo se registra si estábamos conectados
+                // (si no, ya lo cuenta el estado RECONECTANDO y no llenamos el buffer de ruido).
+                if (estado == Estado.CONECTADO) {
+                    Diagnostico.registrar(
+                        Diagnostico.Nivel.AVISO, "conexión",
+                        "$host:$port — se cortó (${e.message ?: e.javaClass.simpleName})",
+                    )
+                }
             } finally {
                 closeCurrent()
             }
@@ -194,6 +222,10 @@ class SshTerminalSession(
                     "\r\n[LA CLAVE DEL HOST CAMBIÓ — conexión bloqueada]\r\n" +
                         "  antes: $old\r\n  ahora: $new\r\n" +
                         "  Puede ser una reinstalación del server… o alguien interceptando.\r\n"
+                )
+                Diagnostico.registrar(
+                    Diagnostico.Nivel.ERROR, "clave-host",
+                    "$host:$port — LA CLAVE DEL HOST CAMBIÓ (antes $old / ahora $new) — bloqueado",
                 )
                 userClosed = true
                 cambiarEstado(Estado.CAIDO)

@@ -279,6 +279,12 @@ row.setStyle(TableStyle([
 ]))
 S.append(row)
 S.append(Spacer(1, 6))
+S.append(P("Diagnóstico de conexión", h2))
+S.append(P("Si algo anda raro con la conexión, <b>mantené apretada la barra de arriba</b> (la "
+           "del ‹ nombre del equipo): se abre el <b>diagnóstico</b>, el historial reciente de "
+           "qué pasó —conectó, reconectó, se cayó, cambió la clave del host…— más nuevo arriba. "
+           "<b>Compartir</b> lo manda como texto (para pegarlo en un reporte) y <b>Limpiar</b> lo "
+           "vacía. No guarda contenido de la terminal ni claves."))
 
 # --- 6. Claude Code ----------------------------------------------------------
 S.append(P("Claude Code en el celular", h1))

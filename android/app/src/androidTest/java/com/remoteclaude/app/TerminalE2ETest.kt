@@ -268,6 +268,30 @@ class TerminalE2ETest {
     }
 
     /**
+     * F8: la observabilidad registra los hitos de conexión. Al conectar de verdad contra el
+     * fixture, el ring buffer de Diagnostico anota "conectado" para este host, y la pantalla de
+     * diagnóstico se abre sin caerse mostrándolo.
+     */
+    @Test fun diagnostico_registraLaConexion_yLaPantallaAbre() {
+        Diagnostico.limpiar()   // el buffer es global: aislar lo de este test
+        ActivityScenario.launch<MainActivity>(intentFor(fixturePort)).use { scenario ->
+            await(what = "la sesión activa llega a CONECTADO") {
+                var e: SshTerminalSession.Estado? = null
+                scenario.onActivity { a -> e = a.currentSessionForTest()?.estado }
+                e == SshTerminalSession.Estado.CONECTADO
+            }
+            await(what = "el diagnóstico registró la conexión") {
+                Diagnostico.exportarTexto()
+                    .contains("conexión: $fixtureHost:$fixturePort — conectado")
+            }
+        }
+        // La pantalla de diagnóstico se dibuja con eventos presentes sin crashear.
+        ActivityScenario.launch(DiagnosticoActivity::class.java).use { esc ->
+            esc.onActivity { assertThat(Diagnostico.instantanea()).isNotEmpty() }
+        }
+    }
+
+    /**
      * WS-A: la barra dice "conectado" (verde, sin sufijo) SOLO cuando la conexión SSH está
      * realmente establecida — no pintada del extra del Intent. Con la clave autorizada, la
      * sesión llega a CONECTADO y la barra no muestra "sin conexión".
