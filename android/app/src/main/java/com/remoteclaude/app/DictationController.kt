@@ -25,12 +25,17 @@ class DictationController(
     private val user: String,
     private val keyPair: java.security.KeyPair,
     private val control: RemoteControl,
-    private val burbuja: TextView,
+    private val burbuja: View,             // contenedor de la burbuja (show/hide)
+    private val burbujaTexto: TextView,    // texto: parciales en vivo + transcripción final
+    private val burbujaBotones: View,      // fila Descartar/Insertar (visible sólo en el preview)
+    private val btnInsertar: View,
+    private val btnDescartar: View,
     private val teclado: () -> KeypadView?,
     private val sesionActiva: () -> SshTerminalSession?,
 ) {
     private val grabador = WavRecorder()
     @Volatile private var transcribiendo = false
+    @Volatile private var previewPendiente = false
     private var vivo: LiveDictation? = null
 
     /** Devuelve true: consume el evento del botón. */
@@ -59,6 +64,9 @@ class DictationController(
 
     private fun empezar() {
         if (transcribiendo) return
+        // Si había un preview pendiente y el usuario vuelve a dictar, ese preview se descarta
+        // (no lo dejamos colgado ni lo insertamos solo).
+        if (previewPendiente) { ocultarBurbuja(); micEnReposo() }
         if (act.checkSelfPermission(Manifest.permission.RECORD_AUDIO) !=
             PackageManager.PERMISSION_GRANTED
         ) {
@@ -69,7 +77,10 @@ class DictationController(
         // queden encolados hasta que el túnel y el WebSocket abran, en vez de perderse.
         val l = LiveDictation(act, host, port, user, keyPair) { txt ->
             act.runOnUiThread {
-                if (burbuja.visibility == View.VISIBLE) burbuja.text = txt.takeLast(220)
+                // sólo mientras se escucha (no piso el preview si ya se está mostrando)
+                if (burbuja.visibility == View.VISIBLE && burbujaBotones.visibility != View.VISIBLE) {
+                    burbujaTexto.text = txt.takeLast(220)
+                }
             }
         }
         vivo = l
@@ -83,7 +94,8 @@ class DictationController(
             if (l.start()) {
                 act.runOnUiThread {
                     if (grabador.isRecording) {
-                        burbuja.text = "🎙 Escuchando…"
+                        burbujaTexto.text = "🎙 Escuchando…"
+                        burbujaBotones.visibility = View.GONE
                         burbuja.visibility = View.VISIBLE
                     }
                 }
@@ -123,22 +135,44 @@ class DictationController(
                 }
             }
             act.runOnUiThread {
-                if (!texto.isNullOrBlank()) {
-                    val bytes = "$texto ".toByteArray(Charsets.UTF_8)
-                    destino.write(bytes, 0, bytes.size)
-                }
-                ocultarBurbuja()
-                micEnReposo()
                 // Se libera DENTRO del post al main: soltándolo en el worker, el main podía no
-                // ver el cambio y el botón quedaba inutilizable el resto de la sesión.
+                // ver el cambio y el botón quedaba inutilizable el resto de la sesión. El STT ya
+                // volvió, así que el mic queda libre aunque el preview siga abierto.
                 transcribiendo = false
+                val limpio = sanitizarDictado(texto)
+                if (limpio.isBlank()) {
+                    ocultarBurbuja(); micEnReposo()
+                    return@runOnUiThread
+                }
+                // Preview no-modal (F6): en vez de escribir directo al prompt, mostramos la
+                // transcripción con Insertar/Descartar. Insertar escribe (sin Enter, ya saneado);
+                // Descartar no escribe nada; la edición fina se hace en el prompt tras insertar.
+                mostrarPreview(limpio, destino)
+                micEnReposo()
             }
         }
     }
 
+    /** Muestra la transcripción en la burbuja con Descartar/Insertar (no-modal). Insertar escribe
+     *  al destino (el que se fijó al soltar el mic), SIN Enter; Descartar no escribe nada. */
+    private fun mostrarPreview(texto: String, destino: SshTerminalSession) {
+        previewPendiente = true
+        burbujaTexto.text = texto
+        burbujaBotones.visibility = View.VISIBLE
+        burbuja.visibility = View.VISIBLE
+        btnInsertar.setOnClickListener {
+            val bytes = "$texto ".toByteArray(Charsets.UTF_8)
+            destino.write(bytes, 0, bytes.size)   // sin Enter: se revisa/edita en el prompt
+            ocultarBurbuja()
+        }
+        btnDescartar.setOnClickListener { ocultarBurbuja() }
+    }
+
     private fun ocultarBurbuja() {
         burbuja.visibility = View.GONE
-        burbuja.text = ""
+        burbujaBotones.visibility = View.GONE
+        burbujaTexto.text = ""
+        previewPendiente = false
     }
 
     private fun micEnReposo() = teclado()?.estadoMicrofono("Dictar", Paleta.KEY_FG)
@@ -148,3 +182,10 @@ class DictationController(
         const val REQ_MIC = 71
     }
 }
+
+/** Saca los caracteres de control ANTES de que el texto del dictado toque el prompt: un `\n`
+ *  del STT sería un Enter IMPLÍCITO (mandaría el comando sin que lo revises) — el gate de Enter
+ *  no lo cubría. Reemplaza todo control char (incl. \n \r \t) por espacio y colapsa espacios.
+ *  Top-level para poder testearlo sin instanciar la Activity. */
+fun sanitizarDictado(texto: String?): String =
+    (texto ?: "").replace(Regex("\\p{Cntrl}"), " ").replace(Regex(" +"), " ").trim()

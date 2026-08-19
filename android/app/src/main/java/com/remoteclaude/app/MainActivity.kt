@@ -128,7 +128,9 @@ class MainActivity : AppCompatActivity() {
         val burbuja = crearBurbujaDictado()
         dictado = DictationController(
             act = this, host = host, port = port, user = user, keyPair = keyPair,
-            control = control, burbuja = burbuja,
+            control = control,
+            burbuja = burbuja, burbujaTexto = burbujaTexto, burbujaBotones = burbujaBotones,
+            btnInsertar = burbujaInsertar, btnDescartar = burbujaDescartar,
             teclado = { if (::keypad.isInitialized) keypad else null },
             sesionActiva = { tabs.sesionActiva },
         )
@@ -248,7 +250,9 @@ class MainActivity : AppCompatActivity() {
         Tour.Paso(
             "Dictado por voz",
             "Mantenga presionado el botón y hable: rojo indica que graba, … que " +
-                "transcribe, y el texto aparece en la terminal. Suelte para terminar.",
+                "transcribe. Al soltar, la transcripción aparece en una burbuja: " +
+                "Insertar la escribe en la terminal (sin Enter, para revisarla) o " +
+                "Descartar la tira.",
             blanco = { keypad.vistaMic() },
         ),
     )
@@ -522,14 +526,47 @@ class MainActivity : AppCompatActivity() {
     }
 
     /** Burbuja del dictado en vivo: los parciales mientras sostenés 🎤. */
-    private fun crearBurbujaDictado() = TextView(this).apply {
-        visibility = View.GONE
-        setBackgroundColor(0xF20F232D.toInt())
-        setTextColor(Paleta.BUBBLE_FG)
-        setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
-        typeface = Typeface.MONOSPACE
-        maxLines = 3
-        setPadding(dp(12), dp(8), dp(12), dp(8))
+    // La burbuja de dictado dejó de ser un TextView suelto: ahora es un contenedor con el
+    // texto (parciales en vivo + transcripción final) y una fila de acciones Descartar/Insertar
+    // que aparece SOLO en el preview (F6). Las partes las maneja DictationController.
+    private lateinit var burbujaTexto: TextView
+    private lateinit var burbujaBotones: LinearLayout
+    private lateinit var burbujaInsertar: TextView
+    private lateinit var burbujaDescartar: TextView
+
+    private fun crearBurbujaDictado(): View {
+        burbujaTexto = TextView(this).apply {
+            setTextColor(Paleta.BUBBLE_FG)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+            typeface = Typeface.MONOSPACE
+            maxLines = 4
+        }
+        fun accion(txt: String, color: Int) = TextView(this).apply {
+            text = txt
+            setTextColor(color)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+            typeface = Typeface.MONOSPACE
+            setPadding(dp(18), dp(8), dp(18), dp(6))
+        }
+        // Descartar tan fácil como Insertar (recomendación del Arq. IA: la ruta de menor
+        // esfuerzo no debe ser "aceptar sí o sí").
+        burbujaDescartar = accion("Descartar", Paleta.REC_FG)
+        burbujaInsertar = accion("Insertar", Paleta.ACCENT)
+        burbujaBotones = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.END
+            visibility = View.GONE
+            addView(burbujaDescartar)
+            addView(burbujaInsertar)
+        }
+        return LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            visibility = View.GONE
+            setBackgroundColor(0xF20F232D.toInt())
+            setPadding(dp(12), dp(8), dp(12), dp(8))
+            addView(burbujaTexto)
+            addView(burbujaBotones)
+        }
     }
 
     /** Detecta si el teclado QWERTY está visible (por el alto que tapa) para la fila de ⇧Tab. */

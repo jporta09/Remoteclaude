@@ -305,10 +305,12 @@ S.append(P("Cuando Claude pide permiso para correr un comando o aplicar un cambi
 
 # --- 7. Dictado -------------------------------------------------------------
 S.append(P("Dictado por voz", h1))
-S.append(P("Mantené apretado <b>Dictar</b> (el micrófono) y hablá: al soltar, el texto aparece en la "
-           "terminal como si lo hubieras tipeado. <b>Sin Enter</b>, así lo revisás antes de "
-           "mandarlo."))
-S.append(B("Si la PC tiene GPU, vas viendo el texto <b>en vivo</b> mientras hablás."))
+S.append(P("Mantené apretado <b>Dictar</b> (el micrófono) y hablá: al soltar, la transcripción "
+           "aparece en una <b>burbuja</b> con dos botones. <b>Insertar</b> la escribe en la terminal "
+           "(<b>sin Enter</b>, para que la revises y edites antes de mandarla); <b>Descartar</b> la "
+           "tira sin escribir nada. Así, si el dictado entendió cualquier cosa, no toca tu prompt."))
+S.append(B("Si la PC tiene GPU, vas viendo el texto <b>en vivo</b> en la burbuja mientras hablás; "
+           "al soltar aparecen Insertar/Descartar."))
 S.append(B("El audio se transcribe <b>en tu PC</b> (faster-whisper), no en un servicio de "
            "terceros, y viaja por tu propia conexión."))
 S.append(B("El motor se apaga solo tras un rato sin uso para liberar la memoria de la "
