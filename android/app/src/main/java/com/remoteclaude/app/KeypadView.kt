@@ -151,6 +151,8 @@ class KeypadView(ctx: Context, private val io: Io) : LinearLayout(ctx) {
     private fun alternarOverflow() {
         overflow = !overflow
         chevron.text = if (overflow) "‹" else "›"
+        // el content-desc antes no cambiaba: un lector de pantalla decía siempre "Más teclas".
+        chevron.contentDescription = if (overflow) "Volver a las teclas principales" else "Más teclas"
         poblarFilaSuperior()
     }
 
@@ -208,7 +210,8 @@ class KeypadView(ctx: Context, private val io: Io) : LinearLayout(ctx) {
         minWidth = 0
         minHeight = 0
         setPadding(context.dp(4), context.dp(10), context.dp(4), context.dp(10))
-        layoutParams = LayoutParams(context.dp(34), Paleta.MATCH)
+        // 48dp: target táctil mínimo recomendado (antes 34dp, angosto y fácil de errar).
+        layoutParams = LayoutParams(context.dp(48), Paleta.MATCH)
         setOnClickListener { alternarOverflow(); io.volverElFoco() }
     }
 

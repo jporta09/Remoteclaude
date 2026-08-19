@@ -563,9 +563,9 @@ confianza está desacoplada de la decisión/estado de confianza*.
 | 1 | **Nodos de tailnet no-efímeros huérfanos al desinstalar** (+ sin `teardown-host.sh` para units/linger/bloques/sshd.d/contenedores) ✅ | Seguridad, DevOps | `ts-link-qr.sh:39`, `Makefile` |
 | 1 | **✔ RESUELTO (F2)** · **`description` de `headed-browser` = 1041 > 1024 chars**: recortado a 1003 (se sacó el paréntesis final `(display on DISPLAY :99, noVNC :6080)`) ✅ | Arq. IA | `headed-browser/SKILL.md` |
 | 1 | **✔ RESUELTO (F2)** · **Trigger-evals incompletas**: creados `share-doc/evals/trigger_eval.json` y `remotemarvin/evals/trigger_eval.json` (10 pos + 10 negativos adversarios, mismo schema que headed-browser) ✅ | Arq. IA | `plugins/.../skills/*/evals/` |
-| 1 | **Diálogos AlertDialog blancos rompen el tema oscuro CRT** ✅ | UX | diálogos nativos |
-| 1 | **Bajo contraste en textos de estado/vacío**; chevron `›` con target angosto (~34dp) y content-desc que no cambia al togglear ✅ | UX | key row / textos muted |
-| 1 | **Instrucción QR inconsistente**: app dice `docker compose exec gateway ts-link-qr`, manual dice `./scripts/ts-link-qr.sh` ✅ | UX, DevOps | diálogo Tailscale vs manual |
+| 1 | **✔ RESUELTO (F4)** · **Diálogos AlertDialog blancos rompen el tema oscuro CRT**: overlay oscuro (`ThemeOverlay.Remoteclaude.Dialog` vía `alertDialogTheme`/`materialAlertDialogTheme`) para todos los AlertDialog nativos; verificado en el emulador (fondo petróleo, texto claro, botones verdes) ✅ | UX | diálogos nativos |
+| 1 | **✔ RESUELTO (F4)** · **Bajo contraste en textos de estado/vacío; chevron `›` angosto y content-desc estático**: `marvin_muted` subido #5E8B7E→#7FA99B; chevron 34→48dp; su content-desc ahora cambia al togglear ("Más teclas"/"Volver a las teclas principales") ✅ | UX | key row / textos muted |
+| 1 | **✔ RESUELTO (F4)** · **Instrucción QR inconsistente**: el diálogo de Tailscale ahora dice `./scripts/ts-link-qr.sh` (alineado con el manual) ✅ | UX, DevOps | diálogo Tailscale vs manual |
 | 1 | **✔ RESUELTO (F2)** · **`.env.example` dice "efímera" pero el nodo es no-efímero**; `plugins/remotemarvin/README.md` hardcodeaba la ruta del autor: corregidos a "un solo uso (no efímera)" y `<ruta-del-repo>` ✅ | DevOps | `.env.example:18`, `plugins/.../README.md:22` |
 | 1 | **✔ RESUELTO (F2)** · **`setup-host.sh` asume `apt-get`**: fallback a dnf/pacman/zypper y mensaje claro si no reconoce el gestor, en vez de morir ✅ | DevOps | `setup-host.sh:60` |
 

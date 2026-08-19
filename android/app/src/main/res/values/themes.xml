@@ -7,5 +7,20 @@
         <item name="android:navigationBarColor">@color/rc_bg</item>
         <!-- barra oscura -> íconos claros -->
         <item name="android:windowLightStatusBar">false</item>
+        <!-- Los AlertDialog nativos (título/mensaje/ítems/botones) seguían el day/night del
+             sistema y salían BLANCOS en modo claro, rompiendo el tema oscuro CRT. Se fuerza un
+             overlay oscuro para todos (los diálogos con setView propio ya eran oscuros). -->
+        <item name="alertDialogTheme">@style/ThemeOverlay.Remoteclaude.Dialog</item>
+        <item name="materialAlertDialogTheme">@style/ThemeOverlay.Remoteclaude.Dialog</item>
+    </style>
+
+    <style name="ThemeOverlay.Remoteclaude.Dialog" parent="ThemeOverlay.Material3.Dialog.Alert">
+        <item name="colorSurface">@color/marvin_surface</item>
+        <item name="colorOnSurface">@color/marvin_fg</item>
+        <item name="colorOnSurfaceVariant">@color/marvin_fg</item>
+        <item name="android:colorBackground">@color/marvin_surface</item>
+        <item name="android:textColorPrimary">@color/marvin_fg</item>
+        <item name="android:textColorSecondary">@color/marvin_fg</item>
+        <item name="colorPrimary">@color/marvin_green</item>
     </style>
 </resources>

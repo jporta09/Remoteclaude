@@ -5,7 +5,7 @@
     <color name="marvin_petrol">#0F232D</color>     <!-- Verde petróleo: fondo / secundario -->
     <color name="marvin_amber">#FDB940</color>      <!-- Ámbar CTR: acento secundario -->
     <color name="marvin_fg">#F2F2F2</color>         <!-- Gris claro: texto sobre fondo oscuro -->
-    <color name="marvin_muted">#5E8B7E</color>      <!-- Verde alt apagado: negativo / mono -->
+    <color name="marvin_muted">#7FA99B</color>      <!-- Verde alt apagado (subido de #5E8B7E para más contraste sobre el petróleo): negativo / mono -->
     <color name="marvin_surface">#16323D</color>    <!-- Panel sobre el petróleo -->
 
     <!-- Aliases usados por el tema y las vistas -->

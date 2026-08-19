@@ -227,9 +227,8 @@ class HostsActivity : AppCompatActivity() {
             .setTitle("Tailscale embebido")
             .setMessage(
                 "La app levanta su propio nodo Tailscale (no necesitás la app de Tailscale " +
-                    "aparte). Lo más fácil: en la PC corré  docker compose exec gateway " +
-                    "ts-link-qr  y escaneá el QR. O pegá una auth key a mano. Vacío = " +
-                    "conexión directa."
+                    "aparte). Lo más fácil: en la PC corré  ./scripts/ts-link-qr.sh  y escaneá " +
+                    "el QR. O pegá una auth key a mano. Vacío = conexión directa."
             )
             .setView(input)
             .setPositiveButton("Guardar y conectar") { _, _ ->
