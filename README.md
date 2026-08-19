@@ -48,8 +48,18 @@ docker compose up -d --build   # contenedores: tailscale (red) + display (visor)
 Después, autorizá el celular: en la app, botón **🔑** → copiás la clave pública → la pegás
 en `~/.ssh/authorized_keys` del host.
 
-En el **celular**: instalás el APK (`android/app/build/outputs/apk/release/`) y vinculás su
-nodo Tailscale escaneando el QR que imprime `./scripts/ts-link-qr.sh`.
+En el **celular**:
+
+1. **Instalá el APK.** Bajá el último `RemoteMarvin-vX.Y.Z.apk` de
+   [Releases](../../releases) y abrilo (permití "instalar de esta fuente"). Es **arm64**
+   (teléfonos; no corre en x86). Verificá el `SHA-256` contra el `.sha256` del release si querés.
+   - **Auto-updates:** instalá [Obtainium](https://github.com/ImranR98/Obtainium), agregá este
+     repo como app (pegás la URL del repo) y te avisa de cada nuevo release. Actualiza sobre la
+     instalación previa sin desinstalar (misma clave de firma).
+2. **Vinculá su nodo Tailscale** escaneando el QR que imprime `./scripts/ts-link-qr.sh` en el host.
+
+> Compilarlo vos mismo es opcional (`cd android && ./gradlew :app:assembleRelease`); requiere el
+> keystore de firma. La forma recomendada es el APK publicado en Releases.
 
 ## Uso
 
