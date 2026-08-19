@@ -123,3 +123,19 @@ func TestStopEsIdempotente(t *testing.T) {
 		t.Error("Running() debería ser false tras Stop")
 	}
 }
+
+// --- Estado: detección de "acceso vencido" (spike de la fila 550) -------------------
+
+func TestEstadoSinNodoEsDetenido(t *testing.T) {
+	mu.Lock()
+	srv = nil
+	mu.Unlock()
+	got := Estado()
+	if got != "Detenido;0;0" {
+		t.Fatalf("con el nodo apagado esperaba \"Detenido;0;0\", dio %q", got)
+	}
+	// El contrato es de 3 campos separados por ';': la app lo parsea así.
+	if n := strings.Count(got, ";"); n != 2 {
+		t.Fatalf("el formato debe tener 3 campos (2 ';'), tiene %d", n)
+	}
+}

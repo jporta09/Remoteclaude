@@ -348,9 +348,13 @@ class TerminalE2ETest {
                 scenario.onActivity { a -> estado = a.currentSessionForTest()?.estado }
                 estado == SshTerminalSession.Estado.CAIDO
             }
-            var barra = ""
-            scenario.onActivity { a -> barra = a.barLabelForTest() }
-            assertThat(barra).contains("sin conexión")
+            // La barra se repinta async (onEstadoCambio -> hilo de UI): esperar a que refleje el
+            // estado, en vez de leerla una vez y cazar el transitorio "conectando…".
+            await(what = "la barra dice 'sin conexión'") {
+                var barra = ""
+                scenario.onActivity { a -> barra = a.barLabelForTest() }
+                barra.contains("sin conexión")
+            }
         }
     }
 

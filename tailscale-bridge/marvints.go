@@ -174,6 +174,49 @@ func Running() bool {
 	return srv != nil
 }
 
+// Estado consulta el estado del nodo por el LocalClient, para que la app pueda distinguir
+// "la red está mal" de "el acceso de Tailscale VENCIÓ y hay que re-escanear el QR". Esto último
+// pasa a los ~180 días, cuando la node key expira: el backend cae a NeedsLogin y todo deja de
+// dialear sin explicación (fila 550 de la revisión).
+//
+// Formato (una línea, para bindear fácil por gomobile):
+//
+//	<backendState>;<expired 0|1>;<keyExpiryEpoch|0>
+//
+// backendState es el string de ipn.State: "Running", "NeedsLogin", "Stopped", "Starting"…
+// Con el nodo apagado devuelve "Detenido;0;0"; si no se pudo consultar, "Desconocido;0;0".
+// La app decide "hay que re-enrolar" con NeedsLogin o expired=1 (ver estadoVencido en Kotlin).
+func Estado() string {
+	mu.Lock()
+	s := srv
+	mu.Unlock()
+	if s == nil {
+		return "Detenido;0;0"
+	}
+	lc, err := s.LocalClient()
+	if err != nil {
+		return "Desconocido;0;0"
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	// StatusWithoutPeers: sólo se necesita Self + BackendState, no enumerar la tailnet entera.
+	st, err := lc.StatusWithoutPeers(ctx)
+	if err != nil || st == nil {
+		return "Desconocido;0;0"
+	}
+	expired := "0"
+	var exp int64
+	if st.Self != nil {
+		if st.Self.Expired {
+			expired = "1"
+		}
+		if st.Self.KeyExpiry != nil {
+			exp = st.Self.KeyExpiry.Unix()
+		}
+	}
+	return fmt.Sprintf("%s;%s;%d", st.BackendState, expired, exp)
+}
+
 // Forward abre un listener TCP local en 127.0.0.1:localPort que tuneliza cada conexión
 // a remoteHost:remotePort por la tailnet. No bloquea.
 func Forward(localPort int, remoteHost string, remotePort int) error {

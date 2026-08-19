@@ -67,6 +67,9 @@ class SshTerminalSession(
     // Para no repetir "[reconectando…]" en cada intento del backoff: se anuncia una vez y se
     // resetea al reconectar con éxito.
     @Volatile private var reconexionAnunciada = false
+    // Fila 550: si el acceso de Tailscale venció (node key expirada), reconectar es inútil —
+    // avisamos UNA vez por episodio para que el usuario reescanee el QR, y no en cada intento.
+    @Volatile private var avisoVencidoDado = false
 
     @Volatile private var userClosed = false
     @Volatile private var cols = 80
@@ -179,6 +182,7 @@ class SshTerminalSession(
                 stdin = s.stdin
                 attempt = 0
                 reconexionAnunciada = false   // el próximo corte volverá a anunciar una vez
+                avisoVencidoDado = false      // idem para el aviso de acceso vencido
                 cambiarEstado(Estado.CONECTADO)
 
                 // Keepalive: tráfico periódico para que el NAT/firewall (sobre todo en redes
@@ -233,6 +237,19 @@ class SshTerminalSession(
             }
             if (userClosed) break
             attempt++
+            // Tras un par de intentos fallidos, si el nodo embebido dice que el acceso venció,
+            // reconectar no va a lograr nada: se avisa una vez con una causa accionable.
+            if (!avisoVencidoDado && attempt >= 2 && TailscaleBridge.accesoVencido()) {
+                status(
+                    "\r\n[el acceso de Tailscale venció — reescaneá el QR desde la línea de " +
+                        "estado de Tailscale para volver a habilitar la conexión]\r\n"
+                )
+                Diagnostico.registrar(
+                    Diagnostico.Nivel.ERROR, "tailscale",
+                    "el acceso de Tailscale venció (node key expirada) — hay que reescanear el QR",
+                )
+                avisoVencidoDado = true
+            }
             val waitMs = minOf(1000L * attempt, 8000L)
             synchronized(reconnectLock) {
                 waitingToReconnect = true

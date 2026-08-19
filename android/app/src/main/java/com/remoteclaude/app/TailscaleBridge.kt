@@ -34,6 +34,25 @@ object TailscaleBridge {
     fun isReady(): Boolean = started
     fun error(): String? = lastError
 
+    /**
+     * Estado del nodo embebido, para distinguir "mala red" de "el acceso de Tailscale VENCIÓ y
+     * hay que re-escanear el QR" (la node key expira a los ~180 días). Devuelve el string crudo
+     * de marvints.Estado(): "<backendState>;<expired 0|1>;<keyExpiryEpoch|0>". Sin nodo embebido
+     * (modo directo) no aplica: "Directo;0;0".
+     */
+    fun estado(): String {
+        if (!enabled) return "Directo;0;0"
+        return runCatching { marvints.Marvints.estado() }.getOrDefault("Desconocido;0;0")
+    }
+
+    /**
+     * true si el acceso de Tailscale venció y hay que re-enrolar: el backend cayó a NeedsLogin
+     * o la node key expiró. Se consulta cuando las conexiones fallan seguido, para dar una causa
+     * clara en vez de reconectar en silencio para siempre. Alta confianza (no grita "reescaneá"
+     * por una caída de red pasajera): sólo el nodo VIVO en NeedsLogin/expired dispara true.
+     */
+    fun accesoVencido(): Boolean = enabled && accesoVencidoDeEstado(estado())
+
     /** Arranca el nodo embebido si hay auth key. Idempotente. Llamar al iniciar la app. */
     @Synchronized
     fun init(ctx: Context) {
@@ -155,4 +174,12 @@ object TailscaleBridge {
         forwards[k] = lp
         return lp
     }
+}
+
+/** Parseo puro del string de marvints.Estado() ("<backendState>;<expired>;<epoch>"): true si el
+ *  acceso venció (backend en NeedsLogin, o la node key marcada como expirada). Top-level para
+ *  testearlo sin el nodo nativo. Un string mal formado no dispara falso positivo. */
+fun accesoVencidoDeEstado(crudo: String): Boolean {
+    val campos = crudo.split(";")
+    return campos.getOrNull(0) == "NeedsLogin" || campos.getOrNull(1) == "1"
 }
