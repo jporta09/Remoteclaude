@@ -43,6 +43,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var keypad: KeypadView
     private lateinit var dictado: DictationController
     private lateinit var clients: TerminalClients
+    private lateinit var aprobacion: AprobacionController
 
     private lateinit var control: RemoteControl
     private lateinit var keyPair: java.security.KeyPair
@@ -95,6 +96,13 @@ class MainActivity : AppCompatActivity() {
         control = RemoteControl(this, host, port, user, keyPair)
 
         terminalView = TerminalView(this, null)
+        aprobacion = AprobacionController(
+            act = this,
+            sesionActiva = { tabs.sesionActiva },
+            // SIN unir líneas: transcriptText (el de screenText) junta las filas con espacios
+            // y el prompt queda en UNA línea; el parser necesita cada opción en su renglón.
+            screenText = { tabs.sesionActiva?.emulator?.screen?.transcriptTextWithoutJoinedLines.orEmpty() },
+        )
         clients = TerminalClients(
             act = this,
             vista = { terminalView },
@@ -102,6 +110,7 @@ class MainActivity : AppCompatActivity() {
             teclado = { if (::keypad.isInitialized) keypad else null },
             mostrarTeclado = { mostrarTeclado() },
             copiar = { copiarAlPortapapeles(it) },
+            alCambiarTexto = { aprobacion.alCambiarTexto() },
         )
         terminalView.apply {
             setTerminalViewClient(clients.vistaCliente)
@@ -136,6 +145,8 @@ class MainActivity : AppCompatActivity() {
                 terminalView.onScreenUpdated()
                 terminalView.requestFocus()
                 pintarBarra()   // al cambiar de pestaña, la barra refleja SU estado
+                aprobacion.cerrarYolvidar()   // un prompt de OTRA pestaña no aplica a ésta
+                aprobacion.alCambiarTexto()   // ¿la nueva pestaña tiene su propio prompt?
             },
             acciones = object : TabsController.Acciones {
                 override fun abrirVisor() = abrirOtraPantalla(DisplayActivity::class.java)
@@ -265,6 +276,12 @@ class MainActivity : AppCompatActivity() {
     /** Contenido visible de la terminal. Lo usan los tests instrumentados. */
     @androidx.annotation.VisibleForTesting
     fun screenText(): String = tabs.sesionActiva?.emulator?.screen?.transcriptText.orEmpty()
+
+    @androidx.annotation.VisibleForTesting
+    fun aprobacionVisibleForTest(): Boolean = ::aprobacion.isInitialized && aprobacion.hojaVisibleParaTest()
+
+    @androidx.annotation.VisibleForTesting
+    fun aprobacionElegirForTest(numero: Int) { if (::aprobacion.isInitialized) aprobacion.elegirParaTest(numero) }
 
     /** Texto actual de la barra de host (con el estado real). Para los tests instrumentados. */
     @androidx.annotation.VisibleForTesting

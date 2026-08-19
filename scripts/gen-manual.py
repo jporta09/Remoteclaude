@@ -296,6 +296,12 @@ S.append(B("Para <b>buscar en el historial</b>: Ctrl+O abre la transcripción co
 S.append(P("Si algún día lo querés desactivar, adentro de Claude: "
            "<font name='Mono' size='9'>/tui default</font> (y "
            "<font name='Mono' size='9'>/tui fullscreen</font> lo devuelve).", small))
+S.append(P("Aprobar acciones", h2))
+S.append(P("Cuando Claude pide permiso para correr un comando o aplicar un cambio, la app "
+           "levanta una <b>hoja de aprobación</b> abajo de la pantalla: el comando o el diff "
+           "completo (scrollable, no recortado por el teclado) y <b>botones grandes</b> con "
+           "cada opción. Tocar una opción es lo mismo que elegirla en la terminal. Si preferís, "
+           "“Ver en la terminal” cierra la hoja y respondés a mano."))
 
 # --- 7. Dictado -------------------------------------------------------------
 S.append(P("Dictado por voz", h1))

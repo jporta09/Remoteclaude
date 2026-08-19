@@ -23,6 +23,8 @@ class TerminalClients(
     private val teclado: () -> KeypadView?,
     private val mostrarTeclado: () -> Unit,
     private val copiar: (String) -> Unit,
+    // WS-F: cada cambio de texto de la sesión activa alimenta al watcher de aprobación.
+    private val alCambiarTexto: (() -> Unit)? = null,
 ) {
     // En float, no en Int: ver Zoom.kt. Con Int los incrementos chicos del pellizco se
     // truncaban y la fuente sólo sabía achicarse.
@@ -36,7 +38,10 @@ class TerminalClients(
 
     val sesion: TerminalSessionClient = object : TerminalSessionClient {
         override fun onTextChanged(changedSession: TerminalSession) {
-            if (sesionActiva() === changedSession) vista().onScreenUpdated()
+            if (sesionActiva() === changedSession) {
+                vista().onScreenUpdated()
+                alCambiarTexto?.invoke()
+            }
         }
 
         override fun onCopyTextToClipboard(session: TerminalSession, text: String?) {

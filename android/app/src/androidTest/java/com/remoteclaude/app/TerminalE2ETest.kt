@@ -140,6 +140,42 @@ class TerminalE2ETest {
     }
 
     /**
+     * WS-F: la hoja de aprobación aparece al detectar el prompt de Claude en el buffer, y el
+     * botón inyecta la elección al host. Se simula un prompt en pantalla alternada que lee UNA
+     * tecla y la guarda; se toca la opción 2 y se verifica que el host recibió el "2".
+     */
+    @Test fun laHojaDeAprobacion_apareceEInyectaLaEleccionAlHost() {
+        fixture.exec("rm -f /tmp/marvin_pick")
+        ActivityScenario.launch<MainActivity>(intentFor(fixturePort)).use { scenario ->
+            await(what = "sesión tmux creada") { fixture.tmuxSessions().contains("term 1") }
+            scenario.onActivity { a ->
+                a.screenText()
+                // prompt tipo Claude en alt-screen; read -rsn1 toma una tecla y la guarda.
+                val cmd = ("printf '\\033[?1049h\\033[2J\\033[HDo you want to proceed?" +
+                    "\\r\\n 1. Yes\\r\\n 2. No\\r\\n'; read -rsn1 k; printf '\\033[?1049l'; " +
+                    "echo \"\$k\" > /tmp/marvin_pick\n").toByteArray()
+                a.currentSessionForTest()?.write(cmd, 0, cmd.size)
+            }
+            // diagnóstico: si la hoja no aparece, mostrar qué había en el buffer
+            val fin = System.currentTimeMillis() + 30_000
+            var aparecio = false
+            var ultimo = ""
+            while (System.currentTimeMillis() < fin && !aparecio) {
+                scenario.onActivity { a ->
+                    aparecio = a.aprobacionVisibleForTest()
+                    ultimo = a.screenText()
+                }
+                if (!aparecio) Thread.sleep(250)
+            }
+            if (!aparecio) throw AssertionError("la hoja no apareció. screenText=<<<$ultimo>>>")
+            scenario.onActivity { a -> a.aprobacionElegirForTest(2) }   // tocar "2. No"
+            await(what = "el host recibió la elección '2'") {
+                fixture.exec("cat /tmp/marvin_pick 2>/dev/null").trim() == "2"
+            }
+        }
+    }
+
+    /**
      * WS-A: la barra dice "conectado" (verde, sin sufijo) SOLO cuando la conexión SSH está
      * realmente establecida — no pintada del extra del Intent. Con la clave autorizada, la
      * sesión llega a CONECTADO y la barra no muestra "sin conexión".
