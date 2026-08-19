@@ -1,5 +1,5 @@
 # Atajos de verificación. El detalle de los E2E está en test/e2e/README.md.
-.PHONY: unit host go lint e2e e2e-device e2e-release e2e-caja-negra release-check aar all
+.PHONY: unit host go lint e2e e2e-device e2e-release e2e-caja-negra release-check aar all teardown-host
 
 # Sin esto, `make unit` y `make lint` fallaban o no según el JAVA_HOME que tuviera el shell
 # de turno (el java por defecto de esta máquina es un 21 sin jlink, que AGP necesita). Que
@@ -49,5 +49,8 @@ release-check:   ## build de release + verificación de las reglas de R8 (sin di
 
 aar:             ## reconstruye marvints.aar (Tailscale embebido) con gomobile
 	tailscale-bridge/build-aar.sh
+
+teardown-host:   ## desinstala del host lo que puso setup-host.sh (units, sshd, docker, config)
+	bash scripts/teardown-host.sh $(ARGS)
 
 all: unit host go lint release-check

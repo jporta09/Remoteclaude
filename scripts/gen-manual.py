@@ -217,6 +217,14 @@ S.append(P("Para vincular el celu por QR necesitás un <b>OAuth client</b> de Ta
            "(<font name='Mono' size='9'>TS_OAUTH_CLIENT_ID/SECRET</font>, tag "
            "<font name='Mono' size='9'>tag:remotemarvin</font>). Ver "
            "<font name='Mono' size='9'>.env.example</font>."))
+S.append(P("Desinstalar (en la PC)", h2))
+S.append(P("Para deshacer todo lo anterior, el par de setup:"))
+S.append(C("bash scripts/teardown-host.sh                 # quita daemons, sshd.d, bloques, baja docker\n"
+           "bash scripts/teardown-host.sh --purgar-datos  # además borra el estado del nodo Tailscale"))
+S.append(P("A propósito <b>no</b> toca tu "
+           "<font name='Mono' size='9'>~/.ssh/authorized_keys</font> ni borra los nodos del "
+           "tailnet: esos dos pasos los hacés vos (el script te los recuerda al final, con los "
+           "nombres a borrar en la consola de Tailscale)."))
 
 # --- 4. Vincular ------------------------------------------------------------
 S.append(P("Conectar el celular (vincular por QR)", h1))

@@ -11,25 +11,33 @@
 # Es idempotente a propósito: correr el setup dos veces tiene que dejar UN bloque, con la
 # versión nueva. La alternativa que había antes —append con un grep como guarda— dejaba la
 # versión vieja para siempre y nunca se enteraba nadie.
+# Borra el bloque delimitado por sentinelas de un archivo, conservando el resto (lo que hay
+# arriba Y abajo del bloque). Si el archivo no existe o no tiene el bloque, no hace nada. Lo
+# usan tanto bloque_sentinelas (para reescribir) como teardown-host.sh (para desinstalar).
+quitar_bloque_sentinelas() {
+    local archivo="$1" begin="$2" end="$3"
+    [ -f "$archivo" ] || return 0
+    grep -qF "$begin" "$archivo" || return 0
+    # awk con banderas y no `sed /a/,/b/d` porque las sentinelas llevan caracteres que sed
+    # interpreta.
+    local tmp
+    tmp="$(mktemp)"
+    awk -v b="$begin" -v e="$end" '
+        index($0, b) { dentro = 1 }
+        !dentro { print }
+        index($0, e) { dentro = 0 }
+    ' "$archivo" > "$tmp"
+    cat "$tmp" > "$archivo"
+    rm -f "$tmp"
+}
+
 bloque_sentinelas() {
     local archivo="$1" begin="$2" end="$3"
     local contenido
     contenido="$(cat)"
 
     touch "$archivo"
-    if grep -qF "$begin" "$archivo"; then
-        # Borrar el bloque anterior. Se usa un awk con banderas y no `sed /a/,/b/d` porque
-        # las sentinelas llevan caracteres que sed interpreta.
-        local tmp
-        tmp="$(mktemp)"
-        awk -v b="$begin" -v e="$end" '
-            index($0, b) { dentro = 1 }
-            !dentro { print }
-            index($0, e) { dentro = 0 }
-        ' "$archivo" > "$tmp"
-        cat "$tmp" > "$archivo"
-        rm -f "$tmp"
-    fi
+    quitar_bloque_sentinelas "$archivo" "$begin" "$end"
     {
         printf '%s\n' "$begin"
         printf '%s\n' "$contenido"
@@ -52,6 +60,18 @@ escribir_unidad() {
         systemctl --user restart "$nombre"
         echo "    reiniciado (estaba corriendo con la versión anterior)"
     fi
+}
+
+# Deshace escribir_unidad: para el servicio si corre, lo deshabilita (por si `mode always` lo
+# dejó enabled), borra el archivo y recarga. Idempotente y a prueba de "no existe" — el teardown
+# nunca debe fallar por una unit que ya no está. El daemon-reload va aunque no hubiera archivo:
+# barato y deja el estado consistente.
+quitar_unidad() {
+    local nombre="$1"
+    local destino="${SYSTEMD_USER_DIR:-$HOME/.config/systemd/user}"
+    systemctl --user disable --now "$nombre" >/dev/null 2>&1 || true
+    rm -f "$destino/$nombre"
+    systemctl --user daemon-reload >/dev/null 2>&1 || true
 }
 
 # ¿Qué métodos de autenticación ofrece el sshd de este host?
