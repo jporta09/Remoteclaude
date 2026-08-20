@@ -309,6 +309,10 @@ S.append(P("La app arranca Claude Code en <b>modo fullscreen</b> (pantalla alter
 S.append(B("<b>Scrollear con el dedo</b> mueve la conversación <i>en vivo</i> — también "
            "dentro de diálogos de opciones largos. Nunca te caés a una foto vieja."))
 S.append(B("<b>PgUp / PgDn</b> (bajo el ›) también scrollean la conversación."))
+S.append(B("Cuando Claude (o cualquier menú) te muestra un <b>prompt con opciones</b> "
+           "(“1) Sí / 2) No”), la app <b>baja el teclado sola</b>: con el teclado arriba la "
+           "terminal queda en ~10 filas y el contexto de arriba se escapa, así que lo baja "
+           "para que puedas leer antes de elegir. Tocá la terminal para volver a escribir."))
 S.append(B("Para <b>buscar en el historial</b>: Ctrl+O abre la transcripción completa, "
            "con “/” para buscar. Ctrl+O de nuevo vuelve al chat."))
 S.append(P("Si algún día lo querés desactivar, adentro de Claude: "
