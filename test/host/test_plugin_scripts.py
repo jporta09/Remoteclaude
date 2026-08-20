@@ -21,6 +21,7 @@ RAIZ = Path(__file__).resolve().parents[2]
 SHOW = RAIZ / "plugins/remotemarvin/skills/headed-browser/scripts/marvin-show.sh"
 SHARE = RAIZ / "plugins/remotemarvin/skills/share-doc/scripts/marvin-share.sh"
 CHECK = RAIZ / "plugins/remotemarvin/scripts/check-version.sh"
+NOTIFY = RAIZ / "plugins/remotemarvin/scripts/marvin-notify.sh"
 
 CONTROL = re.compile(r"[\x00-\x1f\x7f]")
 
@@ -283,3 +284,60 @@ def test_sin_plugin_json_calla_para_siempre(repos):
     r = _correr_check(trabajo)
     assert r.returncode == 0
     assert r.stdout == ""
+
+
+# ---------------------------------------------------------------- marvin-notify
+# El hook Notification/permission_prompt appendea una línea JSON que la app lee por un
+# canal `tail -F`. Debe ser JSON válido con el shape que el parser de la app espera
+# ({"type","message","ts"}), y nunca fallar (el hook no puede romperle el flujo a Claude).
+
+
+def _correr_notify(payload: str, cfg: Path) -> subprocess.CompletedProcess:
+    env = {**os.environ, "XDG_CONFIG_HOME": str(cfg)}
+    return subprocess.run(
+        ["bash", str(NOTIFY)],
+        input=payload,
+        capture_output=True,
+        text=True,
+        env=env,
+        check=False,
+    )
+
+
+def test_notify_escribe_json_con_el_shape_que_espera_la_app(tmp_path):
+    r = _correr_notify(
+        '{"notification_type":"permission_prompt",'
+        '"message":"Claude needs your permission to use Bash(rm -rf build)"}',
+        tmp_path,
+    )
+    assert r.returncode == 0
+    linea = (tmp_path / "marvin" / "notify.jsonl").read_text().strip()
+    obj = json.loads(linea)  # JSON válido
+    assert obj["type"] == "permission_prompt"
+    assert obj["message"] == "Claude needs your permission to use Bash(rm -rf build)"
+    assert isinstance(obj["ts"], int)
+
+
+def test_notify_message_hostil_no_rompe_el_json(tmp_path):
+    # comillas y backslashes en el mensaje: jq debe escaparlos y dejar JSON parseable.
+    r = _correr_notify(
+        '{"notification_type":"permission_prompt","message":"raro \\" y \\\\ y \\n fin"}',
+        tmp_path,
+    )
+    assert r.returncode == 0
+    obj = json.loads((tmp_path / "marvin" / "notify.jsonl").read_text().strip())
+    assert obj["type"] == "permission_prompt"
+
+
+def test_notify_stdin_basura_no_falla_y_escribe_linea_segura(tmp_path):
+    r = _correr_notify("esto no es json", tmp_path)
+    assert r.returncode == 0  # nunca rompe el flujo de Claude
+    obj = json.loads((tmp_path / "marvin" / "notify.jsonl").read_text().strip())
+    assert obj["type"] == "permission_prompt"
+
+
+def test_notify_capea_en_200_lineas(tmp_path):
+    for i in range(210):
+        _correr_notify(f'{{"notification_type":"permission_prompt","message":"n{i}"}}', tmp_path)
+    lineas = (tmp_path / "marvin" / "notify.jsonl").read_text().splitlines()
+    assert len(lineas) <= 200
