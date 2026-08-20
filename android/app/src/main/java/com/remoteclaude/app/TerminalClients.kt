@@ -25,6 +25,9 @@ class TerminalClients(
     private val sesionActiva: () -> SshTerminalSession?,
     private val teclado: () -> KeypadView?,
     private val mostrarTeclado: () -> Unit,
+    // "Modo lectura": ante un prompt de DECISIÓN (opciones numeradas al pie) bajamos el teclado —
+    // leer/elegir no lo necesita— para recuperar filas y no elegir a ciegas.
+    private val ocultarTeclado: () -> Unit = {},
     // WS-F: cada cambio de texto de la sesión activa alimenta al watcher de aprobación.
     private val alCambiarTexto: (() -> Unit)? = null,
 ) {
@@ -47,11 +50,25 @@ class TerminalClients(
     /** Tamaño inicial de fuente, para que la vista arranque igual que el zoom. */
     fun fuenteInicialPx(): Int = fuentePx
 
+    // --- Modo lectura -----------------------------------------------------------------
+    // Cuando aparece un prompt de DECISIÓN (opciones numeradas al pie, tipo "1) Yes / 2) No"),
+    // con el teclado arriba el contexto de arriba se va de pantalla y elegís a ciegas. En ese
+    // momento —y sólo ese— bajamos el teclado para que puedas leer antes de decidir. NO dispara
+    // con salida grande cualquiera (para eso está el scroll/pinch). Detección Claude-independiente
+    // (cualquier menú/select), y de bajo riesgo: sólo decide CUÁNDO bajar el teclado; si se
+    // equivoca, tocás y vuelve — no re-renderiza nada.
+    @Volatile private var enModoLectura = false
+    private val handler = android.os.Handler(android.os.Looper.getMainLooper())
+    private val chequeoLectura = Runnable { revisarLectura() }
+
     val sesion: TerminalSessionClient = object : TerminalSessionClient {
         override fun onTextChanged(changedSession: TerminalSession) {
             if (sesionActiva() === changedSession) {
                 vista().onScreenUpdated()
                 alCambiarTexto?.invoke()
+                // ¿llegó un bloque grande para leer? (debounced: la salida llega en ráfagas)
+                handler.removeCallbacks(chequeoLectura)
+                handler.postDelayed(chequeoLectura, 150)
             }
         }
 
@@ -133,7 +150,12 @@ class TerminalClients(
             return false
         }
 
-        override fun onSingleTapUp(e: MotionEvent?) = mostrarTeclado()
+        override fun onSingleTapUp(e: MotionEvent?) {
+            // Tocar la terminal = quiero escribir: subo el teclado y permito que un próximo
+            // prompt de decisión vuelva a bajarlo.
+            enModoLectura = false
+            mostrarTeclado()
+        }
         override fun shouldBackButtonBeMappedToEscape(): Boolean = false
         override fun shouldEnforceCharBasedInput(): Boolean = true
         override fun shouldUseCtrlSpaceWorkaround(): Boolean = false
@@ -156,9 +178,38 @@ class TerminalClients(
         override fun logStackTrace(tag: String?, e: Exception?) {}
     }
 
+    /** ¿Hay en pantalla un prompt de DECISIÓN (opciones numeradas al pie)? Entonces es el momento
+     *  de leer antes de elegir: bajamos el teclado UNA vez para recuperar filas. Bajo tmux (el modo
+     *  default de la app) NO hay scrollback a nivel del motor, así que se mira el texto VISIBLE. */
+    private fun revisarLectura() {
+        val texto = sesionActiva()?.emulator?.screen?.transcriptTextWithoutJoinedLines ?: return
+        if (hayPromptDeOpciones(texto)) {
+            if (!enModoLectura) {
+                enModoLectura = true
+                ocultarTeclado()   // leer/decidir no necesita el teclado: recupera filas
+            }
+        } else {
+            // el prompt se fue (respondiste, o Claude siguió): permitir que el próximo lo baje
+            enModoLectura = false
+        }
+    }
+
     companion object {
         /** A partir de acá, OSC 52 pide confirmación en vez de copiar con aviso. Bajo (20 KB):
          *  un volcado grande al portapapeles casi nunca es un yank normal de tmux. */
         const val OSC52_CONFIRMAR_SOBRE = 20_000
     }
+}
+
+/** ¿El texto visible termina en un prompt de DECISIÓN con opciones numeradas? (`1) Yes`, `2. No`,
+ *  con cursor `❯`/`>` opcional). Se exige que haya ≥2 opciones **entre las últimas líneas** —un
+ *  prompt deja las opciones al pie, esperando— para no confundir una lista numerada en medio de la
+ *  salida. Claude-independiente (cualquier menú/select). Top-level para testearla sin Android. */
+fun hayPromptDeOpciones(texto: String): Boolean {
+    val opcion = Regex("""^\s*[❯>]?\s*\d+[.)]\s+\S""")
+    val ultimas = texto.split("\n")
+        .map { it.trimEnd() }
+        .filter { it.isNotBlank() }
+        .takeLast(8)
+    return ultimas.count { opcion.containsMatchIn(it) } >= 2
 }

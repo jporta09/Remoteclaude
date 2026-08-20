@@ -116,6 +116,7 @@ class MainActivity : AppCompatActivity() {
             sesionActiva = { tabs.sesionActiva },
             teclado = { if (::keypad.isInitialized) keypad else null },
             mostrarTeclado = { mostrarTeclado() },
+            ocultarTeclado = { ocultarTeclado() },
             alCambiarTexto = { aprobacion.alCambiarTexto(); actualizarA11yTerminal() },
         )
         terminalView.apply {
@@ -655,6 +656,13 @@ class MainActivity : AppCompatActivity() {
         terminalView.requestFocus()
         val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
         imm.showSoftInput(terminalView, InputMethodManager.SHOW_IMPLICIT)
+    }
+
+    /** Baja el teclado del sistema (leer no lo necesita): recupera filas de terminal para el
+     *  "modo lectura" cuando llega un bloque grande de salida. */
+    private fun ocultarTeclado() {
+        val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
+        imm.hideSoftInputFromWindow(terminalView.windowToken, 0)
     }
 
     private fun copiarAlPortapapeles(texto: String) {
