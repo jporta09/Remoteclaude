@@ -661,6 +661,87 @@ Por la regla de superficies, el propio documento es una superficie viva.
 
 ---
 
+## 5. Segunda pasada — verificación de fixes + superficies nuevas (post F6–F10 / v1.13.0)
+
+La primera pasada (§1–§4) **descubrió** el backlog. Entre medio se corrió el Roadmap 2, que cerró
+casi todo. Esta sección gobierna la **segunda pasada**: cada perfil ya no arranca de cero — tiene
+**memoria** de sus hallazgos y un backlog mayormente resuelto. Su trabajo ahora es doble:
+**re-verificar que sus propios fixes aterrizaron de verdad** y **atacar las superficies nuevas**.
+
+### 5.1 Qué cambió desde la primera pasada (digest)
+
+Todo pusheado, CI verde, un commit por fase. Detalle vivo (con las filas ✔ RESUELTO) en
+`docs/revision-integral.md`.
+
+- **F1 — Correctness de Documentos:** `listDocs` NUL-delimited (`\n` en el nombre ya no parte el
+  listado), `Doc.soportado` (nombres inseguros mostrados deshabilitados), error honesto local.
+- **F2 — Onboarding/skills/scripts:** README `/plugin`, evals de skills, hook PostToolUse de
+  contenido no confiable (`flag-subidos-context.sh`), `.env.example`, `setup-host.sh` multi-distro.
+- **F3 — Seguridad/a11y:** `FLAG_SECURE` (sólo el QR, por decisión del usuario), OSC52 con aviso
+  atribuido al host + umbral 20KB, TalkBack en la terminal.
+- **F4 — Cosmética/tema oscuro:** AlertDialogs oscuros, contraste, chevron ≥48dp, texto del QR.
+- **F5 — Red:** "[reconectando…]" una vez por episodio; `endpoint()` fail-fast (no congela 15s).
+- **F6 — Dictado con preview:** al soltar el mic, burbuja no-modal con **Descartar/Insertar**
+  (insertar-para-editar), texto saneado (`\n`/control chars → espacio), nunca auto-Enter.
+- **F7 — Notif de aprobación en background:** con la app atrás, un prompt de Claude postea una
+  notificación (canal HIGH, `POST_NOTIFICATIONS`); tocarla trae la app y aparece la hoja.
+- **F8 — Observabilidad:** ring buffer `Diagnostico` + `DiagnosticoActivity` (long-press en la barra
+  de host), con Compartir/Limpiar; sin secretos ni contenido de terminal.
+- **F9 — `teardown-host.sh`:** deshace el setup (units, helpers, bloques, sshd.d, linger, docker);
+  NO toca `authorized_keys` ni borra nodos del tailnet (pasos guiados).
+- **F10 — Detección de expiry de Tailscale (PARCIAL):** `marvints.Estado()` + `accesoVencido()`;
+  si el nodo vivo reporta NeedsLogin/expired se avisa "reescaneá el QR". Falta validación vs tailnet
+  real + el caso reinicio-tras-vencer (ver `docs/validar-expiry-tailscale.md`).
+- **Release:** APK firmado **v1.13.0** publicado por `release.yml` (GitHub Releases + Obtainium).
+
+### 5.2 Cómo cambia la lógica
+
+- **La frescura ahora es distinta.** Tu memoria es una *foto vieja* (tus hallazgos previos). Lo
+  fresco son las **superficies nuevas** (preview, notificación, diagnóstico, teardown, expiry): esas
+  sí merecen ojos sin sesgo. Para el resto, sos un perfil *informado*.
+- **Re-verificá, no confíes en el ✔.** Por cada hallazgo tuyo de sev≥3, chequeá contra el
+  **código/comportamiento real** si el fix aterrizó y **se sostiene**. Un ✔ que no se sostiene se
+  **reabre** en `revision-integral.md` con evidencia.
+- **Atacá lo nuevo con tu lente** (§5.3) y **re-scoreá** si tu método produce un score (UX→SUS,
+  Arq-IA→ASI01-10).
+- **Handoff notes siguen** (§4.4). **Consolidá**: actualizá `revision-integral.md` (confirmá/ajustá/
+  reabrí) y apéndice fechado a tu memoria.
+
+### 5.3 Foco por perfil (qué re-verificar + qué superficie nueva atacar)
+
+| Perfil | Re-verificar (hallazgos propios) | Atacar (superficies nuevas) |
+|--------|----------------------------------|------------------------------|
+| **usuario-final (dev dogfooder)** | H1 dependencia circular del manual; H6 guía con la PC apagada (cambió con F5/F8); H8 auth fallida igual entra a la terminal+demo. **H3 queda MOOT** (asumir entorno dev ya es correcto) | UX vivida del **preview** (Descartar/Insertar), la **notificación** cuando Claude espera, la **discoverability del diagnóstico** (long-press), y "¿lo adoptaría un dev?" |
+| **ux-devex** | Los 2 sev-4 (falso "Host conectado"+tour → WS-A; ceguera TalkBack → F3) y **re-scorear SUS** | Affordances del **preview** (¿Descartar tan fácil como Insertar?), **tema oscuro** de diálogos (F4), **chevron 48dp** (F4), UX del **diagnóstico** (F8), la **notificación** |
+| **devops** | Su hallazgo estrella: el **teardown** (F9) — ¿deshace todo, idempotente, NO toca `authorized_keys`?; multi-distro (F2); README `/plugin` (F2); **distribución del APK** (release.yml/Obtainium) | Casos borde del `teardown-host.sh` y del release workflow |
+| **dev** | `listDocs` NUL (F1); `execResult` (F1) | Correctitud/arquitectura/deuda del **código nuevo**: `Diagnostico`/`DiagnosticoActivity` (F8), preview en `DictationController` (F6), notif en `Aprobacion` (F7), `marvints.Estado`/`TailscaleBridge` (F10), lib de teardown (F9), `MarvinTestRunner` |
+| **qa** | `raro'nombre` (F1); diálogo que rota (WS-D); sustitución de sesión | Edge cases del **preview** (re-dictar rápido, vacío, control chars = el saneo); **carreras de background/notificación** (F7); **diagnóstico** (overflow del buffer, limpiar durante eventos); **teardown** (estado parcial); **detección de expiry** |
+| **sre** | Botín grande: H1 pérdida de sesión anunciada (F5); H2 notif en background (F7); H3 expiry (F10); H5 endpoint fail-fast (F5); H6 observabilidad (F8); H7 chrome desacoplado (WS-A) | El **ring buffer** como herramienta SRE; la **completitud de la detección de expiry** (mid-sesión vs hueco reinicio-tras-vencer); confiabilidad de la notif |
+| **seguridad-ofensiva** | H3 FLAG_SECURE (F3, sólo el QR); H5 umbral OSC52 (F3); H6 parser `listDocs` (F1); H2 default de usuario ya no root (WS-D) | El **PendingIntent** de la notif (F7); `POST_NOTIFICATIONS`; `teardown-host.sh` (¿de verdad NO toca `authorized_keys`?); exposición de info de `Estado()` (F10); ¿el **diagnóstico** filtra secretos? |
+| **arquitecto-ia** | ASI09 (hoja de aprobación WS-F + notif F7); H4 preview (F6); H5 OSC52 (F3); H3 hook de contenido no confiable (F2); H6/H7 description/evals de skills (F2) | Cómo la **notificación** y el **preview** (insertar-para-editar) mueven la superficie de confianza agéntica. **Re-scorear ASI01–10** |
+
+### 5.4 Libertad de método (y sus límites)
+
+Cada agente puede **escribir y correr los tests que necesite** (`make unit`/`make host`/`make e2e`,
+o pruebas descartables), **levantar el fixture**, **manejar la app en el emulador** y **experimentar**
+con hipótesis. Reglas: **todo throwaway — al terminar REVERTÍ TODO** (nada nuevo ni tocado en el
+repo); **nunca commit/push**; el **emulador es compartido y serializado** (un agente por vez corre
+`make e2e`/maneja el AVD — compite con el runner de CI en esta misma máquina).
+
+### 5.5 Orquestación de la segunda pasada
+
+- **Olas adaptadas** (la frescura pesa menos porque ya hay memoria, pero se respetan las aristas de
+  §4.1): **usuario-dev + UX primero** (ojos frescos sobre la UI nueva), luego **DevOps**; **Dev abre**
+  el tier informado (mapa del código nuevo), luego **QA + SRE**, después **Seguridad**, y **Arq-IA
+  cierra**.
+- **Emulador serializado:** nunca dos agentes con el AVD a la vez; el resto verifica por
+  código/unit/host o espera.
+- **Nota de registro:** editar los defs de los agentes (`~/.claude-personal/agents/*.md`) toma efecto
+  en una **sesión nueva**. Si la pasada corre en la misma sesión del edit, el prompt de spawn lleva
+  la libertad + el reencuadre como respaldo.
+
+---
+
 *Los hallazgos de cualquier ejecución de este programa se consolidan en
 `docs/revision-integral.md` (sección "Lo que queda abierto"), que es el backlog vivo del
 proyecto.*
