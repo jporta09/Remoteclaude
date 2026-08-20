@@ -152,18 +152,14 @@ class RemoteControl(
         val mtime: Long,
         val btime: Long,
         val subido: Boolean,
-        // false si el nombre tiene caracteres que la app no maneja (comilla, salto de línea,
-        // barra): se lista igual —el usuario ve que el archivo existe— pero deshabilitado, en
-        // vez de aparecer como una tarjeta que al tocar miente "no pude bajar" (causa local).
+        // false si el nombre tiene caracteres que la app no maneja (comilla, barra o cualquier
+        // control char): se lista igual —el usuario ve que el archivo existe— pero deshabilitado,
+        // en vez de aparecer como una tarjeta que al tocar miente "no pude bajar" (causa local).
         val soportado: Boolean = true,
     )
 
     private fun rutaDoc(name: String, subido: Boolean) =
         "~/RemoteMarvinDocs/" + (if (subido) "subidos/" else "") + ShellQuote.sq(name)
-
-    /** El saneo compartido de nombres: nada de comillas, saltos de línea ni rutas. */
-    private fun nombreInseguro(name: String) =
-        name.isBlank() || name.contains('\'') || name.contains('\n') || name.contains('/')
 
     /**
      * Lista los docs de ambos orígenes, SIN ordenar (el criterio lo elige la pantalla).
@@ -183,21 +179,7 @@ class RemoteControl(
                 "true"
         )
         if (r.failed) throw IllegalStateException(r.error ?: "no pude conectarme al host")
-        return r.out.split('\u0000').mapNotNull {
-            val p = it.split('\t')
-            if (p.size >= 5 && p[0].isNotBlank())
-                Doc(
-                    name = p[0],
-                    size = p[1].toLongOrNull() ?: 0L,
-                    mtime = p[2].substringBefore('.').toLongOrNull() ?: 0L,
-                    // %W@ da 0 (o -1 en finds viejos) si el FS no registra btime
-                    btime = (p[3].substringBefore('.').toLongOrNull() ?: 0L).coerceAtLeast(0L),
-                    subido = p[4] == "s",
-                    // Mismo saneo que read/delete: si no lo pasa, se lista deshabilitado.
-                    soportado = !nombreInseguro(p[0]),
-                )
-            else null
-        }.toList()
+        return parsearListadoDocs(r.out)
     }
 
     /**
@@ -206,7 +188,7 @@ class RemoteControl(
      * no es un archivo vacío.
      */
     fun readDocBase64(name: String, subido: Boolean = false): String {
-        if (nombreInseguro(name)) return ""
+        if (nombreDeDocInseguro(name)) return ""
         val r = execResult("base64 ${rutaDoc(name, subido)} 2>/dev/null")
         if (r.failed) throw IllegalStateException(r.error ?: "no pude conectarme al host")
         return r.out.replace("\n", "").trim()
@@ -217,7 +199,7 @@ class RemoteControl(
      * `cat` remoto (el mismo patrón que [transcribe]: cerrar stdin = EOF). BLOQUEA.
      */
     fun uploadDoc(name: String, bytes: ByteArray): Exec {
-        if (nombreInseguro(name)) return Exec("", false, "nombre de archivo inválido")
+        if (nombreDeDocInseguro(name)) return Exec("", false, "nombre de archivo inválido")
         val (h, p) = try { TailscaleBridge.endpoint(host, port) } catch (e: Exception) {
             return Exec("", false, e.message ?: "no se pudo resolver el host")
         }
@@ -250,7 +232,7 @@ class RemoteControl(
 
     /** Borra un doc EN EL HOST. Mismo saneo que la lectura: el nombre jamás llega al shell. */
     fun deleteDoc(name: String, subido: Boolean): Exec {
-        if (nombreInseguro(name)) return Exec("", false, "nombre de archivo inválido")
+        if (nombreDeDocInseguro(name)) return Exec("", false, "nombre de archivo inválido")
         return execResult("rm -- ${rutaDoc(name, subido)}")
     }
 
@@ -331,3 +313,38 @@ class RemoteControl(
             }.filter { it.first in reales }.toList()
     }
 }
+
+/** Caracteres de control (incl. \n y \t): el mismo criterio que [sanitizarDictado]. */
+private val CONTROL = Regex("\\p{Cntrl}")
+
+/** El saneo compartido de nombres de documento: nada de comillas, rutas ni caracteres de
+ *  control — el TAB separa los campos del listado y el salto de línea partía registros.
+ *  Top-level para poder testearlo (y compartirlo con [parsearListadoDocs]) sin conexión. */
+fun nombreDeDocInseguro(name: String) =
+    name.isBlank() || name.contains('\'') || name.contains('/') || CONTROL.containsMatchIn(name)
+
+/** Parseo puro de la salida de los `find` de [RemoteControl.listDocs]: registros terminados en
+ *  NUL, campos separados por TAB (`%f \t %s \t %T@ \t %W@ \t c|s`). Top-level para testearlo
+ *  sin host. */
+fun parsearListadoDocs(crudo: String): List<RemoteControl.Doc> =
+    crudo.split('\u0000').mapNotNull {
+        val p = it.split('\t')
+        // El nombre es el campo 0 pero lo elige QUIEN CREA EL ARCHIVO y puede traer TABs; los
+        // 4 campos de metadatos nunca los traen. Por eso se leen desde el FINAL y el nombre es
+        // todo lo de antes, re-unido: si no, un archivo llamado `informe.pdf\t9\t9\t9\ts`
+        // corría los campos y salía como fila FANTASMA ("informe.pdf", que no existe) con el
+        // label de procedencia spoofeado ("subido por vos").
+        val nombre = p.dropLast(4).joinToString("\t")
+        if (p.size < 5 || nombre.isBlank()) return@mapNotNull null
+        val meta = p.takeLast(4)
+        RemoteControl.Doc(
+            name = nombre,
+            size = meta[0].toLongOrNull() ?: 0L,
+            mtime = meta[1].substringBefore('.').toLongOrNull() ?: 0L,
+            // %W@ da 0 (o -1 en finds viejos) si el FS no registra btime
+            btime = (meta[2].substringBefore('.').toLongOrNull() ?: 0L).coerceAtLeast(0L),
+            subido = meta[3] == "s",
+            // Mismo saneo que read/delete: si no lo pasa, se lista deshabilitado.
+            soportado = !nombreDeDocInseguro(nombre),
+        )
+    }.toList()

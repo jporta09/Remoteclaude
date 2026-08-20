@@ -142,6 +142,30 @@ class DocsE2ETest {
         assertThat(conSalto!!.soportado).isFalse()
     }
 
+    /**
+     * El TAB separa los CAMPOS del listado y el nombre es el campo 0: un archivo que Claude deja
+     * en la raíz llamado `contab.txt\t9\t9\t9\ts` corría los campos y salía como fila FANTASMA
+     * ("con", que no existe: tocarla es un callejón sin salida) etiquetada "subido por vos".
+     * Este test atraviesa el `find` real del host, que emite el TAB del nombre tal cual.
+     */
+    @Test fun listDocs_unTabEnElNombreNoCorreLosCampos() {
+        // archivo COMPARTIDO (raíz) cuyo nombre imita los campos del listado
+        fixture.exec("touch \"\$HOME/RemoteMarvinDocs/\$(printf 'contab.txt\\t9\\t9\\t9\\ts')\"")
+
+        val docs = control.listDocs()
+
+        // no aparece la fila fantasma "contab.txt" (el nombre recortado en el primer TAB)
+        assertThat(docs.map { it.name }).doesNotContain("contab.txt")
+        val hostil = docs.firstOrNull { it.name.startsWith("contab.txt\t") }
+        assertThat(hostil).isNotNull()
+        // el nombre llega entero, no dice "subido por vos" y no es accionable
+        assertThat(hostil!!.name).isEqualTo("contab.txt\t9\t9\t9\ts")
+        assertThat(hostil.subido).isFalse()
+        assertThat(hostil.soportado).isFalse()
+        // y el resto del listado sigue intacto
+        assertThat(docs.map { it.name }).containsAtLeast("notas.txt", "datos.csv")
+    }
+
     @Test fun leeElContenidoDeUnDocumento() {
         val b64 = control.readDocBase64("notas.txt")
         val texto = String(android.util.Base64.decode(b64, android.util.Base64.DEFAULT))
