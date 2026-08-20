@@ -8,6 +8,7 @@ Cada test acá reproduce el bug original y falla con el código viejo.
 import http.server
 import json
 import os
+import re
 import shutil
 import subprocess
 import threading
@@ -18,7 +19,17 @@ import pytest
 
 RAIZ = Path(__file__).resolve().parents[2]
 SHOW = RAIZ / "plugins/remotemarvin/skills/headed-browser/scripts/marvin-show.sh"
+SHARE = RAIZ / "plugins/remotemarvin/skills/share-doc/scripts/marvin-share.sh"
 CHECK = RAIZ / "plugins/remotemarvin/scripts/check-version.sh"
+
+CONTROL = re.compile(r"[\x00-\x1f\x7f]")
+
+
+def _inseguro_para_la_app(nombre: str) -> bool:
+    """Espejo de nombreDeDocInseguro (RemoteControl.kt): control chars, comilla simple,
+    barra o vacío. El consumidor lo marca no-soportado; el productor no debe crearlo.
+    """
+    return not nombre or "'" in nombre or "/" in nombre or bool(CONTROL.search(nombre))
 
 
 # ---------------------------------------------------------------- marvin-show
@@ -133,6 +144,61 @@ def test_show_sin_daemon_falla_con_mensaje(tmp_path):
     )
     assert r.returncode == 1
     assert "No llego al render" in r.stderr
+
+
+# ---------------------------------------------------------------- marvin-share
+
+
+def _correr_share(tmp_path, dest, *args):
+    # MARVIN_RENDER_PORT=1: nadie escucha -> use_sink=0 -> copia local (la ruta del bug).
+    env = dict(
+        os.environ, MARVIN_RENDER_PORT="1", HOME=str(tmp_path),
+        REMOTEMARVIN_DOCS=str(dest),
+    )
+    return subprocess.run(
+        ["bash", str(SHARE), *args], env=env, capture_output=True, text=True, timeout=30,
+        check=False,
+    )
+
+
+def test_share_nombre_hostil_aterriza_saneado(tmp_path):
+    """Bug §F.2: `cp -- "$f" "$DEST/"` copiaba con el basename crudo, así que un nombre con
+
+    TAB / comilla / control chars —el mismo que corría los campos de listDocs— nacía en
+    ~/RemoteMarvinDocs. Defensa en profundidad del productor: lo que aterriza tiene que ser
+    un nombre que el visor considere seguro (sin control chars, sin comilla).
+    """
+    src = tmp_path / "src"
+    src.mkdir()
+    dest = tmp_path / "dest"
+    # informe<TAB>9<TAB>9<TAB>9<TAB>s'.pdf : TAB (corre columnas) + comilla simple.
+    hostil = src / "informe\t9\t9\t9\ts'.pdf"
+    hostil.write_text("x")
+
+    r = _correr_share(tmp_path, dest, str(hostil))
+    assert r.returncode == 0, r.stderr
+    aterrizados = [p.name for p in dest.iterdir()]
+    assert len(aterrizados) == 1, aterrizados
+    n = aterrizados[0]
+    assert not _inseguro_para_la_app(n), f"nombre inseguro creado: {n!r}"
+    assert n == "informe_9_9_9_s_.pdf", n
+
+
+def test_share_nombre_legitimo_se_preserva(tmp_path):
+    """No es un rechazo a lo bruto: un nombre legítimo con espacios, acentos y emoji
+
+    sobrevive intacto (el visor de la app los soporta). Sólo se neutraliza lo peligroso.
+    """
+    src = tmp_path / "src"
+    src.mkdir()
+    dest = tmp_path / "dest"
+    bueno = src / "informe final ñandú 📄.pdf"
+    bueno.write_text("y")
+
+    r = _correr_share(tmp_path, dest, str(bueno))
+    assert r.returncode == 0, r.stderr
+    aterrizados = [p.name for p in dest.iterdir()]
+    assert aterrizados == ["informe final ñandú 📄.pdf"], aterrizados
 
 
 # ---------------------------------------------------------------- check-version

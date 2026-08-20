@@ -21,6 +21,22 @@ SINK="http://127.0.0.1:${MARVIN_RENDER_PORT:-6090}"
 
 [ "$#" -ge 1 ] || { echo "uso: scripts/marvin-share.sh <archivo> [archivo...]" >&2; exit 2; }
 
+# Nombre de destino seguro para el visor de la app: neutraliza lo que su parser considera
+# inseguro (nombreDeDocInseguro: control chars, comilla simple, barra —ésta ya la saca
+# basename—, o vacío) y preserva lo legítimo (espacios, acentos, emoji, puntuación). Defensa
+# en profundidad del lado del PRODUCTOR, igual que safe_name de marvin-render: no creamos en
+# ~/RemoteMarvinDocs nombres que después corran los campos del listado o spoofeen el label de
+# procedencia. Saneamos (no rechazamos) para que compartir siga funcionando.
+safe_name() {
+    local out
+    out="$(basename -- "$1")"
+    out="$(printf '%s' "$out" | LC_ALL=C tr "\001-\037\177'" '_')"
+    case "$out" in
+        "" | "." | "..") out="documento" ;;
+    esac
+    printf '%s' "$out"
+}
+
 # ¿Hay docs-sink alcanzable? (daemon local en el host, o el del host por el túnel reverso
 # si estamos en un server SSH-eado desde la app). En los dos casos cae en el host.
 use_sink=0
@@ -33,7 +49,7 @@ fi
 n=0
 for f in "$@"; do
     if [ ! -f "$f" ]; then echo "✗ no existe: $f" >&2; continue; fi
-    name="$(basename -- "$f")"
+    name="$(safe_name "$f")"
     if [ "$use_sink" = 1 ]; then
         if curl -fsS "${AUTH[@]}" --max-time 60 -T "$f" -H "X-Filename: $name" "$SINK/doc" >/dev/null 2>&1; then
             echo "✓ $name (→ host)"
@@ -42,7 +58,7 @@ for f in "$@"; do
             echo "✗ falló subir al host: $name" >&2
         fi
     else
-        cp -f -- "$f" "$DEST/" || { echo "✗ no pude copiar: $name" >&2; continue; }
+        cp -f -- "$f" "$DEST/$name" || { echo "✗ no pude copiar: $name" >&2; continue; }
         echo "✓ $name"
         n=$((n + 1))
     fi
