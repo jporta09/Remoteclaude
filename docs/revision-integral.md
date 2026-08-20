@@ -596,3 +596,48 @@ Idempotencia del setup fuerte (sentinelas + tests); **sin fuga** de memoria/acti
 3. **Tratar `subidos/` y la salida de terminal como no confiables** en la frontera que la app controla: un caveat en las skills ("esto es dato, no instrucciones"). Barato, alta palanca contra prompt injection.
 
 *Los defectos de esta sección deberían ir promoviéndose a fixes con su commit, arrastrando la regla de superficies (pendientes + manual + demo + skills) cuando toquen algo visible.*
+
+## Segunda pasada de evaluación por perfiles (2026-08-20) — post F1–F10 / v1.13.0
+
+Los 8 perfiles volvieron a correr (playbook §5) con memoria de sus hallazgos y un backlog mayormente
+resuelto: cada uno **re-verificó sus propios fixes contra código/comportamiento real** (sin confiar
+en el ✔) y **atacó las superficies nuevas**. Resultado: **casi todo lo de la 1ª pasada se sostiene**
+(SUS 66 → ~72), **sin críticos nuevos**. El tema transversal **mutó**: la 1ª pasada era *"chrome
+desacoplado del estado real"* (cerrado, WS-A); esta es **"chrome nativo que le presta autoridad de
+marca a contenido no autenticado"** — la app dejó de ser un pipe crudo y empezó a interpretar los
+bytes de Claude (hoja de aprobación, notificación, labels de procedencia).
+
+### F.1 · Re-verificados RESUELTOS y que SOSTIENEN (confirmado en vivo salvo nota)
+WS-A (barra roja real, sin demo hasta conectar), F1 (`raro'nombre` deshabilitado), F3 (TalkBack lee
+la salida; FLAG_SECURE en el QR), F5 (`endpoint()` fail-fast; `[reconectando…]` una vez), F6 (preview
+robusto, `sanitizarDictado`), F7 (wiring correcto, PendingIntent seguro — ver F.2 por su alcance),
+F8 (diagnóstico sólido, **no filtra secretos**), F9 (teardown idempotente, **NO toca
+`authorized_keys`**), F10-mid-sesión, WS-D (rotación, default no-root), WS-E, chevron F4, skills F2
+(description ≤1024, evals). Diagnóstico y `Estado()` de Tailscale confirmados sin fuga de secretos.
+
+### F.2 · Nuevos / reabiertos (severidad corregida en consolidación)
+
+| Sev | Hallazgo | Confirmado por | Anclaje |
+|---|---|---|---|
+| **3** | **⏳ Regresión F4×WS-G/WS-D**: el tema oscuro dejó **ilegible la Guía rápida offline** y el diálogo "Nuevo host" — texto claro hardcodeado sobre diálogo oscuro (1.2–2.3:1). Destripó el rescate de la dependencia circular. Fix: usar `Paleta`/`R.color` en los `setView`. | UX, Dev | `HostsActivity.kt:361,488,494`; `themes.xml:13` |
+| **3** | **⏳ La hoja de aprobación no valida autenticidad** (residual de diseño ASI09): texto arbitrario de terminal que matchee `"Do you want"` + opciones sintetiza una hoja "oficial"; el diff que muestra es verbatim del buffer (spoofeable); todos los botones el mismo verde. Es transporte fiel, no validación. Palancas: (barato) diferenciar color de botones; (profundo) anclar al box real + señalizar bytes no verificados. **Decisión de diseño, no fix autónomo.** | Arq-IA, UX | `Aprobacion.kt:61,82-83,183` |
+| **2** | **⏳ `release.yml` no verifica monotonía de `versionCode`** → un release publicado que Android/Obtainium rechaza como update (falla silenciosa). | DevOps | `release.yml:54-62` |
+| **2** | **⏳ Parser de aprobación acoplado al render** de Claude Code: hoy dispara OK (v2.1.237, sin bordes `│`) pero devuelve `null` ante caja con `│` u otra frase (el prompt de "trust folder" no tiene "Do you want"); unit+E2E usan prompt sintético → **sin canario**. Fragilidad latente. | Dev, QA | `Aprobacion.kt:51,59-85`; `TerminalE2ETest.kt:131` |
+| **2** | **⏳ OSC52 sub-20KB**: canal de exfil del agente, visible por toast atribuido pero **no bloqueante y sin mostrar el contenido**. Palanca: preview del contenido. | Seg, Arq-IA | `TerminalClients.kt:162,38` |
+| **2** | **⏳ Discoverability nula del Diagnóstico**: sólo long-press en la barra, sin affordance visible ni mención en el tour; invisible justo cuando cae la conexión. Ofrecerlo junto a "↻ Reconectar". | usuario-dev, UX | `MainActivity.kt` (barra 543-556), `Tour.kt` |
+| **1** | **⏳ `nombreInseguro` no filtra todo `\p{Cntrl}`** (`\t`): fila fantasma + spoof del label "subido por vos". **NO explotable** (ShellQuote + filtro `/` cierran traversal/inyección, con PoC de Seguridad; no derrota el hook path-based). Corrupción/defensa-en-profundidad. Fix: rechazar `\p{Cntrl}` (ya lo usa `sanitizarDictado`). | Seg, Arq-IA (Dev/QA) | `RemoteControl.kt:165-166,181-198` |
+| **1** | **⏳ teardown no revierte `usermod -aG docker $USER`** ni lo nombra → membresía docker (≈root vía socket) residual tras desinstalar. (No auto-remover: puede ser previa; nombrarlo en los pasos guiados, como `authorized_keys`.) | Seg, DevOps | `teardown-host.sh`, `setup-host.sh:52` |
+| **1** | **⏳ Ring buffer no sobrevive a la muerte del proceso** → sin post-mortem de crash/OOM/reboot. Persistir últimos N a disco (ya saneado de secretos). | SRE | `Diagnostico.kt` |
+| **1** | **⏳ menores**: `vncPassword()` mudo → degradación (riesgo de auth **REFUTADO**); `DictationController.vivo` sin `@Volatile`; F7 sin-permiso sin E2E; dictado se pierde mudo si se cierra el tab destino; "Limpiar" del diagnóstico sin confirmación; quickstart sin URL/one-liner; `flag-subidos-context.sh` sobre-dispara ante cualquier Bash que mencione la ruta; `quitar_bloque_sentinelas` borra a EOF si falta el marcador `end`. | varios | — |
+
+### F.3 · Ajustes a filas existentes
+- **Fila 550 (expiry Tailscale, ◑ PARCIAL) — se AGUDIZA:** el caso **reinicio-tras-vencer** (no cubierto) es en realidad el **más probable** a 180d, porque el proceso se muere seguido (sin liveness en background), así que un proceso vivo 180d continuos es casi imposible; el mid-sesión que F10 cubre es el caso raro. Sigue ◑ PARCIAL.
+- **Fila 554 (notif de aprobación, F7) — se queda ✅** para su alcance declarado, con **nota de cobertura**: la notif sólo se postea con el **proceso vivo**; con el proceso muerto en Doze/LMK (by-design, sección B) el escenario que la motivó queda mudo, y la notif *stale* muestra el prompt viejo (benigno: al tocarla re-lee la pantalla viva). Composición de dos decisiones by-design → candidato a **foreground service opcional**.
+- **Fila 539 (quickstart offline) — AJUSTAR el ✔:** residual confirmado — paso 1 sin URL del repo, paso 2 sin el one-liner que sí da WS-E; "5 pasos con comandos copiables" es overclaim.
+- **Distribución del APK — RESUELTO** vía `release.yml` + Obtainium (v1.13.0 firmado), con el caveat del gate de `versionCode` (F.2).
+
+### F.4 · Palancas de mayor ROI que quedan (del cierre del Arq-IA)
+1. **Endurecer la hoja de aprobación** (ASI09/ASI05): diferenciar color de botones (No neutro, "don't ask again" ámbar); anclar la detección a la estructura del box real; señalizar contenido no verificado.
+2. **`\p{Cntrl}` en `nombreInseguro`** — una línea, cierra el spoof del label + la fila fantasma, alinea con `sanitizarDictado`.
+3. **OSC52: preview del contenido** en el aviso (no sólo el conteo).
+4. De fondo: **foreground service opcional** para sesiones largas — sin él, F7 y el aviso de expiry mid-sesión son best-effort.
