@@ -183,7 +183,7 @@ class TerminalClients(
      *  default de la app) NO hay scrollback a nivel del motor, así que se mira el texto VISIBLE. */
     private fun revisarLectura() {
         val texto = sesionActiva()?.emulator?.screen?.transcriptTextWithoutJoinedLines ?: return
-        if (hayPromptDeOpciones(texto)) {
+        if (hayPromptDeDecision(texto)) {
             if (!enModoLectura) {
                 enModoLectura = true
                 ocultarTeclado()   // leer/decidir no necesita el teclado: recupera filas
@@ -201,15 +201,23 @@ class TerminalClients(
     }
 }
 
-/** ¿El texto visible termina en un prompt de DECISIÓN con opciones numeradas? (`1) Yes`, `2. No`,
- *  con cursor `❯`/`>` opcional). Se exige que haya ≥2 opciones **entre las últimas líneas** —un
- *  prompt deja las opciones al pie, esperando— para no confundir una lista numerada en medio de la
- *  salida. Claude-independiente (cualquier menú/select). Top-level para testearla sin Android. */
-fun hayPromptDeOpciones(texto: String): Boolean {
+/** ¿El texto visible termina en un **selector de decisión de Claude** esperando input? Anclado en la
+ *  firma REAL capturada del selector (tanto el de permiso de herramienta como el de trust):
+ *    ❯ 1. Yes
+ *      2. No
+ *    Esc to cancel · Tab to amend · ctrl+e to explain
+ *  Los invariantes robustos son (a) el **cursor `❯` sobre una opción numerada** —el sello del select
+ *  de Claude, ausente en salida común— y (b) el footer con `to cancel` (que lo distingue del spinner,
+ *  que dice "esc to *interrupt*"). El header ("Do you want to proceed?" / "…make this edit?") varía,
+ *  así que NO se ancla ahí. Se mira sólo el texto VISIBLE (bajo tmux no hay scrollback en el motor).
+ *  Top-level para testearla sin Android. */
+fun hayPromptDeDecision(texto: String): Boolean {
+    val cursor = Regex("""^\s*❯\s*\d+[.)]\s+\S""")
     val opcion = Regex("""^\s*[❯>]?\s*\d+[.)]\s+\S""")
-    val ultimas = texto.split("\n")
-        .map { it.trimEnd() }
-        .filter { it.isNotBlank() }
-        .takeLast(8)
-    return ultimas.count { opcion.containsMatchIn(it) } >= 2
+    val ultimas = texto.split("\n").map { it.trimEnd() }.filter { it.isNotBlank() }.takeLast(10)
+    val tieneCursor = ultimas.any { cursor.containsMatchIn(it) }
+    val opciones = ultimas.count { opcion.containsMatchIn(it) }
+    val footerCancelar = ultimas.any { it.contains("to cancel", ignoreCase = true) }
+    // el cursor ❯-sobre-opción es específico de Claude; corroborado por el footer o una 2ª opción
+    return tieneCursor && (footerCancelar || opciones >= 2)
 }

@@ -45,10 +45,10 @@ class MainActivity : AppCompatActivity() {
     private lateinit var keypad: KeypadView
     private lateinit var dictado: DictationController
     private lateinit var clients: TerminalClients
-    private lateinit var aprobacion: AprobacionController
+    private lateinit var notifsRemotas: NotificacionesRemotas
 
-    /** F7: si la app está adelante (entre onResume y onPause). El controlador de aprobación lo
-     *  consulta: adelante muestra la hoja; atrás avisa por notificación. */
+    /** Si la app está adelante (entre onResume y onPause). La alerta de "Claude te espera" sólo
+     *  molesta cuando estás atrás; adelante ya la ves (y el modo lectura bajó el teclado). */
     @Volatile private var enPrimerPlano = false
 
     private lateinit var control: RemoteControl
@@ -102,14 +102,11 @@ class MainActivity : AppCompatActivity() {
         control = RemoteControl(this, host, port, user, keyPair)
 
         terminalView = TerminalView(this, null)
-        aprobacion = AprobacionController(
-            act = this,
-            sesionActiva = { tabs.sesionActiva },
-            // SIN unir líneas: transcriptText (el de screenText) junta las filas con espacios
-            // y el prompt queda en UNA línea; el parser necesita cada opción en su renglón.
-            screenText = { tabs.sesionActiva?.emulator?.screen?.transcriptTextWithoutJoinedLines.orEmpty() },
+        // Alerta "Claude te espera" por el hook Notification del host (canal SSH persistente).
+        notifsRemotas = NotificacionesRemotas(
+            act = this, host = host, port = port, user = user, key = keyPair,
             enPrimerPlano = { enPrimerPlano },
-        )
+        ).also { it.iniciar() }
         clients = TerminalClients(
             act = this,
             vista = { terminalView },
@@ -117,7 +114,7 @@ class MainActivity : AppCompatActivity() {
             teclado = { if (::keypad.isInitialized) keypad else null },
             mostrarTeclado = { mostrarTeclado() },
             ocultarTeclado = { ocultarTeclado() },
-            alCambiarTexto = { aprobacion.alCambiarTexto(); actualizarA11yTerminal() },
+            alCambiarTexto = { actualizarA11yTerminal() },
         )
         terminalView.apply {
             setTerminalViewClient(clients.vistaCliente)
@@ -159,8 +156,6 @@ class MainActivity : AppCompatActivity() {
                 terminalView.onScreenUpdated()
                 terminalView.requestFocus()
                 pintarBarra()   // al cambiar de pestaña, la barra refleja SU estado
-                aprobacion.cerrarYolvidar()   // un prompt de OTRA pestaña no aplica a ésta
-                aprobacion.alCambiarTexto()   // ¿la nueva pestaña tiene su propio prompt?
             },
             acciones = object : TabsController.Acciones {
                 override fun abrirVisor() = abrirOtraPantalla(DisplayActivity::class.java)
@@ -269,8 +264,8 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         enPrimerPlano = true
-        // Volvimos adelante: bajar cualquier aviso y mostrar la hoja del prompt pendiente.
-        if (::aprobacion.isInitialized) aprobacion.alPrimerPlano()
+        // Volvimos adelante: bajar cualquier aviso pendiente (ya estás mirando).
+        if (::notifsRemotas.isInitialized) notifsRemotas.alPrimerPlano()
     }
 
     override fun onPause() {
@@ -280,14 +275,15 @@ class MainActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         try { connectivity.unregisterNetworkCallback(networkCallback) } catch (_: Exception) {}
+        if (::notifsRemotas.isInitialized) notifsRemotas.detener()
         dictado.soltar()
         tabs.cerrarTodas()
         super.onDestroy()
     }
 
     /** Pide el permiso de notificaciones (Android 13+) una sola vez, para poder avisar cuando
-     *  Claude quede esperando aprobación con la app en segundo plano. Best-effort: si se niega,
-     *  la hoja igual aparece al volver a la app. */
+     *  Claude quede esperando una decisión con la app en segundo plano. Best-effort: si se niega,
+     *  degrada en silencio (igual ves el prompt al abrir la app). */
     private fun pedirPermisoNotificaciones() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
         if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) ==
@@ -349,25 +345,6 @@ class MainActivity : AppCompatActivity() {
 
     @androidx.annotation.VisibleForTesting
     fun enviarTeclaEspecialForTest(keyCode: Int) = enviarTeclaEspecial(keyCode)
-
-    @androidx.annotation.VisibleForTesting
-    fun aprobacionVisibleForTest(): Boolean = ::aprobacion.isInitialized && aprobacion.hojaVisibleParaTest()
-
-    @androidx.annotation.VisibleForTesting
-    fun aprobacionElegirForTest(numero: Int) { if (::aprobacion.isInitialized) aprobacion.elegirParaTest(numero) }
-
-    /** F7: los tests corren con la activity RESUMED; esto simula que la app pasó a segundo plano
-     *  (y de vuelta) para verificar que un prompt nuevo se avise por notificación en vez de por
-     *  la hoja, y que al volver el aviso se baje y la hoja aparezca. Al volver replica onResume. */
-    @androidx.annotation.VisibleForTesting
-    fun simularSegundoPlanoParaTest(atras: Boolean) {
-        enPrimerPlano = !atras
-        if (!atras && ::aprobacion.isInitialized) aprobacion.alPrimerPlano()
-    }
-
-    @androidx.annotation.VisibleForTesting
-    fun avisoAprobacionActivoForTest(): Boolean =
-        ::aprobacion.isInitialized && aprobacion.avisoActivoParaTest()
 
     /** Texto actual de la barra de host (con el estado real). Para los tests instrumentados. */
     @androidx.annotation.VisibleForTesting

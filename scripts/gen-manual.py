@@ -319,14 +319,14 @@ S.append(P("Si algún día lo querés desactivar, adentro de Claude: "
            "<font name='Mono' size='9'>/tui default</font> (y "
            "<font name='Mono' size='9'>/tui fullscreen</font> lo devuelve).", small))
 S.append(P("Aprobar acciones", h2))
-S.append(P("Cuando Claude pide permiso para correr un comando o aplicar un cambio, la app "
-           "levanta una <b>hoja de aprobación</b> abajo de la pantalla: el comando o el diff "
-           "completo (scrollable, no recortado por el teclado) y <b>botones grandes</b> con "
-           "cada opción. Tocar una opción es lo mismo que elegirla en la terminal. Si preferís, "
-           "“Ver en la terminal” cierra la hoja y respondés a mano."))
+S.append(P("Cuando Claude pide permiso para correr un comando o aplicar un cambio, lo leés y "
+           "respondés en la <b>terminal misma</b> (tipeás el número de la opción). Para que no "
+           "elijas a ciegas, la app te ayuda de dos maneras:", body))
+S.append(B("<b>Baja el teclado sola</b> apenas aparece el selector de opciones, así ves el "
+           "contexto completo antes de decidir (tocá la terminal para volver a escribir)."))
 S.append(B("Si la app está en <b>segundo plano</b> cuando Claude queda esperando, te llega una "
-           "<b>notificación</b> (“Claude espera tu aprobación”). Tocala y la app se abre con la "
-           "hoja lista. La primera vez, Android te pide permiso para notificarte."))
+           "<b>notificación</b> (“Claude te espera”). Tocala y la app vuelve al frente con el "
+           "prompt a la vista. La primera vez, Android te pide permiso para notificarte."))
 
 # --- 7. Dictado -------------------------------------------------------------
 S.append(P("Dictado por voz", h1))

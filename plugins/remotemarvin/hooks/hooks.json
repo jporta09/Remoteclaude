@@ -23,6 +23,18 @@
           }
         ]
       }
+    ],
+    "Notification": [
+      {
+        "matcher": "permission_prompt",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/scripts/marvin-notify.sh",
+            "timeout": 5
+          }
+        ]
+      }
     ]
   }
 }
