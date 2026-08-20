@@ -97,6 +97,11 @@ verificables contra el repo (`RemoteControl.kt`, `HostKeys.kt`, la demo `Tour.kt
 
 ### A. Usuario final no técnico
 
+> **⚠️ Re-encuadrado en la segunda pasada (§5):** los usuarios reales de RemoteMarvin son
+> **desarrolladores**, así que este persona pasó a ser un **dev que dogfoodea** (ver §5.3).
+> Esta sección queda como registro histórico de la primera pasada; su restricción de "no leer
+> código" ya no aplica al perfil actual.
+
 **Misión.** Medir la calidad del onboarding **sin el sesgo del autor**: ¿alguien que solo
 sigue la demo y el manual llega a usar la app sin ayuda externa?
 
@@ -704,8 +709,11 @@ Todo pusheado, CI verde, un commit por fase. Detalle vivo (con las filas ✔ RES
   **reabre** en `revision-integral.md` con evidencia.
 - **Atacá lo nuevo con tu lente** (§5.3) y **re-scoreá** si tu método produce un score (UX→SUS,
   Arq-IA→ASI01-10).
-- **Handoff notes siguen** (§4.4). **Consolidá**: actualizá `revision-integral.md` (confirmá/ajustá/
-  reabrí) y apéndice fechado a tu memoria.
+- **Handoff notes siguen** (§4.4). **Consolidación**: NO edites `revision-integral.md` vos mismo
+  (regla throwaway de §5.4 + varios agentes en paralelo = carrera de escrituras; el backlog único lo
+  mantiene el coordinador, §4.6). En tu reporte **proponé las filas exactas** a confirmar/ajustar/
+  reabrir, con evidencia; el coordinador las aplica. Tu **memoria** sí es tuya: apendá el apéndice
+  fechado (vive fuera del repo).
 
 ### 5.3 Foco por perfil (qué re-verificar + qué superficie nueva atacar)
 
@@ -716,7 +724,7 @@ Todo pusheado, CI verde, un commit por fase. Detalle vivo (con las filas ✔ RES
 | **devops** | Su hallazgo estrella: el **teardown** (F9) — ¿deshace todo, idempotente, NO toca `authorized_keys`?; multi-distro (F2); README `/plugin` (F2); **distribución del APK** (release.yml/Obtainium) | Casos borde del `teardown-host.sh` y del release workflow |
 | **dev** | `listDocs` NUL (F1); `execResult` (F1) | Correctitud/arquitectura/deuda del **código nuevo**: `Diagnostico`/`DiagnosticoActivity` (F8), preview en `DictationController` (F6), notif en `Aprobacion` (F7), `marvints.Estado`/`TailscaleBridge` (F10), lib de teardown (F9), `MarvinTestRunner` |
 | **qa** | `raro'nombre` (F1); diálogo que rota (WS-D); sustitución de sesión | Edge cases del **preview** (re-dictar rápido, vacío, control chars = el saneo); **carreras de background/notificación** (F7); **diagnóstico** (overflow del buffer, limpiar durante eventos); **teardown** (estado parcial); **detección de expiry** |
-| **sre** | Botín grande: H1 pérdida de sesión anunciada (F5); H2 notif en background (F7); H3 expiry (F10); H5 endpoint fail-fast (F5); H6 observabilidad (F8); H7 chrome desacoplado (WS-A) | El **ring buffer** como herramienta SRE; la **completitud de la detección de expiry** (mid-sesión vs hueco reinicio-tras-vencer); confiabilidad de la notif |
+| **sre** | Botín grande: H1 pérdida de sesión (hoy se anuncia — verificá el aviso y el Toast); H2 notif en background (F7); H3 expiry (F10); H5 endpoint fail-fast (F5); H6 observabilidad (F8); H7 chrome desacoplado (WS-A) | El **ring buffer** como herramienta SRE; la **completitud de la detección de expiry** (mid-sesión vs hueco reinicio-tras-vencer); confiabilidad de la notif |
 | **seguridad-ofensiva** | H3 FLAG_SECURE (F3, sólo el QR); H5 umbral OSC52 (F3); H6 parser `listDocs` (F1); H2 default de usuario ya no root (WS-D) | El **PendingIntent** de la notif (F7); `POST_NOTIFICATIONS`; `teardown-host.sh` (¿de verdad NO toca `authorized_keys`?); exposición de info de `Estado()` (F10); ¿el **diagnóstico** filtra secretos? |
 | **arquitecto-ia** | ASI09 (hoja de aprobación WS-F + notif F7); H4 preview (F6); H5 OSC52 (F3); H3 hook de contenido no confiable (F2); H6/H7 description/evals de skills (F2) | Cómo la **notificación** y el **preview** (insertar-para-editar) mueven la superficie de confianza agéntica. **Re-scorear ASI01–10** |
 
@@ -725,8 +733,10 @@ Todo pusheado, CI verde, un commit por fase. Detalle vivo (con las filas ✔ RES
 Cada agente puede **escribir y correr los tests que necesite** (`make unit`/`make host`/`make e2e`,
 o pruebas descartables), **levantar el fixture**, **manejar la app en el emulador** y **experimentar**
 con hipótesis. Reglas: **todo throwaway — al terminar REVERTÍ TODO** (nada nuevo ni tocado en el
-repo); **nunca commit/push**; el **emulador es compartido y serializado** (un agente por vez corre
-`make e2e`/maneja el AVD — compite con el runner de CI en esta misma máquina).
+repo; `revision-integral.md` incluido — las filas se proponen en el reporte, §5.2); **nunca
+commit/push**; el **emulador es compartido y serializado** (un agente por vez corre `make e2e`/
+maneja el AVD — compite con el runner de CI en esta misma máquina). La única escritura persistente
+tuya es **tu archivo de memoria**, que vive fuera del repo.
 
 ### 5.5 Orquestación de la segunda pasada
 
