@@ -139,3 +139,50 @@ def test_teardown_desinstala_lo_local_sin_tocar_lo_ajeno(tmp_path):
     cmds = log.read_text()
     assert "docker compose down" in cmds
     assert "loginctl disable-linger" in cmds
+
+
+# --- grupo docker residual ------------------------------------------------------------
+# setup-host.sh hace `usermod -aG docker $USER` cuando INSTALA Docker, y eso es root efectivo
+# (quien llega al socket puede todo). El teardown no debe sacarlo solo —el usuario podía estar
+# en el grupo desde antes, misma lección que authorized_keys— pero tampoco puede callarlo.
+
+def _teardown_con_grupos(tmp_path, grupos):
+    """Corre el teardown en un sandbox con un `id` falso que reporta esos grupos."""
+    home = tmp_path / "home"
+    (home / ".local" / "bin").mkdir(parents=True)
+    (home / ".config" / "systemd" / "user").mkdir(parents=True)
+    log = tmp_path / "cmd.log"
+    binn = tmp_path / "bin"
+    for cmd in ("systemctl", "docker", "loginctl", "gpasswd", "usermod"):
+        _bin_falso(binn, cmd, log)
+    (binn / "id").write_text(
+        f'#!/usr/bin/env bash\necho "id $@" >> "{log}"\necho "{grupos}"\n')
+    (binn / "id").chmod(0o755)
+
+    env = dict(
+        os.environ, HOME=str(home),
+        PATH=f"{binn}:{os.environ['PATH']}",
+        SYSTEMD_USER_DIR=str(home / ".config" / "systemd" / "user"),
+    )
+    r = subprocess.run(["bash", TEARDOWN, "--sin-sudo"], env=env,
+                       capture_output=True, text=True, check=False)
+    assert r.returncode == 0, r.stderr
+    return r, log.read_text()
+
+
+def test_teardown_nombra_el_grupo_docker_pero_no_te_saca(tmp_path):
+    r, cmds = _teardown_con_grupos(tmp_path, "tester docker sudo")
+    salida = r.stdout
+    # Lo NOMBRA, con el comando exacto para salir a mano.
+    assert "docker" in salida and "gpasswd -d" in salida
+    assert "sudo gpasswd -d" in salida
+    # Pero NO lo ejecuta: la membresía se toca a mano o no se toca.
+    assert "gpasswd" not in cmds
+    assert "usermod" not in cmds
+
+
+def test_teardown_no_molesta_si_no_estas_en_el_grupo_docker(tmp_path):
+    r, cmds = _teardown_con_grupos(tmp_path, "tester sudo")
+    assert "gpasswd" not in r.stdout
+    assert "no está en él" in r.stdout
+    assert "gpasswd" not in cmds and "usermod" not in cmds

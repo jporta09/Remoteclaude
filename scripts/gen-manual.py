@@ -222,9 +222,10 @@ S.append(P("Para deshacer todo lo anterior, el par de setup:"))
 S.append(C("bash scripts/teardown-host.sh                 # quita daemons, sshd.d, bloques, baja docker\n"
            "bash scripts/teardown-host.sh --purgar-datos  # además borra el estado del nodo Tailscale"))
 S.append(P("A propósito <b>no</b> toca tu "
-           "<font name='Mono' size='9'>~/.ssh/authorized_keys</font> ni borra los nodos del "
-           "tailnet: esos dos pasos los hacés vos (el script te los recuerda al final, con los "
-           "nombres a borrar en la consola de Tailscale)."))
+           "<font name='Mono' size='9'>~/.ssh/authorized_keys</font>, no te saca del grupo "
+           "<font name='Mono' size='9'>docker</font> (podías estar en él desde antes) y no borra "
+           "los nodos del tailnet: esos tres pasos los hacés vos, y el script te los recuerda al "
+           "final con el comando exacto y los nombres a borrar en la consola de Tailscale."))
 
 # --- 4. Vincular ------------------------------------------------------------
 S.append(P("Conectar el celular (vincular por QR)", h1))

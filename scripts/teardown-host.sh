@@ -10,8 +10,9 @@
 #   bash scripts/teardown-host.sh --sin-sudo      # no toca sshd (para hosts sin root)
 #
 # A propósito NO toca ~/.ssh/authorized_keys (la clave de la app la agregaste vos a mano; borrarla
-# a ciegas por una etiqueta podía llevarse OTRA clave) NI borra los nodos del tailnet (eso se hace
-# desde la consola de admin). Ambas cosas quedan como pasos guiados al final.
+# a ciegas por una etiqueta podía llevarse OTRA clave), NI te saca del grupo docker que el setup
+# agrega cuando instala Docker (podías estar en él desde antes), NI borra los nodos del tailnet
+# (eso se hace desde la consola de admin). Las tres quedan como pasos guiados al final.
 set -euo pipefail
 
 PURGAR=0
@@ -20,7 +21,7 @@ for arg in "$@"; do
     case "$arg" in
         --purgar-datos) PURGAR=1 ;;
         --sin-sudo)     SIN_SUDO=1 ;;
-        -h|--help)      sed -n '2,14p' "$0"; exit 0 ;;
+        -h|--help)      sed -n '2,15p' "$0"; exit 0 ;;
         *) echo "opción desconocida: $arg (ver --help)"; exit 2 ;;
     esac
 done
@@ -99,6 +100,20 @@ if [ "$PURGAR" = 1 ]; then
     echo "    borrado lo que hubiera (si quedaba algo tuyo ahí, el rmdir lo respeta)"
 fi
 
+# Grupo docker: el setup agrega al usuario CUANDO instala Docker (usermod -aG docker). NO lo
+# revertimos solos —podías estar en el grupo desde ANTES y sacarte a ciegas rompería otra cosa,
+# la misma razón por la que no tocamos authorized_keys— pero sí lo nombramos: quien llega al
+# socket de docker es root efectivo en el host, y eso no puede quedar como residuo mudo.
+if id -nG "$USER" 2>/dev/null | tr ' ' '\n' | grep -qx docker; then
+    PASO_DOCKER=" 3) Tu usuario SIGUE en el grupo \"docker\" (= root efectivo en el host: quien
+    llega al socket de docker puede todo). El setup te agrega ahí sólo cuando
+    INSTALA Docker; si fue por eso y ya no lo querés:
+        sudo gpasswd -d $USER docker
+    (después, cerrá y volvé a entrar). No te sacamos solos: podías estar antes."
+else
+    PASO_DOCKER=" 3) Grupo \"docker\": tu usuario no está en él, nada que hacer."
+fi
+
 # .env sólo para nombrar el nodo del host en la guía de abajo.
 TS_HOSTNAME="remoteclaude"
 [ -f "$REPO/.env" ] && TS_HOSTNAME="$(grep -E '^TS_HOSTNAME=' "$REPO/.env" | tail -1 | cut -d= -f2- || true)"
@@ -119,7 +134,9 @@ cat <<EOF
     Borralos ahí si ya no vas a usar RemoteMarvin. (En el celu, además, la app
     tiene su propio "olvidar / desvincular".)
 
- 3) Paquetes (openssh-server, tmux, jq, qrencode) y Docker: quedan instalados.
+$PASO_DOCKER
+
+ 4) Paquetes (openssh-server, tmux, jq, qrencode) y Docker: quedan instalados.
     Si los pusiste sólo para esto, desinstalalos con tu gestor de paquetes.
 ============================================================
 EOF
