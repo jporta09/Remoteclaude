@@ -242,6 +242,28 @@ class TerminalE2ETest {
     }
 
     /**
+     * v1.15.3 (#1): forzar reconexión (lo que hace el resume ante una conexión muerta sin RST)
+     * cierra la conexión actual y reconecta. Se verifica que produce una SEGUNDA conexión
+     * registrada en el diagnóstico — el mecanismo que recupera la terminal congelada al volver.
+     */
+    @Test fun forzarReconexion_reconecta() {
+        Diagnostico.limpiar()
+        val conexiones = { Diagnostico.exportarTexto().split("$fixtureHost:$fixturePort — conectado").size - 1 }
+        ActivityScenario.launch<MainActivity>(intentFor(fixturePort)).use { scenario ->
+            await(what = "la sesión activa llega a CONECTADO") {
+                var e: SshTerminalSession.Estado? = null
+                scenario.onActivity { a -> e = a.currentSessionForTest()?.estado }
+                e == SshTerminalSession.Estado.CONECTADO
+            }
+            await(what = "el diagnóstico registró la 1ª conexión") { conexiones() >= 1 }
+            scenario.onActivity { a -> a.forzarReconexionForTest() }
+            await(what = "forzar reconexión produce una 2ª conexión", timeoutMs = 40_000) {
+                conexiones() >= 2
+            }
+        }
+    }
+
+    /**
      * WS-A: la barra dice "conectado" (verde, sin sufijo) SOLO cuando la conexión SSH está
      * realmente establecida — no pintada del extra del Intent. Con la clave autorizada, la
      * sesión llega a CONECTADO y la barra no muestra "sin conexión".

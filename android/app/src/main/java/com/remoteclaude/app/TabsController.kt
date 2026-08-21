@@ -160,6 +160,10 @@ class TabsController(
      *  en background la conexión suele caerse y el backoff dejaba la terminal "trabada" al volver. */
     fun reintentarConexiones() = tabs.toList().forEach { it.session.reintentarConexionYa() }
 
+    /** Al volver tras un rato en background: forzar reconexión en todas (caza la conexión "media"
+     *  muerta-sin-RST que la app no detecta y deja la terminal congelada sin avisar). */
+    fun forzarReconexiones() = tabs.toList().forEach { it.session.forzarReconexion() }
+
     private fun abrir(nombre: String) {
         tabs.add(Tab(crearSesion(nombre)))
         activar(tabs.size - 1)

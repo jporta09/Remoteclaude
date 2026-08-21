@@ -289,6 +289,35 @@ class SshTerminalSession(
         closeCurrent()
     }
 
+    @Volatile private var forzando = false
+
+    /**
+     * Al VOLVER a primer plano tras un rato en background: forzar reconexión. En background la
+     * conexión suele quedar "media" (muerta pero SIN RST): el kernel del server sigue ACKeando el
+     * TCP, así el keepalive (que sólo escribe, no espera respuesta) NO falla, y la app cree que
+     * sigue conectada → terminal congelada SIN avisar "reconectando", a veces para siempre. El
+     * backoff no aplica (nunca se detectó la caída), así que [reintentarConexionYa] no alcanza.
+     *
+     * NO sondeamos la conexión: cualquier operación de trilead toma el lock del `Connection` y se
+     * cuelga contra el server congelado, y después `closeCurrent()` no puede tomar ese lock
+     * (deadlock, verificado). En vez de eso cerramos directo → el read colgado se desbloquea y el
+     * loop reconecta (tmux `-A` reengancha la sesión intacta, así que es barato y sin pérdida).
+     * Va en un hilo aparte porque `Connection.close()` hace I/O. Sólo lo llama el resume tras superar
+     * un umbral de tiempo en background (un vistazo corto no tira la conexión).
+     */
+    fun forzarReconexion() {
+        if (userClosed || conn == null || forzando) return
+        forzando = true
+        thread(name = "ssh-force-reconnect", isDaemon = true) {
+            try {
+                reintentarConexionYa()   // que no espere el backoff después de cerrar
+                closeCurrent()           // rompe el read colgado -> el loop reconecta
+            } finally {
+                forzando = false
+            }
+        }
+    }
+
     private fun closeCurrent() {
         try { sshSession?.close() } catch (_: Exception) {}
         try { conn?.close() } catch (_: Exception) {}

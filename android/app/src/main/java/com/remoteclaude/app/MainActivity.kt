@@ -52,6 +52,9 @@ class MainActivity : AppCompatActivity() {
      *  molesta cuando estás atrás; adelante ya la ves (y el modo lectura bajó el teclado). */
     @Volatile private var enPrimerPlano = false
 
+    /** Cuándo se fue a background (elapsedRealtime), para decidir si al volver forzar reconexión. */
+    private var pausadoEnMs = 0L
+
     private lateinit var control: RemoteControl
     private lateinit var keyPair: java.security.KeyPair
     private lateinit var barraHost: View
@@ -274,12 +277,20 @@ class MainActivity : AppCompatActivity() {
         if (::notifsRemotas.isInitialized) notifsRemotas.alPrimerPlano()
         if (::vigia.isInitialized) vigia.reanudar()
         // En background la conexión se cae; al volver, reconectar YA en vez de esperar el backoff
-        // (ese era el "freeze al volver estando en Claude"). #1.
-        if (::tabs.isInitialized) tabs.reintentarConexiones()
+        // (caso "detectado", barra en reconectando). #1.
+        if (::tabs.isInitialized) {
+            tabs.reintentarConexiones()
+            // Caso "no detectado": conexión media (muerta sin RST) que la app cree viva → terminal
+            // congelada sin avisar. Si estuvimos un rato afuera, forzar reconexión (tmux -A reengancha
+            // sin pérdida). Un vistazo corto no fuerza nada (no vale la pena el redibujo).
+            val afueraMs = android.os.SystemClock.elapsedRealtime() - pausadoEnMs
+            if (pausadoEnMs != 0L && afueraMs > UMBRAL_FORZAR_RECONEXION_MS) tabs.forzarReconexiones()
+        }
     }
 
     override fun onPause() {
         enPrimerPlano = false
+        pausadoEnMs = android.os.SystemClock.elapsedRealtime()
         if (::vigia.isInitialized) vigia.pausar()
         super.onPause()
     }
@@ -367,9 +378,17 @@ class MainActivity : AppCompatActivity() {
     @androidx.annotation.VisibleForTesting
     fun bloquearMainParaTest(ms: Long) = Thread.sleep(ms)
 
+    /** Fuerza reconexión en todas las sesiones (lo que hace el resume ante una conexión muerta). */
+    @androidx.annotation.VisibleForTesting
+    fun forzarReconexionForTest() { if (::tabs.isInitialized) tabs.forzarReconexiones() }
+
     companion object {
         /** Código del pedido de permiso POST_NOTIFICATIONS (Android 13+). */
         private const val REQ_NOTIF = 72
+
+        /** Tiempo en background a partir del cual, al volver, se fuerza reconexión (por si la
+         *  conexión quedó muerta sin RST). Un vistazo más corto no fuerza nada. */
+        private const val UMBRAL_FORZAR_RECONEXION_MS = 3000L
     }
 
     // --- identidad del host ----------------------------------------------------
