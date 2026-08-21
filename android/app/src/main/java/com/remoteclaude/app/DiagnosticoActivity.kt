@@ -11,6 +11,7 @@ import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 
 /**
@@ -99,7 +100,14 @@ class DiagnosticoActivity : AppCompatActivity() {
             setOnClickListener { onClick() }
         }
         addView(boton("Limpiar", "Vaciar el diagnóstico") {
-            Diagnostico.limpiar()
+            // Confirmar: "Limpiar" borra el timeline (incluidos los eventos persistidos ya cargados),
+            // y sin confirmación un toque accidental se lleva la evidencia justo cuando la mirás.
+            AlertDialog.Builder(this@DiagnosticoActivity)
+                .setTitle("¿Vaciar el diagnóstico?")
+                .setMessage("Se borran los eventos de conexión de esta pantalla.")
+                .setNegativeButton("Cancelar", null)
+                .setPositiveButton("Vaciar") { _, _ -> Diagnostico.limpiar() }
+                .show()
         })
         addView(boton("Compartir", "Compartir el diagnóstico") {
             compartir()

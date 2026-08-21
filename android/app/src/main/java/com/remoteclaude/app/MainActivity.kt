@@ -105,6 +105,11 @@ class MainActivity : AppCompatActivity() {
         keyPair = KeyStoreSsh.getOrCreateKeyPair()
         control = RemoteControl(this, host, port, user, keyPair)
 
+        // Diagnóstico: recuperar los eventos de conexión de una corrida anterior (si el proceso murió)
+        // ANTES de habilitar la persistencia, para no re-persistir lo recuperado.
+        Diagnostico.cargarPersistidos(this)
+        Diagnostico.init(this)
+
         // Vigía del hilo de UI (#1): sube al Diagnóstico cuelgues de una corrida anterior (si la app
         // se cerró en el freeze) y arranca a vigilar el main en primer plano.
         VigiaUi.cargarPersistidos(this)
@@ -588,6 +593,20 @@ class MainActivity : AppCompatActivity() {
             setOnClickListener { tabs.reconectarActiva() }
         }
         addView(barraReconectar, LinearLayout.LayoutParams(Paleta.WRAP, Paleta.WRAP))
+        // Acceso VISIBLE al diagnóstico (además del long-press de la barra): un ⓘ chico, siempre
+        // presente, para que se encuentre justo cuando cae la conexión. Su propio click lo consume,
+        // así que no dispara el finish() del contenedor.
+        addView(TextView(this@MainActivity).apply {
+            text = "ⓘ"
+            typeface = monoFont
+            setTextColor(getColor(R.color.marvin_muted))
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
+            setPadding(dp(10), 0, dp(10), 0)
+            contentDescription = "Diagnóstico de conexión"
+            setOnClickListener {
+                startActivity(Intent(this@MainActivity, DiagnosticoActivity::class.java))
+            }
+        }, LinearLayout.LayoutParams(Paleta.WRAP, Paleta.WRAP))
         addView(ImageView(this@MainActivity).apply {
             setImageResource(R.drawable.marvin_isologo_bar)
             adjustViewBounds = true
