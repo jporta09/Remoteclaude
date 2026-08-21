@@ -57,6 +57,11 @@ class TerminalClients(
     // con salida grande cualquiera (para eso está el scroll/pinch). Detección Claude-independiente
     // (cualquier menú/select), y de bajo riesgo: sólo decide CUÁNDO bajar el teclado; si se
     // equivoca, tocás y vuelve — no re-renderiza nada.
+    //
+    // `enModoLectura` = "ya reaccioné al prompt que está en pantalla" (bajé el teclado UNA vez).
+    // No significa "el teclado está abajo": si tocás para tipear, el teclado sube pero el flag
+    // sigue true, así NO se lo vuelve a bajar mientras el MISMO prompt siga. Se rearma (→ false)
+    // recién cuando el prompt cambia o desaparece.
     @Volatile private var enModoLectura = false
     private val handler = android.os.Handler(android.os.Looper.getMainLooper())
     private val chequeoLectura = Runnable { revisarLectura() }
@@ -151,9 +156,10 @@ class TerminalClients(
         }
 
         override fun onSingleTapUp(e: MotionEvent?) {
-            // Tocar la terminal = quiero escribir: subo el teclado y permito que un próximo
-            // prompt de decisión vuelva a bajarlo.
-            enModoLectura = false
+            // Tocar la terminal = quiero escribir: subo el teclado. NO reseteo `enModoLectura`:
+            // si el selector SIGUE en pantalla, `revisarLectura` NO debe volver a bajarlo (si no,
+            // se pelea con el usuario que quiere tipear la respuesta). El flag se rearma solo
+            // cuando el prompt cambia o desaparece (rama else de `revisarLectura`).
             mostrarTeclado()
         }
         override fun shouldBackButtonBeMappedToEscape(): Boolean = false
