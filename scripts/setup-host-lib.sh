@@ -18,6 +18,14 @@ quitar_bloque_sentinelas() {
     local archivo="$1" begin="$2" end="$3"
     [ -f "$archivo" ] || return 0
     grep -qF "$begin" "$archivo" || return 0
+    # Si está el inicio pero NO el fin (p.ej. alguien editó el archivo a mano y borró la sentinela
+    # de cierre), el awk de abajo dejaría `dentro=1` hasta EOF y borraría desde `begin` hasta el
+    # final del archivo. No tocamos nada en ese caso: mejor dejar una sentinela huérfana que
+    # comerse el resto de un ~/.ssh/config o ~/.tmux.conf.
+    grep -qF "$end" "$archivo" || {
+        printf 'aviso: %s tiene la sentinela de inicio pero no la de fin; no lo modifico para no borrar de más\n' "$archivo" >&2
+        return 0
+    }
     # awk con banderas y no `sed /a/,/b/d` porque las sentinelas llevan caracteres que sed
     # interpreta.
     local tmp

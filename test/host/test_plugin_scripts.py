@@ -22,6 +22,8 @@ SHOW = RAIZ / "plugins/remotemarvin/skills/headed-browser/scripts/marvin-show.sh
 SHARE = RAIZ / "plugins/remotemarvin/skills/share-doc/scripts/marvin-share.sh"
 CHECK = RAIZ / "plugins/remotemarvin/scripts/check-version.sh"
 NOTIFY = RAIZ / "plugins/remotemarvin/scripts/marvin-notify.sh"
+NOTIFY_DECISION = RAIZ / "plugins/remotemarvin/scripts/marvin-notify-decision.sh"
+FLAG_SUBIDOS = RAIZ / "plugins/remotemarvin/scripts/flag-subidos-context.sh"
 
 CONTROL = re.compile(r"[\x00-\x1f\x7f]")
 
@@ -341,3 +343,90 @@ def test_notify_capea_en_200_lineas(tmp_path):
         _correr_notify(f'{{"notification_type":"permission_prompt","message":"n{i}"}}', tmp_path)
     lineas = (tmp_path / "marvin" / "notify.jsonl").read_text().splitlines()
     assert len(lineas) <= 200
+
+
+# ------------------------------------------------------ marvin-notify-decision
+# El hook PreToolUse (matcher ExitPlanMode|AskUserQuestion) cubre lo que el hook Notification NO:
+# Claude esperando que apruebes un plan o respondas una pregunta. Emite el MISMO type
+# "permission_prompt" que la app ya reacciona, con un mensaje según el tool, y nunca falla.
+
+
+def _correr_decision(payload: str, cfg: Path) -> subprocess.CompletedProcess:
+    env = {**os.environ, "XDG_CONFIG_HOME": str(cfg)}
+    return subprocess.run(
+        ["bash", str(NOTIFY_DECISION)],
+        input=payload,
+        capture_output=True,
+        text=True,
+        env=env,
+        check=False,
+    )
+
+
+def test_decision_exitplanmode_avisa_por_el_plan(tmp_path):
+    r = _correr_decision('{"tool_name":"ExitPlanMode","tool_input":{}}', tmp_path)
+    assert r.returncode == 0
+    obj = json.loads((tmp_path / "marvin" / "notify.jsonl").read_text().strip())
+    assert obj["type"] == "permission_prompt"  # la app lo reacciona sin cambios
+    assert "plan" in obj["message"].lower()
+    assert isinstance(obj["ts"], int)
+
+
+def test_decision_askuserquestion_avisa_por_la_pregunta(tmp_path):
+    r = _correr_decision('{"tool_name":"AskUserQuestion","tool_input":{}}', tmp_path)
+    assert r.returncode == 0
+    obj = json.loads((tmp_path / "marvin" / "notify.jsonl").read_text().strip())
+    assert obj["type"] == "permission_prompt"
+    assert "pregunta" in obj["message"].lower()
+
+
+def test_decision_stdin_basura_no_falla(tmp_path):
+    r = _correr_decision("no es json", tmp_path)
+    assert r.returncode == 0  # nunca rompe el flujo de Claude
+    obj = json.loads((tmp_path / "marvin" / "notify.jsonl").read_text().strip())
+    assert obj["type"] == "permission_prompt"
+
+
+# ------------------------------------------------------ flag-subidos-context
+# PostToolUse (Read|Bash): recuerda que lo leído de ~/RemoteMarvinDocs/subidos/ es DATO no confiable.
+# Debe disparar cuando se LEE el contenido, NO ante cualquier mención de la ruta (antes sobre-disparaba
+# con ls/marvin-share/etc.).
+
+
+def _correr_flag(payload: str) -> subprocess.CompletedProcess:
+    return subprocess.run(
+        ["bash", str(FLAG_SUBIDOS)],
+        input=payload,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+
+def _dispara(r: subprocess.CompletedProcess) -> bool:
+    return "additionalContext" in r.stdout
+
+
+def test_flag_read_de_subidos_dispara(tmp_path):
+    r = _correr_flag('{"tool_name":"Read","tool_input":{"file_path":"/home/x/RemoteMarvinDocs/subidos/foto.png"}}')
+    assert r.returncode == 0
+    assert _dispara(r)
+
+
+def test_flag_bash_que_lee_el_contenido_dispara(tmp_path):
+    r = _correr_flag('{"tool_name":"Bash","tool_input":{"command":"cat ~/RemoteMarvinDocs/subidos/notas.txt"}}')
+    assert r.returncode == 0
+    assert _dispara(r)
+
+
+def test_flag_bash_ls_no_sobre_dispara(tmp_path):
+    # ls sólo lista nombres, no lee contenido: no debe disparar el recordatorio.
+    r = _correr_flag('{"tool_name":"Bash","tool_input":{"command":"ls -la ~/RemoteMarvinDocs/subidos/"}}')
+    assert r.returncode == 0
+    assert not _dispara(r)
+
+
+def test_flag_bash_que_no_toca_subidos_no_dispara(tmp_path):
+    r = _correr_flag('{"tool_name":"Bash","tool_input":{"command":"cat /etc/hostname"}}')
+    assert r.returncode == 0
+    assert not _dispara(r)

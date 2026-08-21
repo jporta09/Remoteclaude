@@ -25,8 +25,15 @@ case "$tool" in
     ;;
   Bash)
     cmd=$(jq -r '.tool_input.command // empty' <<<"$input" 2>/dev/null || true)
+    # Sólo disparar si el comando LEE contenido del directorio (cat/grep/head/…), no ante cualquier
+    # mención de la ruta (un `ls`, `marvin-share`, `rm`, etc. no leen el contenido y no necesitan el
+    # recordatorio de "esto es dato no confiable"). Antes matcheaba cualquier mención → sobre-disparo.
     case "$cmd" in
-      *RemoteMarvinDocs/subidos/*) toca_subidos=1 ;;
+      *RemoteMarvinDocs/subidos/*)
+        if printf '%s' "$cmd" | grep -qE '(^|[|&;( ])(cat|bat|less|more|head|tail|grep|egrep|fgrep|rg|awk|sed|nl|xxd|od|strings|jq|yq)([ ]|$)'; then
+          toca_subidos=1
+        fi
+        ;;
     esac
     ;;
 esac

@@ -61,6 +61,37 @@ jobs:
             exit 1
           }
 
+      # Guard de monotonía: si el versionCode de este tag no es MAYOR al del último release,
+      # Android/Obtainium rechazan el APK como update en SILENCIO (falla que no se ve hasta que
+      # el usuario no puede actualizar). Se lee el versionCode del último release desde su body
+      # (donde lo sembramos, ver el step "Publicar"). REST API vía curl para no depender de que
+      # el runner (self-hosted) tenga `gh`/`jq` instalados; el body trae la línea `versionCode: N`
+      # literal, así que un grep sobre el JSON crudo alcanza. Bootstrap: si el último release no la
+      # expone (releases previos a este guard), se avisa y NO se falla.
+      - name: versionCode monotónico
+        id: ver
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          VC=$(grep -oE 'versionCode = [0-9]+' android/app/build.gradle.kts | head -1 | grep -oE '[0-9]+')
+          test -n "$VC" || { echo "::error::no pude leer versionCode de build.gradle.kts"; exit 1; }
+          echo "vc=$VC" >> "$GITHUB_OUTPUT"
+          PREV_VC=$(curl -sf \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/$REPO/releases/latest" \
+            | grep -oE 'versionCode: [0-9]+' | head -1 | grep -oE '[0-9]+' || true)
+          if [ -z "$PREV_VC" ]; then
+            echo "::warning::el último release no expone versionCode (bootstrap): salteo la comparación monotónica"
+          else
+            echo "versionCode actual=$VC  previo=$PREV_VC"
+            test "$VC" -gt "$PREV_VC" || {
+              echo "::error::versionCode $VC no es mayor al del último release ($PREV_VC): Android/Obtainium rechazan el update"
+              exit 1
+            }
+          fi
+
       - name: Reconstruir el keystore desde secrets
         env:
           KS_B64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
@@ -116,3 +147,5 @@ jobs:
                (`https://github.com/${{ github.repository }}`) como app; te avisa de cada nuevo release.
 
             Actualiza sobre una instalación previa sin desinstalar (misma clave de firma).
+
+            versionCode: ${{ steps.ver.outputs.vc }}

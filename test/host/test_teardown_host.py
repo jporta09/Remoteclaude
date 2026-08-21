@@ -47,6 +47,18 @@ def test_quitar_bloque_no_falla_si_el_archivo_no_existe(tmp_path):
     assert r.returncode == 0, r.stderr
 
 
+def test_quitar_bloque_con_inicio_sin_fin_no_borra_hasta_eof(tmp_path):
+    # Si alguien borró a mano la sentinela de cierre, NO debemos comernos el resto del archivo
+    # (era el bug: el awk dejaba dentro=1 hasta EOF y borraba desde el inicio al final).
+    f = tmp_path / "ssh_config"
+    original = "Host uno\n  User juan\n# >>> M >>>\nvieja\nHost dos\n  User ana\n"  # sin # <<< M <<<
+    f.write_text(original)
+    r = con_lib(f'quitar_bloque_sentinelas "{f}" "# >>> M >>>" "# <<< M <<<"', tmp_path)
+    assert r.returncode == 0, r.stderr
+    assert f.read_text() == original  # intacto: no se tocó
+    assert "Host dos" in f.read_text()
+
+
 # --- quitar_unidad --------------------------------------------------------------------
 
 def systemctl_falso(tmp_path):
