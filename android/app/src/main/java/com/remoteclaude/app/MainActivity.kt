@@ -273,6 +273,9 @@ class MainActivity : AppCompatActivity() {
         // Volvimos adelante: bajar cualquier aviso pendiente (ya estás mirando).
         if (::notifsRemotas.isInitialized) notifsRemotas.alPrimerPlano()
         if (::vigia.isInitialized) vigia.reanudar()
+        // En background la conexión se cae; al volver, reconectar YA en vez de esperar el backoff
+        // (ese era el "freeze al volver estando en Claude"). #1.
+        if (::tabs.isInitialized) tabs.reintentarConexiones()
     }
 
     override fun onPause() {

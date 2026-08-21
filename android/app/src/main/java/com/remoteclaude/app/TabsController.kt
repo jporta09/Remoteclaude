@@ -156,6 +156,10 @@ class TabsController(
     fun avisarRed(disponible: Boolean) =
         tabs.toList().forEach { if (disponible) it.session.onNetworkAvailable() else it.session.onNetworkLost() }
 
+    /** Al volver a primer plano: pedir reconexión INMEDIATA en todas (romper el backoff), porque
+     *  en background la conexión suele caerse y el backoff dejaba la terminal "trabada" al volver. */
+    fun reintentarConexiones() = tabs.toList().forEach { it.session.reintentarConexionYa() }
+
     private fun abrir(nombre: String) {
         tabs.add(Tab(crearSesion(nombre)))
         activar(tabs.size - 1)

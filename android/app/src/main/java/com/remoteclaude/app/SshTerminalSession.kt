@@ -81,6 +81,11 @@ class SshTerminalSession(
 
     private val reconnectLock = Object()
     @Volatile private var waitingToReconnect = false
+    // "Reconectá YA" (romper el backoff). Flag para que sea race-safe: si el pedido llega ANTES de
+    // que el loop entre a esperar, igual se salta la espera. Lo prende: la red que vuelve y el
+    // volver a primer plano (en background la conexión se cae y el backoff dejaba la terminal
+    // "trabada" unos segundos al volver, hasta que expiraba la espera).
+    @Volatile private var reconectarYa = false
 
     // Toda I/O de red va fuera del hilo principal (si no, un socket muerto cuelga la UI = ANR).
     private val ioExecutor = Executors.newSingleThreadExecutor()
@@ -253,22 +258,31 @@ class SshTerminalSession(
             val waitMs = minOf(1000L * attempt, 8000L)
             synchronized(reconnectLock) {
                 waitingToReconnect = true
-                try {
-                    reconnectLock.wait(waitMs)
-                } catch (_: InterruptedException) {
+                // Si ya pidieron reconectar (p. ej. volviste a la app mientras caíamos), no esperar.
+                if (!reconectarYa) {
+                    try {
+                        reconnectLock.wait(waitMs)
+                    } catch (_: InterruptedException) {
+                    }
                 }
+                reconectarYa = false
                 waitingToReconnect = false
             }
         }
         onTransportClosed(null)
     }
 
-    /** La red volvió: despertar el backoff para reconectar ya. */
-    fun onNetworkAvailable() {
+    /** Pedir reconexión YA (romper el backoff). Race-safe: setea el flag Y notifica, así funciona
+     *  tanto si el loop ya está esperando como si todavía no entró a la espera. */
+    fun reintentarConexionYa() {
         synchronized(reconnectLock) {
-            if (waitingToReconnect) reconnectLock.notifyAll()
+            reconectarYa = true
+            reconnectLock.notifyAll()
         }
     }
+
+    /** La red volvió: reconectar ya. */
+    fun onNetworkAvailable() = reintentarConexionYa()
 
     /** La red se cayó: cerrar el socket muerto para que el read se desbloquee y entremos al backoff. */
     fun onNetworkLost() {
