@@ -221,6 +221,27 @@ class TerminalE2ETest {
     }
 
     /**
+     * v1.15.0 (#1): el VigiaUi detecta un cuelgue del hilo principal y captura su stack en el
+     * Diagnóstico. Se bloquea el main a propósito por 6 s (> UMBRAL de 4 s) y se verifica que
+     * quedó un evento "cuelgue-ui" con el stack — lo que grabará el freeze real sin reproducirlo.
+     */
+    @Test fun vigiaUi_registraElCuelgueDelHiloPrincipal() {
+        Diagnostico.limpiar()
+        ActivityScenario.launch<MainActivity>(intentFor(fixturePort)).use { scenario ->
+            // onActivity corre EN el hilo de UI: dormirlo lo cuelga de verdad. El vigía (otro hilo)
+            // lo detecta a los ~4 s y registra el stack mientras seguimos bloqueados.
+            scenario.onActivity { a -> a.bloquearMainParaTest(6000) }
+            await(what = "el vigía registró el cuelgue con el stack") {
+                Diagnostico.instantanea().any {
+                    it.categoria == "cuelgue-ui" &&
+                        it.detalle.contains("stack del hilo principal") &&
+                        it.detalle.contains("bloquearMainParaTest")
+                }
+            }
+        }
+    }
+
+    /**
      * WS-A: la barra dice "conectado" (verde, sin sufijo) SOLO cuando la conexión SSH está
      * realmente establecida — no pintada del extra del Intent. Con la clave autorizada, la
      * sesión llega a CONECTADO y la barra no muestra "sin conexión".

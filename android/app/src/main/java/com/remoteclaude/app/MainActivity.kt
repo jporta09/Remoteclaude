@@ -46,6 +46,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var dictado: DictationController
     private lateinit var clients: TerminalClients
     private lateinit var notifsRemotas: NotificacionesRemotas
+    private lateinit var vigia: VigiaUi
 
     /** Si la app está adelante (entre onResume y onPause). La alerta de "Claude te espera" sólo
      *  molesta cuando estás atrás; adelante ya la ves (y el modo lectura bajó el teclado). */
@@ -100,6 +101,11 @@ class MainActivity : AppCompatActivity() {
 
         keyPair = KeyStoreSsh.getOrCreateKeyPair()
         control = RemoteControl(this, host, port, user, keyPair)
+
+        // Vigía del hilo de UI (#1): sube al Diagnóstico cuelgues de una corrida anterior (si la app
+        // se cerró en el freeze) y arranca a vigilar el main en primer plano.
+        VigiaUi.cargarPersistidos(this)
+        vigia = VigiaUi(this)
 
         terminalView = TerminalView(this, null)
         // Alerta "Claude te espera" por el hook Notification del host (canal SSH persistente).
@@ -266,15 +272,18 @@ class MainActivity : AppCompatActivity() {
         enPrimerPlano = true
         // Volvimos adelante: bajar cualquier aviso pendiente (ya estás mirando).
         if (::notifsRemotas.isInitialized) notifsRemotas.alPrimerPlano()
+        if (::vigia.isInitialized) vigia.reanudar()
     }
 
     override fun onPause() {
         enPrimerPlano = false
+        if (::vigia.isInitialized) vigia.pausar()
         super.onPause()
     }
 
     override fun onDestroy() {
         try { connectivity.unregisterNetworkCallback(networkCallback) } catch (_: Exception) {}
+        if (::vigia.isInitialized) vigia.detener()
         if (::notifsRemotas.isInitialized) notifsRemotas.detener()
         dictado.soltar()
         tabs.cerrarTodas()
@@ -349,6 +358,11 @@ class MainActivity : AppCompatActivity() {
     /** Texto actual de la barra de host (con el estado real). Para los tests instrumentados. */
     @androidx.annotation.VisibleForTesting
     fun barLabelForTest(): String = if (::barraLabel.isInitialized) barraLabel.text.toString() else ""
+
+    /** Bloquea el hilo principal por `ms` (llamar en el hilo de UI): para testear que el [VigiaUi]
+     *  detecta el cuelgue y captura el stack. */
+    @androidx.annotation.VisibleForTesting
+    fun bloquearMainParaTest(ms: Long) = Thread.sleep(ms)
 
     companion object {
         /** Código del pedido de permiso POST_NOTIFICATIONS (Android 13+). */
