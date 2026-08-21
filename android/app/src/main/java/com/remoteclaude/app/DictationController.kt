@@ -36,7 +36,8 @@ class DictationController(
     private val grabador = WavRecorder()
     @Volatile private var transcribiendo = false
     @Volatile private var previewPendiente = false
-    private var vivo: LiveDictation? = null
+    // @Volatile: lo toca el callback onChunk del grabador (otro hilo) además del hilo de UI.
+    @Volatile private var vivo: LiveDictation? = null
 
     /** Devuelve true: consume el evento del botón. */
     fun alTocarMicrofono(ev: MotionEvent): Boolean {
@@ -161,6 +162,13 @@ class DictationController(
         burbujaBotones.visibility = View.VISIBLE
         burbuja.visibility = View.VISIBLE
         btnInsertar.setOnClickListener {
+            // Si cerraste el tab destino entre el dictado y el Insertar, el write iría a una sesión
+            // muerta EN SILENCIO (se perdía el dictado sin avisar). Mejor decirlo.
+            if (destino.cerrada) {
+                Toast.makeText(act, "La sesión se cerró; no se pudo insertar el dictado", Toast.LENGTH_LONG).show()
+                ocultarBurbuja()
+                return@setOnClickListener
+            }
             val bytes = "$texto ".toByteArray(Charsets.UTF_8)
             destino.write(bytes, 0, bytes.size)   // sin Enter: se revisa/edita en el prompt
             ocultarBurbuja()

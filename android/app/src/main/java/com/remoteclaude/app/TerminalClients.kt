@@ -2,6 +2,7 @@ package com.remoteclaude.app
 
 import android.content.ClipData
 import android.content.ClipboardManager
+import android.content.Context
 import android.view.KeyEvent
 import android.view.MotionEvent
 import android.widget.Toast
@@ -38,14 +39,33 @@ class TerminalClients(
     private fun copiarDelHost(text: String) {
         act.getSystemService(ClipboardManager::class.java)
             ?.setPrimaryClip(ClipData.newPlainText("terminal", text))
-        Toast.makeText(act, "El host copió ${text.length} car. al portapapeles", Toast.LENGTH_SHORT).show()
+        // Preview del contenido (no sólo el conteo): que se vea QUÉ se copió, para notar una copia
+        // inesperada. No intrusivo: sólo un snippet en el toast, sin cortar el flujo.
+        Toast.makeText(
+            act,
+            "El host copió ${text.length} car.: \"${previewSeguro(text, 48)}\"",
+            Toast.LENGTH_LONG,
+        ).show()
     }
+
     // En float, no en Int: ver Zoom.kt. Con Int los incrementos chicos del pellizco se
     // truncaban y la fuente sólo sabía achicarse.
-    private var fuente = act.sp(15f).toFloat()
     private val fuenteMin = act.sp(8f).toFloat()
     private val fuenteMax = act.sp(28f).toFloat()
+    // El tamaño se PERSISTE (prefs): sin esto arrancaba en 15sp por cada tab/sesión y había que
+    // re-pellizcar siempre para poder leer. Se agranda una vez y queda.
+    private var fuente = cargarFuente()
     private var fuentePx = Zoom.aPixeles(fuente)
+
+    private fun cargarFuente(): Float =
+        act.getSharedPreferences("remotemarvin", Context.MODE_PRIVATE)
+            .getFloat("fuente_sp", act.sp(15f).toFloat())
+            .coerceIn(fuenteMin, fuenteMax)
+
+    private fun guardarFuente() {
+        act.getSharedPreferences("remotemarvin", Context.MODE_PRIVATE)
+            .edit().putFloat("fuente_sp", fuente).apply()
+    }
 
     /** Tamaño inicial de fuente, para que la vista arranque igual que el zoom. */
     fun fuenteInicialPx(): Int = fuentePx
@@ -86,7 +106,8 @@ class TerminalClients(
                 AlertDialog.Builder(act)
                     .setTitle("¿Copiar al portapapeles?")
                     .setMessage(
-                        "El host quiere copiar ${text.length / 1024} KB al portapapeles del teléfono."
+                        "El host quiere copiar ${text.length / 1024} KB al portapapeles del teléfono.\n\n" +
+                            "Empieza con:\n\"${previewSeguro(text, 200)}\""
                     )
                     .setNegativeButton("Descartar", null)
                     .setPositiveButton("Copiar") { _, _ -> copiarDelHost(text) }
@@ -127,6 +148,7 @@ class TerminalClients(
             if (nuevo != fuentePx) {
                 fuentePx = nuevo
                 vista().setTextSize(nuevo)
+                guardarFuente()   // que el tamaño elegido sobreviva a cerrar la app / cambiar de tab
             }
             return 1.0f
         }
@@ -226,4 +248,11 @@ fun hayPromptDeDecision(texto: String): Boolean {
     val footerCancelar = ultimas.any { it.contains("to cancel", ignoreCase = true) }
     // el cursor ❯-sobre-opción es específico de Claude; corroborado por el footer o una 2ª opción
     return tieneCursor && (footerCancelar || opciones >= 2)
+}
+
+/** Snippet de una línea para el preview de OSC 52 (mostrar QUÉ copió el host, no sólo el conteo):
+ *  colapsa espacios/saltos/control a un espacio y trunca con "…". Top-level para testearla sin Android. */
+fun previewSeguro(text: String, max: Int): String {
+    val limpio = text.replace(Regex("""\s+"""), " ").trim()
+    return if (limpio.length <= max) limpio else limpio.take(max) + "…"
 }

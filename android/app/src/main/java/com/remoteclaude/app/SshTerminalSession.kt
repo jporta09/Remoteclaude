@@ -72,6 +72,10 @@ class SshTerminalSession(
     @Volatile private var avisoVencidoDado = false
 
     @Volatile private var userClosed = false
+
+    /** La sesión ya se cerró (se cerró el tab / se mató): escribirle no llega a ningún lado. */
+    val cerrada: Boolean get() = userClosed
+
     @Volatile private var cols = 80
     @Volatile private var rows = 24
 
