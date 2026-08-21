@@ -4,7 +4,6 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
-import android.graphics.Color
 import android.graphics.Typeface
 import android.os.Bundle
 import android.text.InputType
@@ -358,7 +357,8 @@ class HostsActivity : AppCompatActivity() {
         // Label persistente (el hint desaparecía al tipear: sev-2 "campos sin label").
         fun etiqueta(txt: String) = box.addView(TextView(this).apply {
             text = txt
-            setTextColor(Color.parseColor("#666666"))
+            // Token del tema: #666 (gris oscuro) quedaba ilegible sobre el diálogo oscuro.
+            setTextColor(getColor(R.color.marvin_muted))
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
             setPadding(dp(16), dp(10), dp(16), dp(2))
         })
@@ -485,21 +485,23 @@ class HostsActivity : AppCompatActivity() {
             text = txt
             typeface = bodyFont
             setTypeface(typeface, Typeface.BOLD)
-            setTextColor(Color.parseColor("#222222"))
+            // Tokens del tema (la app es mono-oscuro): antes hardcodeaba #222 = negro sobre el
+            // diálogo oscuro → ilegible.
+            setTextColor(getColor(R.color.marvin_fg))
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
             setPadding(0, dp(14), 0, dp(4))
         })
         fun parrafo(txt: String) = box.addView(TextView(this).apply {
             text = txt
-            setTextColor(Color.parseColor("#444444"))
+            setTextColor(getColor(R.color.marvin_muted))
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
         })
         fun comando(cmd: String) {
             box.addView(TextView(this).apply {
                 text = cmd
                 typeface = monoFont
-                setTextColor(Color.parseColor("#111111"))
-                setBackgroundColor(Color.parseColor("#F0F0F0"))
+                setTextColor(getColor(R.color.marvin_fg))
+                setBackgroundColor(getColor(R.color.marvin_petrol))
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
                 setPadding(dp(12), dp(10), dp(12), dp(10))
                 val lp = LinearLayout.LayoutParams(MATCH, WRAP); lp.setMargins(0, dp(4), 0, dp(2))
@@ -520,8 +522,8 @@ class HostsActivity : AppCompatActivity() {
         }
 
         titulo("1 · En la PC: preparar el host (una sola vez)")
-        parrafo("Cloná el repo de RemoteMarvin y corré:")
-        comando("bash scripts/setup-host.sh\ndocker compose up -d --build")
+        parrafo("Cloná el repo de RemoteMarvin y corré (dentro de la carpeta clonada):")
+        comando("git clone https://github.com/jporta09/Remoteclaude\ncd Remoteclaude\nbash scripts/setup-host.sh\ndocker compose up -d --build")
 
         titulo("2 · Autorizar el teléfono")
         parrafo("Al agregar/conectar un host, la app muestra su clave SSH pública (ícono de "
