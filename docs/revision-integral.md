@@ -652,3 +652,99 @@ F8 (diagnóstico sólido, **no filtra secretos**), F9 (teardown idempotente, **N
 2. ~~**`\p{Cntrl}` en `nombreInseguro`**~~ — **hecho** (F.2), y no era una línea: hizo falta además leer los campos del listado desde el final.
 3. ~~**OSC52: preview del contenido**~~ — **hecho v1.18.0** (§F.2). Y **R2 · legibilidad**: el tamaño de fuente (pinch-zoom) ahora se **persiste** en prefs (`TerminalClients`), así que se agranda una vez y queda — antes arrancaba en 15sp por sesión y había que re-pellizcar.
 4. ~~De fondo: **foreground service opcional** para sesiones largas~~ — **PROBADO Y DESCARTADO (2026-08-21):** se implementó `AvisosService` (FGS opt-in, v1.16.0) y se revirtió; el usuario prioriza el best-effort de 1.15 sobre el costo del service (ver F.3b #2). El aviso de expiry mid-sesión y la alerta de decisión siguen best-effort por decisión de producto.
+
+---
+
+## G · Tercera pasada — post v1.14.0–v1.20.0 (2026-08-22)
+
+Los 8 perfiles re-verificaron sus ✅ de §F (todos SOSTIENEN) y atacaron las superficies nuevas (opción B,
+freeze half-open, diagnóstico persistente + ⓘ, FGS aditivo, OSC52 política A, R1/hook plan-mode, guard de
+versionCode, config-scoping) con el lente **§1.5** del playbook ("cuestioná la premisa"). Todo throwaway,
+verificado por código + tests empíricos descartables (el AVD quedó serializado; lo runtime-only va marcado
+SOSPECHADO). Método en `programa-evaluacion-personas.md §6`.
+
+### G.1 · El tema transversal cerró un ciclo
+
+1ª pasada: "chrome desacoplado del estado real". 2ª: "chrome que presta autoridad a contenido no
+autenticado" (la hoja de aprobación). **3ª: la app hizo lo correcto — QUITÓ la hoja en vez de endurecerla
+(opción B, §1.5 aplicado antes de que existiera §1.5) — y la superficie de confianza se movió del *render*
+al *canal de alerta*.** Ya no hay una superficie de decisión spoofeable (**A1 retirado**); ahora hay un
+**canal "Claude te espera" con falsos negativos**: escucha el host equivocado, calla sin el plugin, pierde
+el hueco de reconexión, no distingue sesiones. Ninguno es RCE, pero todos erosionan el supuesto que sostiene
+el flujo — "Claude trabaja solo y el celu me avisa cuando se traba" — sobre un agente con shell root.
+**ASI09 mutó** de "hoja spoofeable" (resuelta) a "canal que induce un modelo mental erróneo".
+
+**Las 2 palancas de mayor ROI (consenso Arq-IA + SRE + Seguridad):** (1) **hacer el canal de alerta honesto**
+— re-apuntar al host activo, releer por cursor de timestamp en vez de `tail -n0`, y cerrar el config-scoping
+con un **self-diagnostic del canal en el Diagnóstico** (~80% del valor: "un canal que a veces calla es peor
+que no tener canal, porque enseña a confiar"). (2) **desacoplar la copia legítima del OSC52** (copia local
+desde `TerminalView.getSelectedText()` + `tmux set-clipboard off`) para bloquear el canal incondicional y
+eliminar la ventana de gracia — §1.5 a su conclusión.
+
+### G.2 · Backlog nuevo (priorizado por clúster)
+
+**Clúster A — Honestidad del canal de alerta (el 80% del valor)**
+| Sev | Hallazgo | Perfiles | Ancla |
+|---|---|---|---|
+| **3** | **Config-scoping: canal MUDO sin señal.** Los hooks sólo disparan si la sesión de Claude tiene el plugin cargado (`remotemarvin` sólo en `claude-personal`, no en el default). Sin él: `notify.jsonl` nunca recibe línea, el `tail -F` corre sano, y la notif fija afirma "avisos activos" — promesa incumplida en silencio. **0 refs a `Diagnostico`** en el canal (verificado). Fix (§1.5): **no más docs — hacer visible el silencio**: instrumentar `NotificacionesRemotas` (connect/auth-fail/línea-recibida) y mostrar salud del canal en `DiagnosticoActivity`. | usuario-final, ux, dev, sre, arq, seg (6) | `NotificacionesRemotas.kt`, `AvisosService.kt`, `hooks.json` |
+| **2** | **`AvisosService` escucha el host EQUIVOCADO al cambiar de host.** `onStartCommand` con `if (notifs==null)` → de host A(ON) a B(ON) el service no se reinicia; actualiza el TEXTO de la FGS a "en B" pero el `tail` sigue en A. La notif fija miente. | qa, arq | `AvisosService.kt:45`, `MainActivity.kt:129-137` |
+| **2** | **`tail -n0` PIERDE (no demora) el aviso del hueco de reconexión.** Toda línea escrita mientras el canal SSH reconecta (Doze/roaming) se saltea para siempre; R1 comparte el hueco. El FGS mantiene el proceso pero no inmuniza contra caídas de red. Fix: cursor por timestamp. | sre, dev, arq, seg | `NotificacionesRemotas.kt:73-79` |
+| **1-2** | **Notif renderiza el `message` de Claude (atacante-controlable) con autoridad de la app.** `notify.jsonl` es escribible por cualquier proceso del usuario (Claude inyectado, append directo); la app lo muestra verbatim en notif HIGH. Acotado post-opción-B (tocar no aprueba). Fix (§1.5): string FIJO, dropear el `message` free-form (el `type` es la única señal útil). | seg, arq | `marvin-notify.sh:21`, `NotificacionesRemotas.kt:104` |
+| **1** | **Notif ciega a la identidad bajo multi-sesión.** `NOTIF_ID` fijo + `setOnlyAlertOnce` → dos Claude bloqueados = una notif con el último mensaje, sin host/tab. Incluir host+tab. | qa, arq | `NotificacionesRemotas.kt:99-150` |
+| **1** | **Re-emit de notif vieja tras rotación de `notify.jsonl`.** `mv` cambia el inode → `tail -F` relee 200 líneas viejas → notif stale del último prompt. Fix: dedup por `ts`. | sre, seg | `marvin-notify.sh:32-33` |
+| **1-2** | **R1 plan-mode sin debounce** → ruido: `PreToolUse` dispara SIEMPRE (sin el proxy 6s del hook `Notification`); un buzz por cada plan/pregunta aun al teclado. | usuario-final | `marvin-notify-decision.sh`, `hooks.json` |
+
+**Clúster B — Robustez de la persistencia del Diagnóstico**
+| Sev | Hallazgo | Perfiles | Ancla |
+|---|---|---|---|
+| **2** | **Acantilado 64KB borra TODO el histórico** (empírico: 1111 ev → 1). `if (f.length()>64KB) f.writeText("")` no rota, wipea — justo bajo un storm de reconexión cuando más lo necesitás. Mismo bug en `VigiaUi`. Fix: rotar conservando la mitad. | sre, qa, dev | `Diagnostico.kt:60`, `VigiaUi.kt:93` |
+| **1** | **`Diagnostico.persistir` no thread-safe** (empírico: 8000 ev → 1538 líneas). Corre fuera del `synchronized`; length-check+truncate no atómico; log lossy bajo carga (no crashea). | sre, dev | `Diagnostico.kt:53` |
+| **1** | **`VigiaUi` duplica los cuelgues** en el post-mortem: escribe el mismo stack a `eventos-conexion.log` (vía `Diagnostico.registrar`) Y a `cuelgues-ui.log` → aparece 2× al reabrir. | dev, qa | `VigiaUi.kt:85-86` |
+
+**Clúster C — FGS: ciclo de vida y robustez**
+| Sev | Hallazgo | Perfiles | Ancla |
+|---|---|---|---|
+| **2** (latente) | **`dataSync` FGS: cap de 6h/día de Android 15 + sin restart tras reboot.** Con `targetSdk=34` exento; al subir a 35+ el sistema lo mata a las 6h (sin `onTimeout`) y no vuelve tras reboot (sin `RECEIVE_BOOT_COMPLETED`). Rompe "sobrevive todo el día". | sre, devops | `AvisosService.kt`, `AndroidManifest.xml` |
+| **1** | **"Detener" del FGS no sticky:** recrear la Activity (rotación) con el toggle ON lo revive; el usuario que pidió "pará" lo ve volver. No hay re-arranque in-app sin reconectar. | qa, ux | `MainActivity.kt:129-137` |
+
+**Clúster D — Freeze #1 residual**
+| Sev | Hallazgo | Perfiles | Ancla |
+|---|---|---|---|
+| **2** | **Half-open en PRIMER PLANO queda mudo.** `forzarReconexion` sólo dispara en `onResume` (gate >3s); un half-open estando adelante (NAT idle, AP que blackholea sin RST) congela la terminal sin ningún camino de detección (keepalive write-only, `ConnectivityManager` sólo ante cambios de red, `VigiaUi` sólo cuelgues del main). Única salida: irte a background >3s y volver. | sre | `MainActivity.kt:311`, `SshTerminalSession.kt:198-207` |
+
+**Clúster E — OSC52 política A: bypass + assurance**
+| Sev | Hallazgo | Perfiles | Ancla |
+|---|---|---|---|
+| **2** (bordea 3) | **BYPASS por modo Sel / gracia 3s.** `copiaIniciadaPorVos()` acepta cualquier OSC52 del host mientras `isSelectionDragMode()` (toggle **persistente**, no evento) o dentro de 3s de apagar Sel → un Claude inyectado que spamea OSC52 secuestra el portapapeles sin marca de bloqueo, con toast "Copiado" que engaña. Sel es "la forma recomendada de copiar" → estado común. Fix (§1.5, **no** endurecer): copia de Sel LOCAL (`getSelectedText`) + `tmux set-clipboard off` → **bloquear TODO OSC52 del host, incondicional**. | qa, seg, arq | `MainActivity.kt:713-717`, `KeypadView.kt:146`, `TerminalView.java:658-679` |
+| **2** | **Política A sin test + `ClipboardE2ETest` STALE.** Los tests `unOsc52Chico_copiaAlPortapapeles`/`unOsc52Gigante_pideConfirmacion` (verificado, `:55`/`:75`) afirman el comportamiento PRE-política-A (OSC52 chico copia; diálogo de umbral) que v1.20.0 invirtió; no se actualizaron, y política A entró por **push directo a main** (`e3a2b66`) → el e2e (gatea en PR) nunca corrió. El control de seguridad no tiene test verde. | seg, qa, dev | `ClipboardE2ETest.kt`, `e2e.yml` triggers |
+
+**Clúster F — Dictado**
+| Sev | Hallazgo | Perfiles | Ancla |
+|---|---|---|---|
+| **2** | **`tabCerrado` mid-transcribe derrota el guard `transcribiendo`.** Resetea `transcribiendo=false` con el worker STT en vuelo → un 2º `empezar()` lanza worker concurrente; el clobber/descarte queda acotado por el gate de Insertar + no-auto-Enter (Arq: **no** mueve el threat model), pero puede descartar/pisar un dictado válido. | qa, dev | `DictationController.kt:206-211,152` |
+
+**Clúster G — Distribución / DevOps**
+| Sev | Hallazgo | Perfiles | Ancla |
+|---|---|---|---|
+| **2** | **Repo PRIVADO → la distribución por Obtainium exige un PAT no documentado.** README asume repo público (`../../releases` da 404 sin auth); no menciona el PAT ni guía a un fine-grained read-only → probable PAT `repo` (toda la cuenta) en el celu, sin Keystore hardware. Fix (§1.5): releases públicos (elimina la credencial) **o** fine-grained single-repo con expiry + documentarlo. | devops, seg | `README.md:61-66` |
+| **1-2** | **Guard de versionCode FAIL-OPEN.** `curl -sf ... || true` → si el curl falla (5xx/rate-limit) o el body no expone `versionCode:`, cae en bootstrap y **saltea** la monotonía (la falla que existe para prevenir). No distingue "primer release" de "curl falló". Fix: fail-**closed** ante error HTTP (retry→hard-fail); saltear sólo con marcador de bootstrap explícito. | devops, qa, seg | `release.yml:80-93` |
+
+**Clúster H — UX / menores**
+| Sev | Hallazgo | Perfiles | Ancla |
+|---|---|---|---|
+| **2-3** | **Toggle "🔔 Avisos en segundo plano" enterrado, default OFF, sin helper ni badge.** El valor central (avisos confiables) queda en el modo no-confiable (best-effort) sin que el usuario lo sepa. FGS aditivo OK (sin regresión). Falta ayuda inline / prompt en el primer connect / badge en la tarjeta. SUS 72→77 (el techo lo pone esto + el config-scoping). | usuario-final, ux | `HostsActivity.kt:425` |
+| **1** | **Toast del bloqueo OSC52 no accionable / jerga.** "(no fue con Sel)" no dice cómo copiar (usar Sel) ni que es una medida de **seguridad**; sorprende al workflow host-side (vim/tmux/script OSC52). | usuario-final, ux | `TerminalClients.kt:52` |
+| **1** | **Target del ⓘ (y del chevron) < 48dp** (~36×21dp). WCAG 2.5.8. | ux | `MainActivity.kt` (`barraDeHost`) |
+| **1** | **Modo lectura: falso-positivo con TUIs no-Claude** (`gum`/`fzf`/CLIs que usan `❯` sobre opciones numeradas) baja el teclado; consecuencia mínima (tap lo sube, v1.15.1 evita re-drop), no cubierto por test. | usuario-final | `TerminalClients.hayPromptDeDecision` |
+
+**Clúster I — Reabiertos / matices de §F**
+| Sev | Hallazgo | Perfiles | Ancla |
+|---|---|---|---|
+| **2/3** | **`exec()` mudo persiste** (D4, sigue de la 2ª pasada): `vncPassword`/`listSessions`/`killSession`/`setDisplayMode`/`sttMode` no distinguen vacío de fallo; `sessionsWithLastLine` hace doble round-trip vía `listSessions()` → filtra sesiones válidas en mala red. | dev | `RemoteControl.kt:100,118,122,294` |
+| — | **H5/F5 endpoint fail-fast → matizar a "parcial":** la PRIMERA llamada aún bloquea 15s (`TailscaleBridge.kt:159`); el fail-fast de 1s recién opera tras ese primer timeout. | sre | `TailscaleBridge.kt:159` |
+
+### G.3 · Verificados que SOSTIENEN / retirados (3ª pasada)
+
+- **✅ SOSTIENEN (re-verificados por código):** diálogos oscuros legibles (v1.16, contraste muted 5.2:1), ⓘ del diagnóstico (v1.17), fuente persistida (v1.18), OSC52 bloqueo host-iniciado (v1.20 — **native y Sel SÍ copian**, sólo cae el OSC52 host puro), "Copiado" consistente en las 3 superficies, R1 plan-mode dispara con mensaje diferenciado y **no es inyectable** (`tool_name` sólo elige entre 3 strings fijos), FGS aditivo (sin regresión del default best-effort), `forzarReconexion` (sin sonda, sin deadlock, gate 3s), teardown F9 + `quitar_bloque_sentinelas` (no borra a EOF sin `end`), guard de versionCode (armado — con el residual fail-open de arriba), `PendingIntent` del FGS (`FLAG_IMMUTABLE`, `exported=false`, no disparable por otra app), `flag-subidos-context.sh` (sólo lecturas).
+- **🗑️ RETIRADOS / CERRADOS:** **A1** (hoja de aprobación spoofeable) → MOOT: opción B REMOVIÓ la hoja (`7d37f91`), §1.5 aplicado; el modo lectura NO es control de seguridad (sólo baja el teclado). **D3** (TAB en nombre de doc) → cerrado (`nombreDeDocInseguro` rechaza `\p{Cntrl}` + parseo desde el final). **D2** (parser de aprobación) → MOOT (opción B). **teardown docker-group** → RESUELTO (detectado + nombrado + remediado, `teardown-host.sh:103-114`). **Umbral OSC52** → MOOT (política A lo reemplazó por bloqueo).
+- **Nota app-vs-Claude:** "el plan se ve chico/dominante en el celu" NO es de la app (es el TUI de Claude Code; verificado que no hay config para compactarlo) — la única palanca app-side es el tamaño de fuente (persistido; pendiente A+/A− discoverable). El layout del bloque de plan/pregunta = `/feedback` a Claude Code.

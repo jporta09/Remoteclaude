@@ -772,6 +772,55 @@ tuya es **tu archivo de memoria**, que vive fuera del repo.
 
 ---
 
+## 6. Tercera pasada — re-verificación + superficies nuevas (post v1.14.0–v1.20.0)
+
+La 2ª pasada (§5) re-verificó los fixes de F6–F10 y cerró casi todo §F. Entre medio se hizo mucho más
+(v1.14.0–v1.20.0). Esta 3ª pasada: cada perfil **re-verifica que sus ✅ de §F se sostengan** (sin confiar
+en la marca) y **ataca las superficies nuevas** con su lente, aplicando el nuevo **§1.5** ("cuestioná la
+premisa"). La lógica, el throwaway, la handoff y la consolidación son las mismas que §5.2/§5.4.
+
+### 6.1 Qué cambió desde la 2ª pasada (digest)
+
+- **Opción B (v1.14.0):** la **hoja de aprobación se REMOVIÓ**; alerta "Claude te espera" por hook
+  host-side (`Notification/permission_prompt` → `marvin-notify.sh`); **modo lectura** (`hayPromptDeDecision`,
+  firma real del PTY).
+- **Freeze #1 (v1.15.x):** `VigiaUi` (watchdog UI); half-open → `forzarReconexion` (gate >3s, sin sonda).
+- **v1.16.0:** diálogos legibles (tokens del tema); URL del repo en el quickstart.
+- **v1.17.0:** `Diagnostico` **persistente** (`filesDir`, espeja `VigiaUi`); acceso **ⓘ** visible;
+  "Limpiar" con confirmación.
+- **v1.18.0:** fuente **persistida**; `DictationController.vivo` `@Volatile`.
+- **v1.19.0:** **FGS aditivo** — `AvisosService` (dataSync), `EstadoApp`, toggle "Avisos en segundo
+  plano", `NotificacionesRemotas`→`Context`.
+- **v1.19.1:** dictado cancelado al cerrar su pestaña (`sesionEnJuego`/`tabCerrado`).
+- **v1.20.0:** **OSC52 política A** — bloquea la copia host-iniciada (`copiaIniciadaPorVos`).
+- **Plugin 1.7.0:** hook **PreToolUse** (`ExitPlanMode|AskUserQuestion`) = R1.
+- **release.yml:** guard de **versionCode monotónico** + seeding.
+- **Paso D:** `quitar_bloque_sentinelas` no borra a EOF sin `end`; `flag-subidos-context.sh` sólo lecturas.
+- **Caveat de config:** hooks/notifs sólo disparan con el plugin cargado (remotemarvin sólo en
+  `claude-personal`, no en el default).
+
+### 6.2 Foco por perfil (re-verificar + atacar)
+
+| Perfil | Re-verificar (sus ✅ de §F) | Atacar (superficies nuevas v1.14→v1.20) |
+|--------|----------------------------|------------------------------------------|
+| **usuario-final (dev dogfooder)** | diálogos oscuros (v1.16), ⓘ (v1.17), quickstart+URL | UX del toggle "Avisos en segundo plano", notif de **plan-mode** (R1), el **bloqueo OSC52** (¿confunde?), el **caveat de config**, modo lectura, fuente persistida. "¿lo adoptaría hoy?" |
+| **ux-devex** | tema oscuro de diálogos, ⓘ; **re-scorear SUS** | affordance del toggle FGS + notif fija "avisos activos" + **Detener**; toast "Bloqueé una copia del host"; "Copiado" del Sel; notif de plan-mode |
+| **devops** | teardown (F9), release.yml, distribución APK | **guard de versionCode** (bootstrap/seeding/¿release rechazable?); `<service>`/perms del FGS; hook plugin 1.7.0; cadencia de releases |
+| **dev** | `listDocs`/`execResult` (F1) | correctitud/arq/deuda del código nuevo: `AvisosService`/`EstadoApp`, persistencia de `Diagnostico`, `DictationController` (`sesionEnJuego`/`tabCerrado`), `TerminalClients` (`copiaLaPediste`), `NotificacionesRemotas` (Context), `SshTerminalSession` (`forzarReconexion`), `VigiaUi`, `marvin-notify-decision.sh` |
+| **qa** | `raro'nombre` (F1), rotación, sustitución de sesión | FGS (toggle/swipe/Detener/no-duplicar-tail); **OSC52 bloqueo** (ventana de gracia del Sel, selección nativa); dictado (cerrar durante grabación/round-trip/preview); persistencia del diagnóstico (overflow, crash); guard de versionCode |
+| **sre** | H1-H7 (reconnect, notif, expiry F10, observabilidad) | **fix del freeze** (half-open/`forzarReconexion`/gate >3s — ¿confiable?); FGS vs Doze; **pérdida best-effort** (`tail -n0` saltea el hueco); ring buffer persistido; entrega R1 |
+| **seguridad-ofensiva** | FLAG_SECURE (F3), teardown/`authorized_keys` | **OSC52 política A** (¿bypass? ventana de gracia; `isSelectingText` edge); hook **PreToolUse R1** (inyección vía `tool_name`/mensaje); **config-scoping** (¿riesgo que la notif no dispare?); PendingIntent del FGS + `POST_NOTIFICATIONS`; guard de versionCode. **Aplicá §1.5.** |
+| **arquitecto-ia** | ASI01-10; hoja removida (opción B) | cómo mueven la superficie de confianza agéntica: notif por hook + **R1 plan-mode** + **bloqueo OSC52** (anti-secuestro por Claude inyectado) + hook PreToolUse; config-scoping. **Re-scorear ASI01-10.** §1.5. |
+
+### 6.3 Orquestación
+
+Olas como §5.5 (usuario-dev + UX → DevOps → Dev → QA + SRE → Seguridad → Arq-IA cierra); **emulador
+serializado** (preferir verificación por código/unit/host; un AVD por vez, matarlo al terminar). Los
+hallazgos confirmados se consolidan en una **§G** de `revision-integral.md` (los agentes proponen filas,
+no las editan). Después, plan de implementación aparte.
+
+---
+
 *Los hallazgos de cualquier ejecución de este programa se consolidan en
 `docs/revision-integral.md` (sección "Lo que queda abierto"), que es el backlog vivo del
 proyecto.*
