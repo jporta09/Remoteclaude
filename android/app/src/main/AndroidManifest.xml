@@ -10,6 +10,11 @@
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <!-- Avisar (Android 13+) cuando Claude queda esperando una aprobación con la app en segundo plano -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Foreground service opcional (AvisosService): mantiene vivo el canal de avisos "Claude te
+         espera" con la app en background/cerrada. Tipo dataSync: es una conexión SSH que tailea el
+         archivo de notificaciones del host. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <uses-feature android:name="android.hardware.camera" android:required="false" />
 
     <!-- allowBackup=false: las prefs guardan la config de hosts y (cifrada) la auth key
@@ -66,6 +71,14 @@
             android:name=".DocViewerActivity"
             android:exported="false"
             android:configChanges="orientation|screenSize|keyboardHidden" />
+
+        <!-- Foreground service opcional que mantiene vivo el canal de avisos "Claude te espera".
+             stopWithTask=false: sobrevive a que el usuario cierre la app (swipe) para seguir avisando. -->
+        <service
+            android:name=".AvisosService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync"
+            android:stopWithTask="false" />
 
         <!-- Lector de QR (vincular Tailscale) forzado a vertical -->
         <activity

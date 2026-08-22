@@ -11,10 +11,13 @@ data class Host(
     val hostname: String,
     val port: Int,
     val user: String,
+    /** Mantener vivo el canal de avisos "Claude te espera" con la app en background (foreground service). */
+    val avisosBg: Boolean = false,
 ) {
     fun toJson(): JSONObject = JSONObject()
         .put("id", id).put("label", label)
         .put("hostname", hostname).put("port", port).put("user", user)
+        .put("avisosBg", avisosBg)
 
     companion object {
         fun fromJson(o: JSONObject) = Host(
@@ -23,6 +26,7 @@ data class Host(
             hostname = o.optString("hostname").ifBlank { error("host sin hostname") },
             port = o.optInt("port", 22),
             user = o.optString("user", "root"),
+            avisosBg = o.optBoolean("avisosBg", false),
         )
     }
 }

@@ -327,6 +327,11 @@ S.append(B("<b>Baja el teclado sola</b> apenas aparece el selector de opciones, 
 S.append(B("Si la app está en <b>segundo plano</b> cuando Claude queda esperando, te llega una "
            "<b>notificación</b> (“Claude te espera”). Tocala y la app vuelve al frente con el "
            "prompt a la vista. La primera vez, Android te pide permiso para notificarte."))
+S.append(B("Ese aviso es <b>best-effort</b>: si el teléfono duerme un rato puede demorar o perderse. "
+           "Para que llegue <b>al instante aunque tengas la app cerrada o el teléfono guardado</b>, "
+           "activá “🔔 Avisos en segundo plano” editando el host: deja corriendo un servicio liviano "
+           "(con una notificación fija que podés <b>Detener</b>) que mantiene vivo sólo el canal de "
+           "avisos. Viene <b>apagado</b>; prenderlo cuesta un poco de batería."))
 
 # --- 7. Dictado -------------------------------------------------------------
 S.append(P("Dictado por voz", h1))

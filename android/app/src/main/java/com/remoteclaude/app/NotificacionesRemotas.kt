@@ -5,10 +5,10 @@ import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
-import androidx.appcompat.app.AppCompatActivity
 import com.trilead.ssh2.Connection
 import java.io.BufferedReader
 import java.io.InputStreamReader
@@ -24,13 +24,18 @@ import org.json.JSONObject
  * acá abrimos un canal SSH persistente que `tail -F`ea ese archivo y, ante un `permission_prompt`
  * con la app en segundo plano, postea una notificación Android.
  *
- * Es best-effort, atado a la conexión viva (igual que el terminal): si el proceso muere en
- * background no llega —el techo conocido, que cerraría un foreground service/FCM—. Señal PRECISA
- * (host-side, sin parsear la pantalla ni los 6 s importan acá); token-free (el hook es shell local).
- * Complementa al "modo lectura" del [TerminalClients], que baja el teclado al instante en foreground.
+ * Corre en UNO de dos lugares, nunca los dos a la vez (diseño ADITIVO):
+ *  - Por defecto (toggle "Avisos en segundo plano" OFF): la lanza la [MainActivity] mientras la app
+ *    vive. Es **best-effort** — en background Android puede estrangular el hilo o cortar la conexión,
+ *    así que el aviso puede demorar o perderse (el techo conocido).
+ *  - Con el toggle ON: la hostea [AvisosService] (foreground service), así el canal sobrevive a que la
+ *    app esté en background o cerrada y la notif llega en tiempo real. En ese caso la Activity NO la
+ *    lanza (para no duplicar el tail).
+ * Señal PRECISA (host-side, sin parsear la pantalla); token-free (el hook es shell local). Complementa
+ * al "modo lectura" del [TerminalClients], que baja el teclado al instante en foreground.
  */
 class NotificacionesRemotas(
-    private val act: AppCompatActivity,
+    private val ctx: Context,
     private val host: String,
     private val port: Int,
     private val user: String,
@@ -39,7 +44,7 @@ class NotificacionesRemotas(
 ) {
     @Volatile private var corriendo = false
     private var hilo: Thread? = null
-    private val notifManager get() = act.getSystemService(NotificationManager::class.java)
+    private val notifManager get() = ctx.getSystemService(NotificationManager::class.java)
 
     fun iniciar() {
         if (corriendo) return
@@ -53,10 +58,7 @@ class NotificacionesRemotas(
         hilo = null
     }
 
-    /** La app volvió a primer plano: bajar el aviso (ya estás mirando). */
-    fun alPrimerPlano() = cancelarAviso()
-
-    // Reconecta con backoff mientras `corriendo`. Cada conexión abre UN canal exec que tailea
+    // Reconecta con backoff mientras `corriendo`. Cada canal exec tailea
     // el archivo de notificaciones y bloquea leyendo líneas hasta que se cae.
     private fun bucle() {
         var backoffMs = 2_000L
@@ -65,7 +67,7 @@ class NotificacionesRemotas(
             try {
                 val (h, p) = TailscaleBridge.endpoint(host, port)
                 val conn = Connection(h, p).also { c = it }
-                conn.connect(HostKeys.verifier(act.applicationContext, host, port), 10_000, 10_000)
+                conn.connect(HostKeys.verifier(ctx.applicationContext, host, port), 10_000, 10_000)
                 if (!conn.authenticateWithPublicKey(user, key)) { esperar(backoffMs); continue }
                 val s = conn.openSession()
                 // -n0: arrancar en el final (no re-emitir viejas al reconectar). Se pierde lo escrito
@@ -107,7 +109,7 @@ class NotificacionesRemotas(
 
     private fun puedeNotificar(): Boolean =
         Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
-            act.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) ==
+            ctx.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) ==
             PackageManager.PERMISSION_GRANTED
 
     private fun asegurarCanal() {
@@ -123,14 +125,14 @@ class NotificacionesRemotas(
         if (!puedeNotificar()) return   // sin permiso, degrada en silencio
         asegurarCanal()
         // singleTop + REORDER_TO_FRONT: trae la MainActivity viva al frente (con su sesión).
-        val intent = Intent(act, MainActivity::class.java).apply {
+        val intent = Intent(ctx, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT
         }
         val pi = PendingIntent.getActivity(
-            act, 0, intent,
+            ctx, 0, intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
-        val n = Notification.Builder(act, CANAL)
+        val n = Notification.Builder(ctx, CANAL)
             .setSmallIcon(R.drawable.ic_notif)
             .setContentTitle("Claude te espera")
             .setContentText(mensaje)
@@ -143,12 +145,16 @@ class NotificacionesRemotas(
         notifManager?.notify(NOTIF_ID, n)
     }
 
-    private fun cancelarAviso() {
-        try { notifManager?.cancel(NOTIF_ID) } catch (_: Exception) {}
-    }
-
     companion object {
         private const val CANAL = "claude-espera"
         private const val NOTIF_ID = 4207
+
+        /** Baja la notif "Claude te espera" desde afuera (p.ej. la Activity al volver a primer plano),
+         *  sin tener la instancia: el canal lo mantiene [AvisosService] en otro componente. */
+        fun cancelar(ctx: Context) {
+            try {
+                ctx.getSystemService(NotificationManager::class.java)?.cancel(NOTIF_ID)
+            } catch (_: Exception) {}
+        }
     }
 }

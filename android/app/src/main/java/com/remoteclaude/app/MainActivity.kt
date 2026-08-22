@@ -45,12 +45,14 @@ class MainActivity : AppCompatActivity() {
     private lateinit var keypad: KeypadView
     private lateinit var dictado: DictationController
     private lateinit var clients: TerminalClients
-    private lateinit var notifsRemotas: NotificacionesRemotas
     private lateinit var vigia: VigiaUi
 
-    /** Si la app está adelante (entre onResume y onPause). La alerta de "Claude te espera" sólo
-     *  molesta cuando estás atrás; adelante ya la ves (y el modo lectura bajó el teclado). */
-    @Volatile private var enPrimerPlano = false
+    /** Canal de avisos best-effort en la Activity. Sólo se usa cuando el host NO tiene "Avisos en
+     *  segundo plano" (con el toggle ON el canal lo hostea [AvisosService], para no duplicar el tail). */
+    private var notifsRemotas: NotificacionesRemotas? = null
+
+    /** Avisos en segundo plano prendidos para este host (pref local, viene por Intent). */
+    private var avisosBg = false
 
     /** Cuándo se fue a background (elapsedRealtime), para decidir si al volver forzar reconexión. */
     private var pausadoEnMs = 0L
@@ -91,6 +93,7 @@ class MainActivity : AppCompatActivity() {
         user = intent.getStringExtra("user") ?: "root"
         hostId = intent.getStringExtra("hostId") ?: "default"
         hostLabel = intent.getStringExtra("label") ?: host
+        avisosBg = intent.getBooleanExtra("avisosBg", false)
 
         aplicarColoresDeMarca()
         // Con la demo pendiente el teclado arranca cerrado: si no, tapa la fila
@@ -116,11 +119,19 @@ class MainActivity : AppCompatActivity() {
         vigia = VigiaUi(this)
 
         terminalView = TerminalView(this, null)
-        // Alerta "Claude te espera" por el hook Notification del host (canal SSH persistente).
-        notifsRemotas = NotificacionesRemotas(
-            act = this, host = host, port = port, user = user, key = keyPair,
-            enPrimerPlano = { enPrimerPlano },
-        ).also { it.iniciar() }
+        // Alerta "Claude te espera" por el hook Notification del host (canal SSH que tailea notify.jsonl).
+        // ADITIVO: si el host tiene "Avisos en segundo plano", el canal lo mantiene vivo AvisosService
+        // (foreground service, sobrevive a background/cierre → entrega en tiempo real) y acá NO lo
+        // lanzamos, para no duplicar el tail. Si no, lo corre la Activity best-effort (default de siempre).
+        if (avisosBg) {
+            AvisosService.iniciar(this, host, port, user, hostLabel)
+        } else {
+            AvisosService.detener(this)
+            notifsRemotas = NotificacionesRemotas(
+                ctx = applicationContext, host = host, port = port, user = user, key = keyPair,
+                enPrimerPlano = { EstadoApp.enPrimerPlano },
+            ).also { it.iniciar() }
+        }
         clients = TerminalClients(
             act = this,
             vista = { terminalView },
@@ -277,9 +288,11 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
-        enPrimerPlano = true
+        // Compartido con AvisosService (corre en otro componente): en primer plano no molesta con la
+        // notif, ya estás mirando (y el modo lectura bajó el teclado).
+        EstadoApp.enPrimerPlano = true
         // Volvimos adelante: bajar cualquier aviso pendiente (ya estás mirando).
-        if (::notifsRemotas.isInitialized) notifsRemotas.alPrimerPlano()
+        NotificacionesRemotas.cancelar(this)
         if (::vigia.isInitialized) vigia.reanudar()
         // En background la conexión se cae; al volver, reconectar YA en vez de esperar el backoff
         // (caso "detectado", barra en reconectando). #1.
@@ -294,7 +307,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onPause() {
-        enPrimerPlano = false
+        EstadoApp.enPrimerPlano = false
         pausadoEnMs = android.os.SystemClock.elapsedRealtime()
         if (::vigia.isInitialized) vigia.pausar()
         super.onPause()
@@ -303,7 +316,10 @@ class MainActivity : AppCompatActivity() {
     override fun onDestroy() {
         try { connectivity.unregisterNetworkCallback(networkCallback) } catch (_: Exception) {}
         if (::vigia.isInitialized) vigia.detener()
-        if (::notifsRemotas.isInitialized) notifsRemotas.detener()
+        // El canal best-effort de la Activity muere con ella. El de AvisosService NO se toca acá: su
+        // razón de ser es sobrevivir a que la app se cierre (swipe) para seguir avisando; se apaga por
+        // su acción "Detener" o al conectar con el toggle apagado.
+        notifsRemotas?.detener()
         dictado.soltar()
         tabs.cerrarTodas()
         super.onDestroy()

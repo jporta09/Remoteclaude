@@ -306,6 +306,7 @@ class HostsActivity : AppCompatActivity() {
             putExtra("hostname", host.hostname)
             putExtra("port", host.port)
             putExtra("user", host.user)
+            putExtra("avisosBg", host.avisosBg)
         })
     }
 
@@ -417,6 +418,17 @@ class HostsActivity : AppCompatActivity() {
             stt.isEnabled = true   // host nuevo: se intenta aplicar al guardar
         }
 
+        // Avisos en segundo plano (foreground service). Default OFF: es ADITIVO — sin prenderlo, el
+        // aviso "Claude te espera" sigue funcionando best-effort (puede demorar/perderse en Doze);
+        // prendido, un service liviano mantiene el canal vivo y la notif llega al instante aun con la
+        // pantalla apagada. Pref local del host (no toca el host).
+        val avisos = Switch(this).apply {
+            text = "🔔 Avisos en segundo plano"
+            isChecked = restore?.getBoolean("avisosBg") ?: existing?.avisosBg ?: false
+            setPadding(dp(16), dp(12), dp(16), dp(12))
+        }
+        box.addView(avisos)
+
         // Foto de los campos para sobrevivir a rotación.
         snapshotEdicion = {
             Bundle().apply {
@@ -425,6 +437,7 @@ class HostsActivity : AppCompatActivity() {
                 putString("hostname", hostname.text.toString())
                 putString("port", port.text.toString())
                 putString("user", user.text.toString())
+                putBoolean("avisosBg", avisos.isChecked)
             }
         }
 
@@ -445,6 +458,7 @@ class HostsActivity : AppCompatActivity() {
                     hostname = h,
                     port = port.text.toString().toIntOrNull() ?: 22,
                     user = u,
+                    avisosBg = avisos.isChecked,
                 )
                 HostStore.upsert(this, host)
                 refresh()
