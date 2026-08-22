@@ -316,19 +316,26 @@ def test_notify_escribe_json_con_el_shape_que_espera_la_app(tmp_path):
     linea = (tmp_path / "marvin" / "notify.jsonl").read_text().strip()
     obj = json.loads(linea)  # JSON válido
     assert obj["type"] == "permission_prompt"
-    assert obj["message"] == "Claude needs your permission to use Bash(rm -rf build)"
+    # SEGURIDAD (Fase 2, §G): el mensaje es FIJO; el `message` de Claude NO se propaga (era texto
+    # atacante-controlado renderizado con autoridad de la app en una notif HIGH). Ver marvin-notify.sh.
+    assert obj["message"] == "Claude está esperando una decisión"
+    assert "rm -rf build" not in linea  # el payload del host no aparece en ningún lado
     assert isinstance(obj["ts"], int)
 
 
-def test_notify_message_hostil_no_rompe_el_json(tmp_path):
-    # comillas y backslashes en el mensaje: jq debe escaparlos y dejar JSON parseable.
+def test_notify_message_hostil_no_se_propaga(tmp_path):
+    # Un mensaje hostil del host (comillas, backslashes, contenido inyectado) ni rompe el JSON ni se
+    # propaga: se descarta y queda el mensaje fijo.
     r = _correr_notify(
-        '{"notification_type":"permission_prompt","message":"raro \\" y \\\\ y \\n fin"}',
+        '{"notification_type":"permission_prompt","message":"raro \\" y \\\\ y \\n <inyección>"}',
         tmp_path,
     )
     assert r.returncode == 0
-    obj = json.loads((tmp_path / "marvin" / "notify.jsonl").read_text().strip())
+    linea = (tmp_path / "marvin" / "notify.jsonl").read_text().strip()
+    obj = json.loads(linea)
     assert obj["type"] == "permission_prompt"
+    assert obj["message"] == "Claude está esperando una decisión"
+    assert "inyección" not in linea
 
 
 def test_notify_stdin_basura_no_falla_y_escribe_linea_segura(tmp_path):
