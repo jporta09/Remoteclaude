@@ -205,6 +205,14 @@ PY
     echo "== instalando el APK publicado"
     "$ADB" -s "${ANDROID_SERIAL:-emulator-5556}" install -r /tmp/marvin-caja-negra.apk
 
+    # Conceder POST_NOTIFICATIONS por adb (como si tocaras "Allow"): en Android 13+ la app pide el
+    # permiso al arrancar y ese diálogo del sistema queda ENCIMA, tapando la pantalla que la caja
+    # negra espera ("Falta autorizar este dispositivo"). El suite de :app ya lo concede vía
+    # MarvinTestRunner; la caja negra prueba el APK desde afuera y no pasa por ese runner. El permiso
+    # es ortogonal a lo que testea (SSH + sesión).
+    "$ADB" -s "${ANDROID_SERIAL:-emulator-5556}" shell pm grant com.remoteclaude.app \
+        android.permission.POST_NOTIFICATIONS 2>/dev/null || true
+
     # Despertar OTRA VEZ: entre el despertar de arriba y este punto pasaron dos builds de
     # release y una instalación, o sea varios minutos. Si la pantalla se durmió en el medio,
     # ninguna ventana toma foco y toda la suite falla con "no apareció en pantalla…", que
