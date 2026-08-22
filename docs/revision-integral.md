@@ -790,9 +790,15 @@ antes de la siguiente). Progreso:
 - **Fase 4 · DevOps — 4a LISTO + shipped; 4b ESPERANDO OK del usuario.**
   - ✅ **4a** guard de versionCode **fail-closed** (`release.yml`): distingue error HTTP/red (aborta tras 3
     reintentos) del bootstrap genuino (404 sin releases / 200 sin marcador → skip). Lógica verificada local.
-  - ⏸️ **4b** repo público (elimina el PAT del celu): **secret-scan limpio** (gitleaks 255 commits sin
-    leaks + grep manual: sólo placeholders). **Falta la confirmación explícita del usuario para el flip**
-    `gh repo edit --visibility public` + actualizar el README (sacar el PAT). Es la acción irreversible.
+  - ✅ **4b** repo PÚBLICO (elimina el PAT del celu). Antes del flip se detectó un riesgo que el
+    secret-scan no cubría: `MARVIN_RUNNER=self-hosted` = el runner es la PC del usuario, y con el repo
+    público un PR de un fork ejecutaría código arbitrario en su máquina (RCE). Fix (decidido con el
+    usuario): **se borró la variable `MARVIN_RUNNER`** → CI/release corren en GitHub-hosted (aislado),
+    E2E queda para `make e2e` local. Recién ahí el flip: secret-scan limpio (gitleaks 255 commits + grep),
+    `visibility=public`, secret scanning + push protection habilitados, README + `setup-runner.sh` avisan
+    NO usar self-hosted en público. **Bonus:** Actions es gratis en repos públicos → se resolvió también
+    el problema de facturación que los había empujado al self-hosted. Obtainium ya baja releases sin PAT
+    (HTTP 200 anónimo verificado). CI verde en GitHub-hosted.
 - **Fase 5 · Menores — app v1.24.0 (vc 34) · parte SHIPPED (segura), parte DIFERIDA (lifecycle).**
   - ✅ Shipped (bajo riesgo, sin tocar ciclo de vida): **5f** dictado — `tabCerrado` ya no limpia
     `transcribiendo` con el worker en vuelo (cerraba la ventana de un 2º worker concurrente; el worker se
