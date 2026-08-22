@@ -425,9 +425,17 @@ class HostsActivity : AppCompatActivity() {
         val avisos = Switch(this).apply {
             text = "🔔 Avisos en segundo plano"
             isChecked = restore?.getBoolean("avisosBg") ?: existing?.avisosBg ?: false
-            setPadding(dp(16), dp(12), dp(16), dp(12))
+            setPadding(dp(16), dp(12), dp(16), dp(0))
         }
         box.addView(avisos)
+        box.addView(TextView(this).apply {
+            text = "Prendelo para que la notificación \"Claude te espera\" llegue al instante, aun con la " +
+                "pantalla apagada o la app cerrada. Apagado igual avisa, pero en reposo (Doze) puede " +
+                "demorar o perderse."
+            setTextColor(getColor(R.color.marvin_muted))
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+            setPadding(dp(16), dp(0), dp(16), dp(10))
+        })
 
         // Foto de los campos para sobrevivir a rotación.
         snapshotEdicion = {

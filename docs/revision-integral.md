@@ -787,4 +787,20 @@ antes de la siguiente). Progreso:
     cuelgue duplicado al reabrir (`cargarPersistidos` queda como migración/limpieza del archivo viejo).
   - Verificado: compila (JDK17) + unit tests verdes (2 nuevos: rotación conserva-mitad, persistencia
     concurrente no colapsa). **Falta:** prueba en el celu (ⓘ del Diagnóstico).
-- **Fase 4** · DevOps (releases públicos) — pendiente. **Fase 5** · menores UX — pendiente.
+- **Fase 4 · DevOps — 4a LISTO + shipped; 4b ESPERANDO OK del usuario.**
+  - ✅ **4a** guard de versionCode **fail-closed** (`release.yml`): distingue error HTTP/red (aborta tras 3
+    reintentos) del bootstrap genuino (404 sin releases / 200 sin marcador → skip). Lógica verificada local.
+  - ⏸️ **4b** repo público (elimina el PAT del celu): **secret-scan limpio** (gitleaks 255 commits sin
+    leaks + grep manual: sólo placeholders). **Falta la confirmación explícita del usuario para el flip**
+    `gh repo edit --visibility public` + actualizar el README (sacar el PAT). Es la acción irreversible.
+- **Fase 5 · Menores — app v1.24.0 (vc 34) · parte SHIPPED (segura), parte DIFERIDA (lifecycle).**
+  - ✅ Shipped (bajo riesgo, sin tocar ciclo de vida): **5f** dictado — `tabCerrado` ya no limpia
+    `transcribiendo` con el worker en vuelo (cerraba la ventana de un 2º worker concurrente; el worker se
+    auto-cancela por `sesionEnJuego`); **5g** `exec()` mudo — los fallos de comandos de control ahora se
+    **registran en el Diagnóstico** (no cambia tipos ni callers; encaja con la observabilidad de la tanda);
+    **5b** target táctil del ⓘ ≥44dp (era ~21dp); **5a** helper inline bajo el toggle "🔔 Avisos en segundo
+    plano" (qué hace / por qué prenderlo).
+  - ⏸️ DIFERIDO a una tanda CON prueba en el celu (tocan FGS/reconexión, riesgo alto sin validar on-device):
+    **5c** "Detener" del FGS sticky ante rotación; **5e** half-open en primer plano (F-SRE-1, sev 2); **5d**
+    cap 6h/reboot del FGS (forward-looking, hoy exento con targetSdk 34); **5h** modo lectura falso-positivo
+    (sev 1, consecuencia mínima).

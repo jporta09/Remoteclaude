@@ -207,7 +207,10 @@ class DictationController(
         if (sesionEnJuego !== cerrada) return
         vivo?.cancel(); vivo = null
         if (grabador.isRecording) grabador.stop()
-        transcribiendo = false
+        // NO tocamos `transcribiendo`: si hay un worker de transcripción en vuelo, es SUYO (lo pone en
+        // false al terminar). Limpiarlo acá abría una ventana para que un `empezar()` arranque un
+        // segundo worker concurrente. `ocultarBurbuja` pone `sesionEnJuego = null`, que es la señal por
+        // la que ese worker se auto-cancela (chequeo `sesionEnJuego !== destino`) sin pisar nada.
         ocultarBurbuja()          // limpia sesionEnJuego
         micEnReposo()
         Toast.makeText(act, "Cerraste la pestaña del dictado; se descartó", Toast.LENGTH_SHORT).show()

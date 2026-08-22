@@ -96,8 +96,19 @@ class RemoteControl(
         }
     }
 
-    /** Compatibilidad: solo la salida (vacía si falló). Preferir execResult(). */
-    private fun exec(command: String): String = execResult(command).out
+    /** Compatibilidad: solo la salida (vacía si falló). Preferir execResult() cuando el caller pueda
+     *  distinguir vacío de fallo. Acá el fallo ya no es MUDO: se registra en el Diagnóstico (queda en
+     *  el ⓘ y persiste), así "el visor no abrió" / "no aparecen sesiones" dejan rastro en vez de nada. */
+    private fun exec(command: String): String {
+        val r = execResult(command)
+        if (r.failed) {
+            Diagnostico.registrar(
+                Diagnostico.Nivel.AVISO, "control",
+                "comando falló (${r.error ?: "sin detalle"}): ${command.take(60)}",
+            )
+        }
+        return r.out
+    }
 
     /**
      * Fija el modo del display virtual (Xvnc :99) — p.ej. "1280x720" para el modo

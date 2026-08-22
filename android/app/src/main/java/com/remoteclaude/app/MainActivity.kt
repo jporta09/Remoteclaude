@@ -638,6 +638,11 @@ class MainActivity : AppCompatActivity() {
             setTextColor(getColor(R.color.marvin_muted))
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
             setPadding(dp(10), 0, dp(10), 0)
+            // Target táctil ≥44dp (antes ~21dp de alto): la zona tocable crece con min-size + gravity
+            // centrado, sin agrandar el glifo. Un ⓘ chiquito es fácil de errar justo cuando cae la red.
+            minWidth = dp(44)
+            minHeight = dp(44)
+            gravity = android.view.Gravity.CENTER
             contentDescription = "Diagnóstico de conexión"
             setOnClickListener {
                 startActivity(Intent(this@MainActivity, DiagnosticoActivity::class.java))
