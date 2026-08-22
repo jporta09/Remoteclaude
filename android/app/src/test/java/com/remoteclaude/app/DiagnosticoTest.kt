@@ -69,4 +69,41 @@ class DiagnosticoTest {
         Diagnostico.cargarPersistidosDe(File(tmp.root, "no-existe.log"))
         assertThat(Diagnostico.instantanea()).isEmpty()
     }
+
+    @Test fun `al pasar el tope rota conservando la ultima mitad, no borra todo`() {
+        val f = File(tmp.root, "eventos-conexion.log")
+        Diagnostico.archivoParaTest(f)
+        val relleno = "z".repeat(200)
+        // Suficientes ERROR (cada uno persiste) para cruzar el tope de 64 KB varias veces.
+        repeat(900) { Diagnostico.registrar(Diagnostico.Nivel.ERROR, "c", "e$it-$relleno") }
+
+        val texto = f.readText()
+        assertThat(texto).contains("e899")              // lo más nuevo sobrevive
+        assertThat(texto).doesNotContain("e0-")         // lo viejo se rotó
+        // Lo clave del fix: NO quedó borrado a casi nada (antes `writeText("")` dejaba ~1 línea).
+        assertThat(f.readLines().size).isGreaterThan(50)
+        assertThat(f.length()).isAtMost(80 * 1024L)     // acotado
+    }
+
+    @Test fun `persistir concurrente no corrompe ni colapsa el archivo`() {
+        val f = File(tmp.root, "eventos-conexion.log")
+        Diagnostico.archivoParaTest(f)
+        val relleno = "z".repeat(200)
+        val hilos = (0 until 8).map { h ->
+            Thread { repeat(200) { Diagnostico.registrar(Diagnostico.Nivel.ERROR, "h$h", "e$it-$relleno") } }
+        }
+        hilos.forEach { it.start() }
+        hilos.forEach { it.join() }
+
+        // Con el lock, el read-modify-write de la rotación no se pisa con los appends: el archivo queda
+        // coherente y con histórico (antes la carrera lo dejaba en ~1 línea).
+        val lineas = f.readLines()
+        assertThat(lineas.size).isGreaterThan(50)
+        // Cada evento persistido son 2 líneas ("=== ts ===" + "[cat] detalle"): vienen en pares (±1 por
+        // el borde de la rotación, que puede cortar el evento más viejo). Sin el lock, appends pisados
+        // dejaban líneas partidas y el conteo se descuajeringaba.
+        val cabeceras = lineas.count { it.startsWith("=== ") }
+        val cuerpos = lineas.count { it.startsWith("[h") }
+        assertThat(Math.abs(cabeceras - cuerpos)).isAtMost(1)
+    }
 }

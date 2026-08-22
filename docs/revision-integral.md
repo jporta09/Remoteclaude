@@ -779,5 +779,12 @@ antes de la siguiente). Progreso:
     toast de bloqueo reformulado (seguridad + cómo copiar con Sel).
   - Verificado: compila (JDK17); **e2e en emulador VERDE** (`ClipboardE2ETest` 3/3 contra el fixture real).
     **Falta:** prueba en el celu (que el Sel real siga copiando y el host siga bloqueado).
-- **Fase 3** · persistencia — pendiente. **Fase 4** · DevOps (releases públicos) — pendiente.
-  **Fase 5** · menores UX — pendiente.
+- **Fase 3 · Robustez de la persistencia del Diagnóstico — app v1.23.0 (vc 33) · CÓDIGO LISTO, pendiente celu.**
+  - ✅ **Clúster B** cerrado: **3a** el acantilado de 64 KB (`f.writeText("")` borraba TODO) ahora **rota
+    conservando la última mitad**; **3b** `persistir` es thread-safe (lock `archivoLock` que serializa el
+    read-modify-write — antes varios hilos de red se pisaban, medido 8000→1538); **3c** `VigiaUi` deja de
+    escribir su propio `cuelgues-ui.log` (sink ÚNICO = Diagnóstico, que ya persiste los ERROR): se acabó el
+    cuelgue duplicado al reabrir (`cargarPersistidos` queda como migración/limpieza del archivo viejo).
+  - Verificado: compila (JDK17) + unit tests verdes (2 nuevos: rotación conserva-mitad, persistencia
+    concurrente no colapsa). **Falta:** prueba en el celu (ⓘ del Diagnóstico).
+- **Fase 4** · DevOps (releases públicos) — pendiente. **Fase 5** · menores UX — pendiente.

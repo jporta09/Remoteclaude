@@ -82,25 +82,16 @@ class VigiaUi(private val ctx: Context) {
             for (f in stack.take(MAX_FRAMES)) append("  at ").append(f).append('\n')
         }
         Log.w("VigiaUi", txt)
+        // Sink ÚNICO: sólo el Diagnóstico. Él ya persiste los ERROR a `eventos-conexion.log` (sobrevive
+        // al force-close) y los recupera al arrancar. Antes escribíamos ADEMÁS a `cuelgues-ui.log`, así
+        // que cada cuelgue aparecía 2× al reabrir (una por archivo).
         Diagnostico.registrar(Diagnostico.Nivel.ERROR, "cuelgue-ui", txt)
-        persistir(txt)
-    }
-
-    /** Guarda el cuelgue en disco para que sobreviva a un force-close (el ring buffer es en memoria). */
-    private fun persistir(txt: String) {
-        try {
-            val f = File(ctx.filesDir, ARCHIVO)
-            if (f.length() > MAX_ARCHIVO) f.writeText("")  // tope: quedarse con lo nuevo
-            f.appendText("=== ${System.currentTimeMillis()} ===\n$txt\n")
-        } catch (_: Exception) {
-        }
     }
 
     companion object {
         private const val INTERVALO = 1000L     // pulso cada 1 s
         private const val UMBRAL = 4000L        // colgado ≥ 4 s = cuelgue (por debajo del ANR de 5 s)
         private const val MAX_FRAMES = 45
-        private const val MAX_ARCHIVO = 64 * 1024L
         private const val ARCHIVO = "cuelgues-ui.log"
 
         /** Al abrir la app: subir al Diagnóstico los cuelgues persistidos (de una corrida anterior en

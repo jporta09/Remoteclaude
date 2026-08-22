@@ -36,6 +36,7 @@ object Diagnostico {
     private val oyentes = CopyOnWriteArrayList<() -> Unit>()
 
     @Volatile private var archivo: File? = null
+    private val archivoLock = Any()   // serializa el read-modify-write de la persistencia
 
     /** Habilita la persistencia a `filesDir`. Llamar una vez al arranque, DESPUÉS de
      *  [cargarPersistidos] (para no re-persistir lo recuperado). */
@@ -56,10 +57,20 @@ object Diagnostico {
 
     private fun persistir(categoria: String, detalle: String) {
         val f = archivo ?: return
-        try {
-            if (f.length() > MAX_ARCHIVO) f.writeText("")   // tope: quedarse con lo nuevo
-            f.appendText("=== ${System.currentTimeMillis()} ===\n[$categoria] $detalle\n")
-        } catch (_: Exception) {
+        // Serializar el read-modify-write: `registrar` llama a `persistir` FUERA del lock del ring, así
+        // que varios hilos de red pueden entrar a la vez. Sin esto, `length`/`writeText`/`appendText`
+        // compiten y se pierden líneas (medido: 8000 eventos → 1538).
+        synchronized(archivoLock) {
+            try {
+                if (f.length() > MAX_ARCHIVO) {
+                    // Rotar conservando la ÚLTIMA MITAD (no `writeText("")`, que borra todo justo bajo
+                    // un storm de reconexión, que es cuando más se necesita el histórico).
+                    val lineas = f.readLines()
+                    f.writeText(lineas.drop(lineas.size / 2).joinToString("\n", postfix = "\n"))
+                }
+                f.appendText("=== ${System.currentTimeMillis()} ===\n[$categoria] $detalle\n")
+            } catch (_: Exception) {
+            }
         }
     }
 
