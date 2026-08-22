@@ -765,7 +765,8 @@ antes de la siguiente). Progreso:
     el config-scoping — probado en vivo: detecta que remotemarvin está sólo en `claude-personal`, no en el
     default. Además: carrera de rotación de `notify.jsonl` cerrada (flock + tmp único).
   - Verificado: compila (JDK17) + unit tests verdes; hooks y `marvin-doctor` probados en vivo (JSON válido,
-    payload atacante descartado, debounce activo). **Falta:** e2e en emulador (hueco de reconexión, cambio
-    de host) + prueba en el celu con el plugin 1.8.0 instalado.
+    payload atacante descartado, debounce activo); **e2e en emulador VERDE** (`AvisosE2ETest`, 2/2 contra el
+    fixture con corte real de SSH: la línea escrita con el canal caído se entrega al reconectar, y no re-emite
+    lo ya visto). **Falta:** prueba en el celu con el plugin 1.8.0 instalado.
 - **Fase 2** · OSC52 handshake — pendiente. **Fase 3** · persistencia — pendiente. **Fase 4** · DevOps
   (releases públicos) — pendiente. **Fase 5** · menores UX — pendiente.
