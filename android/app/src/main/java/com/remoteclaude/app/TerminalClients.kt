@@ -6,7 +6,6 @@ import android.content.Context
 import android.view.KeyEvent
 import android.view.MotionEvent
 import android.widget.Toast
-import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import com.termux.terminal.TerminalSession
 import com.termux.terminal.TerminalSessionClient
@@ -31,19 +30,26 @@ class TerminalClients(
     private val ocultarTeclado: () -> Unit = {},
     // WS-F: cada cambio de texto de la sesión activa alimenta al watcher de aprobación.
     private val alCambiarTexto: (() -> Unit)? = null,
+    // Seguridad OSC 52: ¿esta copia la iniciaste VOS (Sel / selección)? Si no, la escribió el host
+    // por su cuenta y NO se copia (defensa contra secuestro de portapapeles). Ver copiarBloqueado.
+    private val copiaLaPediste: () -> Boolean = { true },
 ) {
 
-    /** OSC 52 lo dispara el HOST, no el usuario: se copia con un aviso ATRIBUIDO al host (no el
-     *  genérico "Copiado" que el usuario asocia a su propia acción), para que una copia
-     *  inesperada —p.ej. un Claude inyectado escribiendo el portapapeles— se note. */
-    private fun copiarDelHost(text: String) {
+    /** Vos pediste la copia (Sel / selección): al portapapeles, con el "Copiado" de siempre. */
+    private fun copiar(text: String) {
         act.getSystemService(ClipboardManager::class.java)
             ?.setPrimaryClip(ClipData.newPlainText("terminal", text))
-        // Preview del contenido (no sólo el conteo): que se vea QUÉ se copió, para notar una copia
-        // inesperada. No intrusivo: sólo un snippet en el toast, sin cortar el flujo.
+        Toast.makeText(act, "Copiado", Toast.LENGTH_SHORT).show()
+    }
+
+    /** El host quiso escribir el portapapeles por su cuenta (OSC 52 sin que lo pidieras con Sel):
+     *  se BLOQUEA. Cualquier proceso en la terminal —un Claude inyectado, la salida de un archivo no
+     *  confiable— podría secuestrarte el portapapeles en silencio. Se avisa con un preview de lo que
+     *  se intentó meter, para que lo notes. */
+    private fun copiarBloqueado(text: String) {
         Toast.makeText(
             act,
-            "El host copió ${text.length} car.: \"${previewSeguro(text, 48)}\"",
+            "Bloqueé una copia del host (no fue con Sel): \"${previewSeguro(text, 48)}\"",
             Toast.LENGTH_LONG,
         ).show()
     }
@@ -99,22 +105,12 @@ class TerminalClients(
 
         override fun onCopyTextToClipboard(session: TerminalSession, text: String?) {
             if (text.isNullOrEmpty()) return
-            // OSC 52 lo dispara el HOST, no el usuario. Para una selección de tmux es lo
-            // esperado, pero el buffer admite 1 MB: un proceso remoto podría escribir el
-            // portapapeles del teléfono en silencio. Arriba de cierto tamaño se pregunta.
-            if (text.length > OSC52_CONFIRMAR_SOBRE) {
-                AlertDialog.Builder(act)
-                    .setTitle("¿Copiar al portapapeles?")
-                    .setMessage(
-                        "El host quiere copiar ${text.length / 1024} KB al portapapeles del teléfono.\n\n" +
-                            "Empieza con:\n\"${previewSeguro(text, 200)}\""
-                    )
-                    .setNegativeButton("Descartar", null)
-                    .setPositiveButton("Copiar") { _, _ -> copiarDelHost(text) }
-                    .show()
-                return
-            }
-            copiarDelHost(text)
+            // Todo copiado del terminal llega acá como OSC 52 —tanto tu Sel (tmux copia y emite OSC 52
+            // al soltar) como una copia que dispare un programa por su cuenta—. Sólo dejamos pasar la
+            // que iniciaste VOS (Sel / selección activa); la del host se bloquea (secuestro de
+            // portapapeles). El Sel es la forma recomendada de copiar; los botones "Copiar" de la app
+            // NO pasan por acá (escriben el portapapeles directo).
+            if (copiaLaPediste()) copiar(text) else copiarBloqueado(text)
         }
 
         override fun onPasteTextFromClipboard(session: TerminalSession?) {
@@ -220,12 +216,6 @@ class TerminalClients(
             // el prompt se fue (respondiste, o Claude siguió): permitir que el próximo lo baje
             enModoLectura = false
         }
-    }
-
-    companion object {
-        /** A partir de acá, OSC 52 pide confirmación en vez de copiar con aviso. Bajo (20 KB):
-         *  un volcado grande al portapapeles casi nunca es un yank normal de tmux. */
-        const val OSC52_CONFIRMAR_SOBRE = 20_000
     }
 }
 

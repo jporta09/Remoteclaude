@@ -57,6 +57,9 @@ class MainActivity : AppCompatActivity() {
     /** Cuándo se fue a background (elapsedRealtime), para decidir si al volver forzar reconexión. */
     private var pausadoEnMs = 0L
 
+    /** Cuándo apagaste el modo Sel (elapsedRealtime), para la ventana de gracia de la copia OSC 52. */
+    @Volatile private var selDesactivadoEnMs = 0L
+
     private lateinit var control: RemoteControl
     private lateinit var keyPair: java.security.KeyPair
     private lateinit var barraHost: View
@@ -140,6 +143,7 @@ class MainActivity : AppCompatActivity() {
             mostrarTeclado = { mostrarTeclado() },
             ocultarTeclado = { ocultarTeclado() },
             alCambiarTexto = { actualizarA11yTerminal() },
+            copiaLaPediste = { copiaIniciadaPorVos() },
         )
         terminalView.apply {
             setTerminalViewClient(clients.vistaCliente)
@@ -412,6 +416,9 @@ class MainActivity : AppCompatActivity() {
         /** Tiempo en background a partir del cual, al volver, se fuerza reconexión (por si la
          *  conexión quedó muerta sin RST). Un vistazo más corto no fuerza nada. */
         private const val UMBRAL_FORZAR_RECONEXION_MS = 3000L
+
+        /** Gracia tras apagar Sel para aceptar la copia OSC 52 de tmux (llega con retraso de red). */
+        private const val GRACIA_SELECCION_MS = 3000L
     }
 
     // --- identidad del host ----------------------------------------------------
@@ -687,6 +694,10 @@ class MainActivity : AppCompatActivity() {
 
     private fun alCambiarSeleccion(activo: Boolean) {
         terminalView.setSelectionDragMode(activo)
+        // Al apagar Sel, dejar una ventana de gracia: la copia de tmux llega por OSC 52 un instante
+        // DESPUÉS de soltar (round-trip), así que un `copiaIniciadaPorVos()` estricto la perdería si
+        // apagaste Sel enseguida.
+        if (!activo) selDesactivadoEnMs = android.os.SystemClock.elapsedRealtime()
         Toast.makeText(
             this,
             if (activo) "Selección ON: arrastrá para marcar, soltá para copiar"
@@ -695,6 +706,15 @@ class MainActivity : AppCompatActivity() {
         ).show()
         terminalView.requestFocus()
     }
+
+    /** ¿La copia al portapapeles la iniciaste VOS? True si estás en modo Sel, hay una selección
+     *  activa, o soltaste el Sel hace muy poco (la copia de tmux llega por OSC 52 con un pequeño
+     *  retraso). Si es false, el OSC 52 lo escribió el host por su cuenta → se bloquea (política A). */
+    private fun copiaIniciadaPorVos(): Boolean =
+        terminalView.isSelectionDragMode() ||
+            terminalView.isSelectingText() ||
+            (selDesactivadoEnMs != 0L &&
+                android.os.SystemClock.elapsedRealtime() - selDesactivadoEnMs < GRACIA_SELECCION_MS)
 
     private fun abrirOtraPantalla(destino: Class<*>) {
         startActivity(Intent(this, destino).apply {

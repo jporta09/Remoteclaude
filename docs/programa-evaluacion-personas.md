@@ -84,6 +84,26 @@ mismo objeto para tres perfiles:
 Es el candidato natural a severidad 4 y aparece, con lente propia, en tres de las ocho
 secciones. No es redundancia: es triangulación.
 
+### 1.5 Cuestioná la premisa, no sólo el mecanismo
+
+Antes de proponer cómo **endurecer** una capacidad, función o superficie, preguntate si
+**debería existir**: ¿alguien la pide o la usa de verdad? ¿la utilidad justifica la superficie de
+ataque, la complejidad o el costo? A veces el fix correcto es **eliminarla, bloquearla o no
+construirla**, no hacerla "segura". El error a evitar es **optimizar *dentro* de un marco sin
+cuestionar el marco** — refinar la seguridad de un mecanismo pasada tras pasada mientras nadie
+pregunta si el mecanismo tiene que estar.
+
+**Caso real (OSC 52):** se endureció en TRES pasadas —confirmar arriba de 100 KB → atribuir el
+toast ("El host copió…") → mostrar un preview del contenido— sin que ningún perfil preguntara si el
+host debía poder **escribir el portapapeles del teléfono**, para empezar. Cuando por fin se
+preguntó (lo trajo el usuario, no la evaluación), la respuesta correcta fue **bloquearlo**: utilidad
+marginal en esta app + superficie de secuestro de portapapeles (Claude inyectable, contenido no
+confiable). Tres pasadas de "hacerlo seguro" cuando la respuesta era "no dejarlo".
+
+Aplica a todos los perfiles, pero **sobre todo a Seguridad y Arquitecto de IA**, que son los que
+proponen fixes a mecanismos: cada vez que vayas a decir "endurecé X", chequeá antes si X debería
+existir.
+
 ---
 
 ## 2. Los perfiles
