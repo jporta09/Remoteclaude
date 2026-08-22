@@ -115,12 +115,16 @@ class ClipboardE2ETest {
             fijarSentinela(scenario, "SENTINELA")
             val n = System.nanoTime()
             val marca = "MARVIN_OK_$n"
+            // Abrir la ventana del handshake ANTES de mandar el OSC 52 (como pasa de verdad: soltás el
+            // arrastre y RECIÉN AHÍ tmux emite el OSC 52). Si no, un round-trip rápido puede llegar antes
+            // de abrirla y el único OSC 52 se bloquea.
+            scenario.onActivity { it.marcarSelDragSoltadoForTest() }
             val cmd = "printf '\\033]52;c;%s\\a' \"\$(printf %s '$marca' | base64 -w0)\"\n"
             scenario.onActivity { a ->
                 val b = cmd.toByteArray(); a.currentSessionForTest()?.write(b, 0, b.size)
             }
-            // Mantener la ventana del handshake abierta mientras el OSC 52 hace el round-trip por tmux:
-            // simula que acabás de soltar un arrastre en Sel. El primer OSC 52 aceptado copia.
+            // Y mantenerla abierta mientras el OSC 52 hace el round-trip por tmux. El primer OSC 52
+            // aceptado copia.
             await(what = "la copia iniciada por vos llega al portapapeles") {
                 scenario.onActivity { it.marcarSelDragSoltadoForTest() }
                 portapapeles(scenario) == marca

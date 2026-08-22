@@ -12,7 +12,8 @@
 # `type`; el detalle real se ve al TOCAR (abre el terminal vivo). El `type` es la única señal útil.
 set -uo pipefail
 
-input=$(cat 2>/dev/null || true)
+# Drenar stdin (el JSON del hook) sin usarlo: el mensaje es fijo por seguridad (no leemos `.message`).
+cat >/dev/null 2>&1 || true
 
 dir="${XDG_CONFIG_HOME:-$HOME/.config}/marvin"
 file="$dir/notify.jsonl"
