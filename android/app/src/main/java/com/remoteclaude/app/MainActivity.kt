@@ -163,6 +163,7 @@ class MainActivity : AppCompatActivity() {
             btnInsertar = burbujaInsertar, btnDescartar = burbujaDescartar,
             teclado = { if (::keypad.isInitialized) keypad else null },
             sesionActiva = { tabs.sesionActiva },
+            sesionAbierta = { s -> ::tabs.isInitialized && tabs.sesionAbierta(s) },
         )
 
         keypad = KeypadView(this, object : KeypadView.Io {
@@ -187,6 +188,7 @@ class MainActivity : AppCompatActivity() {
                 override fun abrirDocumentos() = abrirOtraPantalla(DocsActivity::class.java)
                 override fun mostrarClavePublica() = this@MainActivity.mostrarClavePublica()
             },
+            alCerrarTab = { sesion -> if (::dictado.isInitialized) dictado.tabCerrado(sesion) },
         )
 
         barraHost = barraDeHost()

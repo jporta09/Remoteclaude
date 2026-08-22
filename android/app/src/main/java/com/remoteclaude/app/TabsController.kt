@@ -36,6 +36,7 @@ class TabsController(
     private val crearSesion: (String) -> SshTerminalSession,
     private val alActivar: (SshTerminalSession) -> Unit,
     private val acciones: Acciones,
+    private val alCerrarTab: (SshTerminalSession) -> Unit = {},
 ) {
     /** Los botones de la barra que no son pestañas: abren otras pantallas. */
     interface Acciones {
@@ -76,6 +77,9 @@ class TabsController(
      * mismo al cerrar la última.
      */
     val sesionActiva: SshTerminalSession? get() = tabs.getOrNull(activo)?.session
+
+    /** ¿Esa sesión sigue siendo una pestaña abierta? (para no escribirle si se cerró el tab). */
+    fun sesionAbierta(s: SshTerminalSession): Boolean = tabs.any { it.session === s }
 
     // --- Blancos para la demo de primer uso --------------------------------------------
     // refrescarBarra() reconstruye todo, así que se buscan al momento, nunca se guardan.
@@ -178,7 +182,9 @@ class TabsController(
 
     private fun cerrar(indice: Int) {
         if (indice !in tabs.indices) return
-        tabs.removeAt(indice).session.finishIfRunning()
+        val quitada = tabs.removeAt(indice).session
+        quitada.finishIfRunning()
+        alCerrarTab(quitada)   // p.ej. cancelar un dictado atado a esta pestaña
         if (tabs.isEmpty()) {
             // Refrescar ANTES de crear la nueva: si no, queda en pantalla el chip de la
             // cerrada y las prefs la siguen listando (al reabrir, resucitaba).

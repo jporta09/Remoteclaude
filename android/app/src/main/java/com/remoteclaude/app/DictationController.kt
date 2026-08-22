@@ -32,12 +32,17 @@ class DictationController(
     private val btnDescartar: View,
     private val teclado: () -> KeypadView?,
     private val sesionActiva: () -> SshTerminalSession?,
+    private val sesionAbierta: (SshTerminalSession) -> Boolean,
 ) {
     private val grabador = WavRecorder()
     @Volatile private var transcribiendo = false
     @Volatile private var previewPendiente = false
     // @Volatile: lo toca el callback onChunk del grabador (otro hilo) además del hilo de UI.
     @Volatile private var vivo: LiveDictation? = null
+
+    // La pestaña a la que está atado el dictado en curso (grabando o con preview pendiente). Si la
+    // cerrás, hay que cancelar: si no, el texto quedaba huérfano o iba a la pestaña equivocada.
+    @Volatile private var sesionEnJuego: SshTerminalSession? = null
 
     /** Devuelve true: consume el evento del botón. */
     fun alTocarMicrofono(ev: MotionEvent): Boolean {
@@ -90,6 +95,7 @@ class DictationController(
             Toast.makeText(act, "No pude abrir el micrófono", Toast.LENGTH_SHORT).show()
             return
         }
+        sesionEnJuego = sesionActiva()   // la pestaña en la que estás dictando
         teclado()?.estadoMicrofono("Grabando", Paleta.REC_FG)
         thread {
             if (l.start()) {
@@ -115,6 +121,7 @@ class DictationController(
         // La sesión destino se fija ACÁ y no al terminar: el round-trip tarda segundos y si
         // mientras tanto cambiás de pestaña, el texto se escribía en la equivocada.
         val destino = sesionActiva() ?: run { l?.cancel(); ocultarBurbuja(); micEnReposo(); return }
+        sesionEnJuego = destino   // a partir de acá el dictado queda atado a la pestaña de destino
         transcribiendo = true
         teclado()?.estadoMicrofono("…", Paleta.ACCENT)
         thread {
@@ -140,6 +147,12 @@ class DictationController(
                 // ver el cambio y el botón quedaba inutilizable el resto de la sesión. El STT ya
                 // volvió, así que el mic queda libre aunque el preview siga abierto.
                 transcribiendo = false
+                // Si cerraste la pestaña del dictado mientras se transcribía, no muestres un preview
+                // colgado atado a una sesión que ya no existe.
+                if (sesionEnJuego !== destino || !sesionAbierta(destino)) {
+                    ocultarBurbuja(); micEnReposo()
+                    return@runOnUiThread
+                }
                 val limpio = sanitizarDictado(texto)
                 if (limpio.isBlank()) {
                     ocultarBurbuja(); micEnReposo()
@@ -162,9 +175,11 @@ class DictationController(
         burbujaBotones.visibility = View.VISIBLE
         burbuja.visibility = View.VISIBLE
         btnInsertar.setOnClickListener {
-            // Si cerraste el tab destino entre el dictado y el Insertar, el write iría a una sesión
-            // muerta EN SILENCIO (se perdía el dictado sin avisar). Mejor decirlo.
-            if (destino.cerrada) {
+            // Si cerraste el tab destino entre el dictado y el Insertar, escribirle mandaría el texto
+            // a una sesión que ya no es una pestaña (se perdía o iba a la equivocada). Chequeamos que
+            // el destino SIGA abierto — no el flag `cerrada` del transport, que no se prende al cerrar
+            // un tab SSH (finishIfRunning es no-op sin shell local).
+            if (!sesionAbierta(destino)) {
                 Toast.makeText(act, "La sesión se cerró; no se pudo insertar el dictado", Toast.LENGTH_LONG).show()
                 ocultarBurbuja()
                 return@setOnClickListener
@@ -181,9 +196,22 @@ class DictationController(
         burbujaBotones.visibility = View.GONE
         burbujaTexto.text = ""
         previewPendiente = false
+        sesionEnJuego = null
     }
 
     private fun micEnReposo() = teclado()?.estadoMicrofono("Dictar", Paleta.KEY_FG)
+
+    /** Cerraron una pestaña. Si es la del dictado en juego (grabando o con preview), cancelarlo y
+     *  sacar la burbuja: si no, el texto quedaba huérfano o iba a la pestaña equivocada. */
+    fun tabCerrado(cerrada: SshTerminalSession) {
+        if (sesionEnJuego !== cerrada) return
+        vivo?.cancel(); vivo = null
+        if (grabador.isRecording) grabador.stop()
+        transcribiendo = false
+        ocultarBurbuja()          // limpia sesionEnJuego
+        micEnReposo()
+        Toast.makeText(act, "Cerraste la pestaña del dictado; se descartó", Toast.LENGTH_SHORT).show()
+    }
 
     companion object {
         /** Código del pedido de permiso RECORD_AUDIO. */
