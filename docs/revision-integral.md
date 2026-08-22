@@ -748,3 +748,24 @@ eliminar la ventana de gracia — §1.5 a su conclusión.
 - **✅ SOSTIENEN (re-verificados por código):** diálogos oscuros legibles (v1.16, contraste muted 5.2:1), ⓘ del diagnóstico (v1.17), fuente persistida (v1.18), OSC52 bloqueo host-iniciado (v1.20 — **native y Sel SÍ copian**, sólo cae el OSC52 host puro), "Copiado" consistente en las 3 superficies, R1 plan-mode dispara con mensaje diferenciado y **no es inyectable** (`tool_name` sólo elige entre 3 strings fijos), FGS aditivo (sin regresión del default best-effort), `forzarReconexion` (sin sonda, sin deadlock, gate 3s), teardown F9 + `quitar_bloque_sentinelas` (no borra a EOF sin `end`), guard de versionCode (armado — con el residual fail-open de arriba), `PendingIntent` del FGS (`FLAG_IMMUTABLE`, `exported=false`, no disparable por otra app), `flag-subidos-context.sh` (sólo lecturas).
 - **🗑️ RETIRADOS / CERRADOS:** **A1** (hoja de aprobación spoofeable) → MOOT: opción B REMOVIÓ la hoja (`7d37f91`), §1.5 aplicado; el modo lectura NO es control de seguridad (sólo baja el teclado). **D3** (TAB en nombre de doc) → cerrado (`nombreDeDocInseguro` rechaza `\p{Cntrl}` + parseo desde el final). **D2** (parser de aprobación) → MOOT (opción B). **teardown docker-group** → RESUELTO (detectado + nombrado + remediado, `teardown-host.sh:103-114`). **Umbral OSC52** → MOOT (política A lo reemplazó por bloqueo).
 - **Nota app-vs-Claude:** "el plan se ve chico/dominante en el celu" NO es de la app (es el TUI de Claude Code; verificado que no hay config para compactarlo) — la única palanca app-side es el tamaño de fuente (persistido; pendiente A+/A− discoverable). El layout del bloque de plan/pregunta = `/feedback` a Claude Code.
+
+### G.4 · Estado de implementación (plan `sleepy-yawning-snowglobe`, 5 fases, releases separados)
+
+El plan implementa TODO el backlog §G.2 en 5 fases, cada una un release separado (se prueba en el celu
+antes de la siguiente). Progreso:
+
+- **Fase 1 · Canal de alerta honesto — app v1.21.0 (vc 31) + plugin 1.8.0 · CÓDIGO LISTO, pendiente prueba en celu.**
+  - ✅ **Clúster A** cerrado en código: **1a** cursor por `ts` (recupera el hueco de reconexión, sin
+    re-emit tras rotación) + siembra para no re-emitir historial; **1b** salud del canal en `Diagnostico`
+    (categoría `avisos`: conectado/línea/caído — hace visible el silencio del config-scoping en la app);
+    **1c** FGS reconstruye el tail al cambiar de host (adiós al guard `notifs==null` que escuchaba el host
+    viejo); **1d** `notify.jsonl` con **mensaje FIJO** por type (el `message` de Claude ya no se propaga —
+    cierra el canal push atacante-controlado) + campo `session` (tmux) para identidad; **1e** notif con
+    subtexto host·sesión; **1f** debounce de R1 (6 s); **1g** `marvin-doctor` (+`--probe`) que diagnostica
+    el config-scoping — probado en vivo: detecta que remotemarvin está sólo en `claude-personal`, no en el
+    default. Además: carrera de rotación de `notify.jsonl` cerrada (flock + tmp único).
+  - Verificado: compila (JDK17) + unit tests verdes; hooks y `marvin-doctor` probados en vivo (JSON válido,
+    payload atacante descartado, debounce activo). **Falta:** e2e en emulador (hueco de reconexión, cambio
+    de host) + prueba en el celu con el plugin 1.8.0 instalado.
+- **Fase 2** · OSC52 handshake — pendiente. **Fase 3** · persistencia — pendiente. **Fase 4** · DevOps
+  (releases públicos) — pendiente. **Fase 5** · menores UX — pendiente.

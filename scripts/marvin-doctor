@@ -1,0 +1,108 @@
+#!/usr/bin/env bash
+# marvin-doctor — diagnostica por qué la notificación "Claude te espera" puede quedar MUDA.
+#
+# El canal de avisos de RemoteMarvin depende de que la sesión de Claude que corre en el host tenga el
+# plugin `remotemarvin` CARGADO: sin él, ningún hook escribe en ~/.config/marvin/notify.jsonl y la app
+# no recibe nada (aunque el `tail -F` corra sano y la notif fija diga "avisos activos"). Como Claude
+# puede usar distintos configs (`~/.claude` por defecto, `~/.claude-personal`, o $CLAUDE_CONFIG_DIR),
+# es fácil que la sesión a la que te conectás use un config SIN el plugin y el canal calle en silencio.
+#
+# Este script hace visible esa degradación: enumera los configs de Claude, dice en cuáles está
+# habilitado remotemarvin, chequea el archivo/hooks, y con --probe manda un aviso de prueba al celu.
+#
+# Uso:  marvin-doctor           # diagnóstico
+#       marvin-doctor --probe   # además, manda una notificación de prueba a la app
+set -uo pipefail
+
+PLUGIN="remotemarvin@remotemarvin"
+dir="${XDG_CONFIG_HOME:-$HOME/.config}/marvin"
+notify="$dir/notify.jsonl"
+ok=1
+
+tiene_jq=0; command -v jq >/dev/null 2>&1 && tiene_jq=1
+
+# Lee enabledPlugins["remotemarvin@remotemarvin"] de un settings.json. Devuelve "true"/"false"/"".
+plugin_habilitado() {
+  local settings="$1"
+  [ -f "$settings" ] || { echo ""; return; }
+  if [ "$tiene_jq" = 1 ]; then
+    jq -r --arg p "$PLUGIN" '.enabledPlugins[$p] // empty' "$settings" 2>/dev/null
+  else
+    # Fallback grosero sin jq: buscar la línea "remotemarvin@remotemarvin": true/false.
+    grep -oE "\"$PLUGIN\"[[:space:]]*:[[:space:]]*(true|false)" "$settings" 2>/dev/null \
+      | grep -oE '(true|false)$' | head -1
+  fi
+}
+
+# Candidatos de config: el explícito ($CLAUDE_CONFIG_DIR) + todos los ~/.claude* con settings.json.
+declare -a configs=()
+[ -n "${CLAUDE_CONFIG_DIR:-}" ] && configs+=("$CLAUDE_CONFIG_DIR")
+for d in "$HOME"/.claude "$HOME"/.claude-*; do
+  [ -d "$d" ] && [ -f "$d/settings.json" ] && configs+=("$d")
+done
+# Dedup preservando orden.
+declare -A vistos=(); declare -a unicos=()
+for d in "${configs[@]:-}"; do
+  [ -z "$d" ] && continue
+  [ -n "${vistos[$d]:-}" ] && continue
+  vistos[$d]=1; unicos+=("$d")
+done
+
+echo "== marvin-doctor =="
+echo
+echo "Configs de Claude y estado del plugin remotemarvin:"
+habilitado_en_default=""
+algun_habilitado=0
+if [ "${#unicos[@]}" -eq 0 ]; then
+  echo "  (no encontré ningún config de Claude con settings.json)"
+  ok=0
+fi
+for d in "${unicos[@]:-}"; do
+  [ -z "$d" ] && continue
+  estado="$(plugin_habilitado "$d/settings.json")"
+  case "$estado" in
+    true)  echo "  ✅ $d — remotemarvin HABILITADO"; algun_habilitado=1 ;;
+    false) echo "  ⚠️  $d — remotemarvin instalado pero DESHABILITADO" ;;
+    *)     echo "  ❌ $d — remotemarvin NO habilitado (no avisará desde acá)" ;;
+  esac
+  [ "$d" = "$HOME/.claude" ] && habilitado_en_default="$estado"
+done
+
+echo
+echo "Canal de avisos (host):"
+if [ -d "$dir" ] && { [ -w "$notify" ] || { mkdir -p "$dir" 2>/dev/null && touch "$notify" 2>/dev/null; }; }; then
+  echo "  ✅ $notify escribible ($(wc -l <"$notify" 2>/dev/null || echo 0) líneas)"
+else
+  echo "  ❌ no puedo escribir $notify"; ok=0
+fi
+
+echo
+if [ "$algun_habilitado" = 0 ]; then
+  echo "🔴 Ningún config tiene remotemarvin habilitado: la app NO recibirá avisos."
+  echo "   Arreglo: en Claude Code →  /plugin install remotemarvin@remotemarvin"
+  ok=0
+elif [ "$habilitado_en_default" != "true" ]; then
+  echo "🟡 remotemarvin está habilitado, pero NO en el config por defecto ($HOME/.claude)."
+  echo "   Si te conectás a una sesión que corre \`claude\` con el config por defecto, NO te avisará."
+  echo "   Asegurate de correr Claude con el config que lo tiene, o habilitalo también en el default."
+else
+  echo "🟢 remotemarvin habilitado en el config por defecto: los avisos deberían llegar."
+fi
+
+# --probe: manda un aviso de prueba a la app (sin depender de Claude), para confirmar la entrega e2e.
+if [ "${1:-}" = "--probe" ]; then
+  echo
+  ts=$(date +%s 2>/dev/null || echo 0)
+  sesion=$(tmux display-message -p '#S' 2>/dev/null || true)
+  msg="Prueba de marvin-doctor: si ves esto en el celu, el canal funciona"
+  if [ "$tiene_jq" = 1 ]; then
+    line=$(jq -cn --arg m "$msg" --arg s "$sesion" --argjson ts "$ts" \
+      '{type:"permission_prompt",message:$m,session:$s,ts:$ts}' 2>/dev/null || true)
+  fi
+  [ -z "${line:-}" ] && line="{\"type\":\"permission_prompt\",\"message\":\"$msg\",\"ts\":$ts}"
+  printf '%s\n' "$line" >>"$notify" 2>/dev/null \
+    && echo "📨 Aviso de prueba enviado. Con la app en segundo plano, debería llegar una notificación." \
+    || echo "❌ no pude escribir el aviso de prueba"
+fi
+
+exit $(( ok == 1 ? 0 : 1 ))

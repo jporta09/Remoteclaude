@@ -24,6 +24,7 @@ import androidx.core.content.ContextCompat
 class AvisosService : Service() {
 
     private var notifs: NotificacionesRemotas? = null
+    private var hostActual: String? = null
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -39,15 +40,21 @@ class AvisosService : Service() {
             return START_NOT_STICKY
         }
         val port = intent.getIntExtra("port", 22)
+        val etiqueta = intent.getStringExtra("label") ?: host
 
-        arrancarEnPrimerPlano(intent.getStringExtra("label") ?: host)
+        arrancarEnPrimerPlano(etiqueta)
 
-        if (notifs == null) {
+        // Reconstruir el tail si es la primera vez O si cambió el host (antes el guard `notifs == null`
+        // dejaba el tail en el host viejo mientras el texto de la FGS ya decía el nuevo: escuchaba mal).
+        if (notifs == null || hostActual != host) {
+            notifs?.detener()
+            hostActual = host
             notifs = NotificacionesRemotas(
                 ctx = applicationContext,
                 host = host, port = port, user = user,
                 key = KeyStoreSsh.getOrCreateKeyPair(),
                 enPrimerPlano = { EstadoApp.enPrimerPlano },
+                etiqueta = etiqueta,
             ).also { it.iniciar() }
         }
         // Si el proceso se mata, que reintente con el mismo intent (recupera host/port/user).
@@ -57,12 +64,14 @@ class AvisosService : Service() {
     override fun onDestroy() {
         notifs?.detener()
         notifs = null
+        hostActual = null
         super.onDestroy()
     }
 
     private fun detenerTodo() {
         notifs?.detener()
         notifs = null
+        hostActual = null
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
     }

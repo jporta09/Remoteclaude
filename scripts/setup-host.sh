@@ -115,6 +115,9 @@ install -m755 "$SCRIPTS/marvin-display-allowed" "$HOME/.local/bin/marvin-display
     install -d "$HOME/.local/bin"
     install -m755 "$SCRIPTS/marvin-display-allowed" "$HOME/.local/bin/marvin-display-allowed"; }
 install -m755 "$SCRIPTS/marvin-allow-display" "$HOME/.local/bin/marvin-allow-display"
+# Diagnóstico del canal de avisos (config-scoping): detecta si Claude corre con un config sin el plugin
+# y la notif quedaría muda. Corré `marvin-doctor` (o `marvin-doctor --probe`) cuando algo no avise.
+install -m755 "$SCRIPTS/marvin-doctor" "$HOME/.local/bin/marvin-doctor"
 
 # Bloque delimitado por sentinelas: así se puede ACTUALIZAR en cada corrida. Antes se
 # hacía append con un grep como guarda, o sea que una versión vieja quedaba para siempre.
@@ -269,5 +272,9 @@ cat <<'EOF'
 
  Tip: que la PC no se suspenda y mate todo:
    sudo systemctl mask sleep.target suspend.target hibernate.target hybrid-sleep.target
+
+ Si las notificaciones "Claude te espera" no llegan, corré:
+   marvin-doctor          # dice si Claude corre con un config SIN el plugin (canal mudo)
+   marvin-doctor --probe  # manda un aviso de prueba al celu
 ============================================================
 EOF

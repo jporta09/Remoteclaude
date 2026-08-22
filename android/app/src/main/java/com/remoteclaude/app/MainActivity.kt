@@ -132,7 +132,7 @@ class MainActivity : AppCompatActivity() {
             AvisosService.detener(this)
             notifsRemotas = NotificacionesRemotas(
                 ctx = applicationContext, host = host, port = port, user = user, key = keyPair,
-                enPrimerPlano = { EstadoApp.enPrimerPlano },
+                enPrimerPlano = { EstadoApp.enPrimerPlano }, etiqueta = hostLabel,
             ).also { it.iniciar() }
         }
         clients = TerminalClients(

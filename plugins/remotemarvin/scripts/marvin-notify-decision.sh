@@ -21,6 +21,15 @@ mkdir -p "$dir" 2>/dev/null || true
 
 ts=$(date +%s 2>/dev/null || echo 0)
 
+# Debounce: PreToolUse no tiene el proxy ~6 s del hook Notification, así que planes/preguntas seguidos
+# generarían un buzz cada uno. Si avisamos hace < 6 s, no re-notificamos.
+stamp="$dir/.decision.stamp"
+prev=$(cat "$stamp" 2>/dev/null || echo 0)
+if [ "$((ts - prev))" -lt 6 ] 2>/dev/null; then exit 0; fi
+echo "$ts" >"$stamp" 2>/dev/null || true
+
+sesion=$(tmux display-message -p '#S' 2>/dev/null || true)
+
 tool=""
 if command -v jq >/dev/null 2>&1; then
   tool=$(jq -r '.tool_name // empty' <<<"$input" 2>/dev/null || true)
@@ -34,18 +43,23 @@ esac
 
 if command -v jq >/dev/null 2>&1; then
   # jq arma JSON válido; el mensaje es fijo (sin comillas/control), pero mantenemos el mismo patrón.
-  line=$(jq -cn --arg m "$msg" --argjson ts "$ts" '{type:"permission_prompt",message:$m,ts:$ts}' 2>/dev/null || true)
+  line=$(jq -cn --arg m "$msg" --arg s "$sesion" --argjson ts "$ts" \
+    '{type:"permission_prompt",message:$m,session:$s,ts:$ts}' 2>/dev/null || true)
 fi
 # Sin jq (o si falló): línea fija. $msg es un literal controlado (sin comillas ni control chars).
 [ -z "${line:-}" ] && line="{\"type\":\"permission_prompt\",\"message\":\"$msg\",\"ts\":$ts}"
 
-printf '%s\n' "$line" >>"$file" 2>/dev/null || true
-
-# Tope: quedarse con las últimas ~200 líneas (igual que marvin-notify.sh). `tail -F` de la app reabre
-# tras el reemplazo de inode.
-n=$(wc -l <"$file" 2>/dev/null || echo 0)
-if [ "${n:-0}" -gt 200 ] 2>/dev/null; then
-  tail -n 200 "$file" >"$file.tmp" 2>/dev/null && mv "$file.tmp" "$file" 2>/dev/null || true
-fi
+# Append + rotación serializados con flock + tmp único (igual que marvin-notify.sh): evita que los dos
+# hooks roten a la vez y se pierdan líneas. Degrada a append sin lock si no hay flock.
+lock="$dir/.notify.lock"
+{
+  flock 9 2>/dev/null || true
+  printf '%s\n' "$line" >>"$file" 2>/dev/null || true
+  n=$(wc -l <"$file" 2>/dev/null || echo 0)
+  if [ "${n:-0}" -gt 200 ] 2>/dev/null; then
+    tmp="$file.$$.tmp"
+    tail -n 200 "$file" >"$tmp" 2>/dev/null && mv "$tmp" "$file" 2>/dev/null || rm -f "$tmp" 2>/dev/null || true
+  fi
+} 9>"$lock"
 
 exit 0

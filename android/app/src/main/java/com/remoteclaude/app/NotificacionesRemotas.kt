@@ -41,14 +41,26 @@ class NotificacionesRemotas(
     private val user: String,
     private val key: KeyPair,
     private val enPrimerPlano: () -> Boolean,
+    private val etiqueta: String = host,
 ) {
     @Volatile private var corriendo = false
     private var hilo: Thread? = null
     private val notifManager get() = ctx.getSystemService(NotificationManager::class.java)
 
+    // Cursor por timestamp: última `ts` (epoch en segundos) que ya procesamos, persistida por host.
+    // -1 = "sin sembrar" (primer arranque): se siembra con la última línea del archivo para no
+    // re-emitir el historial. Con el cursor, al reconectar recuperamos el hueco (releemos y filtramos
+    // por ts > cursor) y la rotación (`mv` + relectura de 200 viejas) no re-emite nada.
+    @Volatile private var cursor: Long = -1L
+
+    private fun prefs() = ctx.getSharedPreferences("avisos", Context.MODE_PRIVATE)
+    private fun cargarCursor(): Long = prefs().getLong("cursor_ts_$host", -1L)
+    private fun guardarCursor(ts: Long) = prefs().edit().putLong("cursor_ts_$host", ts).apply()
+
     fun iniciar() {
         if (corriendo) return
         corriendo = true
+        cursor = cargarCursor()
         hilo = Thread({ bucle() }, "notifs-remotas").apply { isDaemon = true; start() }
     }
 
@@ -69,24 +81,34 @@ class NotificacionesRemotas(
                 val conn = Connection(h, p).also { c = it }
                 conn.connect(HostKeys.verifier(ctx.applicationContext, host, port), 10_000, 10_000)
                 if (!conn.authenticateWithPublicKey(user, key)) { esperar(backoffMs); continue }
+                // Primer arranque: sembrar el cursor con la última línea (no re-emitir el historial).
+                if (cursor < 0L) { cursor = semillaCursor(conn); guardarCursor(cursor) }
                 val s = conn.openSession()
-                // -n0: arrancar en el final (no re-emitir viejas al reconectar). Se pierde lo escrito
-                // mientras estábamos caídos: best-effort, aceptado.
+                // Releemos las últimas 200 y seguimos; `procesar` filtra por ts > cursor. Al reconectar
+                // esto RECUPERA lo escrito mientras estábamos caídos (antes se perdía con -n0), y tras la
+                // rotación (`mv`) el cursor saltea las 200 viejas re-leídas: sin re-emitir.
                 s.execCommand(
                     "mkdir -p ~/.config/marvin && touch ~/.config/marvin/notify.jsonl && " +
-                        "exec tail -n0 -F ~/.config/marvin/notify.jsonl",
+                        "exec tail -n 200 -F ~/.config/marvin/notify.jsonl",
                 )
                 backoffMs = 2_000L   // conexión sana: resetear el backoff
+                Diagnostico.registrar(Diagnostico.Nivel.INFO, "avisos", "canal conectado ($etiqueta)")
                 val r = BufferedReader(InputStreamReader(s.stdout, Charsets.UTF_8))
                 while (corriendo) {
                     val linea = r.readLine() ?: break   // EOF = se cayó el canal
                     procesar(linea)
                 }
                 s.close()
+                if (corriendo) {
+                    Diagnostico.registrar(Diagnostico.Nivel.AVISO, "avisos", "canal caído ($etiqueta), reintento")
+                }
             } catch (_: InterruptedException) {
                 break
             } catch (_: Exception) {
                 // caída de red / auth / endpoint: reconectar con backoff
+                if (corriendo) {
+                    Diagnostico.registrar(Diagnostico.Nivel.AVISO, "avisos", "canal caído ($etiqueta), reintento")
+                }
             } finally {
                 try { c?.close() } catch (_: Exception) {}
             }
@@ -96,13 +118,30 @@ class NotificacionesRemotas(
 
     private fun esperar(ms: Long) = try { Thread.sleep(ms) } catch (_: InterruptedException) {}
 
+    // Lee la última línea del archivo para inicializar el cursor sin re-emitir el historial.
+    private fun semillaCursor(conn: Connection): Long = try {
+        val s = conn.openSession()
+        s.execCommand("tail -n1 ~/.config/marvin/notify.jsonl 2>/dev/null")
+        val linea = BufferedReader(InputStreamReader(s.stdout, Charsets.UTF_8)).readLine()
+        s.close()
+        linea?.let { try { JSONObject(it).optLong("ts", 0L) } catch (_: Exception) { 0L } } ?: 0L
+    } catch (_: Exception) { 0L }
+
     private fun procesar(linea: String) {
         val obj = try { JSONObject(linea) } catch (_: Exception) { return }
         if (obj.optString("type") != "permission_prompt") return
-        // Si estás mirando la app, el "modo lectura" ya bajó el teclado: no molestamos con notif.
+        // Cursor por ts: descartar lo ya visto (historial al reconectar, relectura tras rotación).
+        val ts = obj.optLong("ts", 0L)
+        if (ts <= cursor) return
+        cursor = ts
+        guardarCursor(ts)
+        Diagnostico.registrar(Diagnostico.Nivel.INFO, "avisos", "aviso recibido ($etiqueta)")
+        // Si estás mirando la app, el "modo lectura" ya bajó el teclado: no molestamos con notif
+        // (pero el cursor ya avanzó: no se re-notifica después).
         if (enPrimerPlano()) return
         val msg = obj.optString("message").ifBlank { "Claude está esperando una decisión" }
-        notificar(msg)
+        val sesion = obj.optString("session")
+        notificar(msg, sesion)
     }
 
     // --- notificación (misma plomería que tenía F7) -------------------------------------------
@@ -121,7 +160,7 @@ class NotificacionesRemotas(
         notifManager?.createNotificationChannel(canal)
     }
 
-    private fun notificar(mensaje: String) {
+    private fun notificar(mensaje: String, sesion: String = "") {
         if (!puedeNotificar()) return   // sin permiso, degrada en silencio
         asegurarCanal()
         // singleTop + REORDER_TO_FRONT: trae la MainActivity viva al frente (con su sesión).
@@ -132,11 +171,15 @@ class NotificacionesRemotas(
             ctx, 0, intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
+        // Identidad: de qué host (y sesión, si el hook la manda) viene el aviso — así dos Claude
+        // esperando no colapsan en una notif ambigua.
+        val subtexto = if (sesion.isNotBlank()) "$etiqueta · $sesion" else etiqueta
         val n = Notification.Builder(ctx, CANAL)
             .setSmallIcon(R.drawable.ic_notif)
             .setContentTitle("Claude te espera")
             .setContentText(mensaje)
-            .setStyle(Notification.BigTextStyle().bigText(mensaje))
+            .setSubText(subtexto)
+            .setStyle(Notification.BigTextStyle().bigText(mensaje).setSummaryText(subtexto))
             .setCategory(Notification.CATEGORY_MESSAGE)
             .setContentIntent(pi)
             .setAutoCancel(true)
