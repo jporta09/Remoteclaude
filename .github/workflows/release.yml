@@ -66,8 +66,12 @@ jobs:
       # el usuario no puede actualizar). Se lee el versionCode del último release desde su body
       # (donde lo sembramos, ver el step "Publicar"). REST API vía curl para no depender de que
       # el runner (self-hosted) tenga `gh`/`jq` instalados; el body trae la línea `versionCode: N`
-      # literal, así que un grep sobre el JSON crudo alcanza. Bootstrap: si el último release no la
-      # expone (releases previos a este guard), se avisa y NO se falla.
+      # literal, así que un grep sobre el JSON crudo alcanza.
+      #
+      # FAIL-CLOSED: se distingue el error de red/HTTP del bootstrap genuino. Antes `curl -sf ... || true`
+      # colapsaba ambos en PREV_VC vacío → un 5xx/rate-limit transitorio SALTEABA el guard (la falla que
+      # existe para prevenir). Ahora un error HTTP tras reintentos ABORTA; sólo se saltea el bootstrap real
+      # (404 = no hay releases; o 200 sin el marcador = release previo a este guard).
       - name: versionCode monotónico
         id: ver
         env:
@@ -77,19 +81,35 @@ jobs:
           VC=$(grep -oE 'versionCode = [0-9]+' android/app/build.gradle.kts | head -1 | grep -oE '[0-9]+')
           test -n "$VC" || { echo "::error::no pude leer versionCode de build.gradle.kts"; exit 1; }
           echo "vc=$VC" >> "$GITHUB_OUTPUT"
-          PREV_VC=$(curl -sf \
-            -H "Authorization: Bearer $GH_TOKEN" \
-            -H "Accept: application/vnd.github+json" \
-            "https://api.github.com/repos/$REPO/releases/latest" \
-            | grep -oE 'versionCode: [0-9]+' | head -1 | grep -oE '[0-9]+' || true)
-          if [ -z "$PREV_VC" ]; then
-            echo "::warning::el último release no expone versionCode (bootstrap): salteo la comparación monotónica"
+
+          CODE=000
+          for intento in 1 2 3; do
+            CODE=$(curl -s -o /tmp/rel.json -w '%{http_code}' \
+              -H "Authorization: Bearer $GH_TOKEN" \
+              -H "Accept: application/vnd.github+json" \
+              "https://api.github.com/repos/$REPO/releases/latest" || echo 000)
+            case "$CODE" in
+              200|404) break ;;
+              *) echo "::warning::intento $intento: HTTP $CODE al leer el último release, reintento"; sleep 5 ;;
+            esac
+          done
+
+          if [ "$CODE" = "404" ]; then
+            echo "::warning::no hay releases previos (bootstrap): salteo la comparación monotónica"
+          elif [ "$CODE" = "200" ]; then
+            PREV_VC=$(grep -oE 'versionCode: [0-9]+' /tmp/rel.json | head -1 | grep -oE '[0-9]+' || true)
+            if [ -z "$PREV_VC" ]; then
+              echo "::warning::el último release no expone versionCode (previo al guard): salteo la comparación"
+            else
+              echo "versionCode actual=$VC  previo=$PREV_VC"
+              test "$VC" -gt "$PREV_VC" || {
+                echo "::error::versionCode $VC no es mayor al del último release ($PREV_VC): Android/Obtainium rechazan el update"
+                exit 1
+              }
+            fi
           else
-            echo "versionCode actual=$VC  previo=$PREV_VC"
-            test "$VC" -gt "$PREV_VC" || {
-              echo "::error::versionCode $VC no es mayor al del último release ($PREV_VC): Android/Obtainium rechazan el update"
-              exit 1
-            }
+            echo "::error::no pude leer el último release (HTTP $CODE) tras 3 reintentos: aborto en vez de publicar a ciegas un update que Android/Obtainium podrían rechazar en silencio"
+            exit 1
           fi
 
       - name: Reconstruir el keystore desde secrets
