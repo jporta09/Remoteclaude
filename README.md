@@ -117,11 +117,15 @@ make e2e-caja-negra # valida el APK publicado manejándolo desde afuera
 make all            # todo lo que no necesita dispositivo
 ```
 
-Lo mismo corre en cada push desde [`.github/workflows/ci.yml`](.github/workflows/ci.yml).
-Dónde corre lo decide la variable de repo `MARVIN_RUNNER`: sin definir, los runners de
-GitHub; con `self-hosted`, un runner propio que instala `scripts/setup-runner.sh` (leé el
-encabezado del script antes: el runner ejecuta cada workflow con tu usuario, y eso sólo es
-aceptable con el repo privado).
+El CI liviano (unit/lint/build/host) corre en cada push desde
+[`.github/workflows/ci.yml`](.github/workflows/ci.yml) en los **runners de GitHub** (VMs
+efímeras y aisladas). El **E2E** (emulador + KVM + el AVD) no corre en CI en este repo público:
+se corre **localmente** con `make e2e`, porque necesita un runner con virtualización.
+
+> ⚠️ **No pongas `MARVIN_RUNNER` en `self-hosted` con el repo público.** Un runner propio ejecuta
+> **cada workflow —incluidos los PRs de forks— con tu usuario**, o sea ejecución de código arbitrario
+> en tu máquina (RCE). El self-hosted sólo es aceptable en un repo **privado**. Sin la variable (el
+> default), todo va a los runners de GitHub, que es lo correcto acá.
 
 - La app está en [`android/`](android/README.md); su diseño interno, en
   [`android/DESIGN.md`](android/DESIGN.md).

@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 # Instala un runner self-hosted de GitHub Actions en ESTA máquina, como servicio de usuario.
 #
+# ⚠️ SÓLO EN UN REPO PRIVADO. Un runner self-hosted ejecuta CADA workflow —incluidos los PRs de
+# forks— con tu usuario: en un repo PÚBLICO eso es ejecución de código arbitrario en tu máquina
+# (RCE). Este repo es público, así que el CI va a los runners de GitHub (variable MARVIN_RUNNER
+# SIN definir) y el E2E se corre localmente con `make e2e`. No registres el runner acá.
+#
 # Por qué: el CI hospedado por GitHub dejó de arrancar por facturación ("recent account
 # payments have failed or your spending limit needs to be increased") y los jobs fallan en
 # 3 segundos sin ejecutar nada. Un runner propio devuelve el gate, y de paso habilita a

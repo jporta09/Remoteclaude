@@ -12,11 +12,6 @@ name: E2E
 # dice "sí" no es un canario.
 on:
   pull_request:
-  # También en push a main: trabajo que entra por push DIRECTO (sin PR) —como entró la política A
-  # de OSC 52 (v1.20.0)— no gatillaba el e2e, así que un control de seguridad podía mergear sin que
-  # su test corriera nunca. Ahora corre en cada push a main (sigue gateado por MARVIN_RUNNER).
-  push:
-    branches: [main]
   # Para poder correrla a mano sin abrir un PR (y para verificar el job la primera vez).
   workflow_dispatch:
   # El canario semanal sí se conserva, y ahora sobre el runner de verdad: sin PRs de por
@@ -113,13 +108,7 @@ jobs:
     # carga— y ahí el mensaje fue claro: `kexTimeout (8000 ms) expired`, o sea el canal de
     # control del propio test al fixture. Con los plazos del andamio ajustados, 3 de 3 en
     # verde bajo esa misma carga.
-    #
-    # NO en `push` a main: ahí alcanza con el suite de :app (que incluye los tests de seguridad como
-    # ClipboardE2ETest y es robusto vía MarvinTestRunner). La caja negra —UiAutomator sobre el APK
-    # publicado, más sensible a la carga— sigue bloqueando PRs y corriendo en el canario, que es donde
-    # el mantenedor la puso; correrla en cada push agregaba flakiness (StaleObjectException) sin cubrir
-    # nada que el suite de :app no cubra ya.
-    if: vars.MARVIN_RUNNER != '' && github.event_name != 'push'
+    if: vars.MARVIN_RUNNER != ''
     runs-on: ${{ vars.MARVIN_RUNNER }}
     timeout-minutes: 45
     # Comparte AVD y puertos del fixture con el job de arriba: tienen que ir en serie.
