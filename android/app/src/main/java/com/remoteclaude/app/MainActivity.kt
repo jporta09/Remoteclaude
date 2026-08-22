@@ -57,8 +57,9 @@ class MainActivity : AppCompatActivity() {
     /** Cuándo se fue a background (elapsedRealtime), para decidir si al volver forzar reconexión. */
     private var pausadoEnMs = 0L
 
-    /** Cuándo apagaste el modo Sel (elapsedRealtime), para la ventana de gracia de la copia OSC 52. */
-    @Volatile private var selDesactivadoEnMs = 0L
+    /** Cuándo se soltó el último arrastre en modo Sel (elapsedRealtime). Abre una ventana de UN SOLO
+     *  USO para aceptar la copia OSC 52 que tmux emite al soltar, y sólo esa (handshake, no toggle). */
+    @Volatile private var selDragSoltadoEnMs = 0L
 
     private lateinit var control: RemoteControl
     private lateinit var keyPair: java.security.KeyPair
@@ -144,6 +145,7 @@ class MainActivity : AppCompatActivity() {
             ocultarTeclado = { ocultarTeclado() },
             alCambiarTexto = { actualizarA11yTerminal() },
             copiaLaPediste = { copiaIniciadaPorVos() },
+            alSoltarSelDrag = { selDragSoltadoEnMs = android.os.SystemClock.elapsedRealtime() },
         )
         terminalView.apply {
             setTerminalViewClient(clients.vistaCliente)
@@ -409,6 +411,14 @@ class MainActivity : AppCompatActivity() {
     @androidx.annotation.VisibleForTesting
     fun forzarReconexionForTest() { if (::tabs.isInitialized) tabs.forzarReconexiones() }
 
+    /** Simula que soltaste un arrastre en modo Sel: abre la ventana del handshake OSC 52. */
+    @androidx.annotation.VisibleForTesting
+    fun marcarSelDragSoltadoForTest() { selDragSoltadoEnMs = android.os.SystemClock.elapsedRealtime() }
+
+    /** Prende el modo Sel SIN arrastre: para verificar que el toggle ya NO alcanza para copiar. */
+    @androidx.annotation.VisibleForTesting
+    fun activarSelForTest() { if (::terminalView.isInitialized) terminalView.setSelectionDragMode(true) }
+
     companion object {
         /** Código del pedido de permiso POST_NOTIFICATIONS (Android 13+). */
         private const val REQ_NOTIF = 72
@@ -417,8 +427,9 @@ class MainActivity : AppCompatActivity() {
          *  conexión quedó muerta sin RST). Un vistazo más corto no fuerza nada. */
         private const val UMBRAL_FORZAR_RECONEXION_MS = 3000L
 
-        /** Gracia tras apagar Sel para aceptar la copia OSC 52 de tmux (llega con retraso de red). */
-        private const val GRACIA_SELECCION_MS = 3000L
+        /** Ventana de un-solo-uso tras soltar un arrastre en Sel para aceptar EL OSC 52 de tmux (que
+         *  llega un instante después por el round-trip). Se consume al primer OSC 52 aceptado. */
+        private const val VENTANA_HANDSHAKE_MS = 1500L
     }
 
     // --- identidad del host ----------------------------------------------------
@@ -694,10 +705,6 @@ class MainActivity : AppCompatActivity() {
 
     private fun alCambiarSeleccion(activo: Boolean) {
         terminalView.setSelectionDragMode(activo)
-        // Al apagar Sel, dejar una ventana de gracia: la copia de tmux llega por OSC 52 un instante
-        // DESPUÉS de soltar (round-trip), así que un `copiaIniciadaPorVos()` estricto la perdería si
-        // apagaste Sel enseguida.
-        if (!activo) selDesactivadoEnMs = android.os.SystemClock.elapsedRealtime()
         Toast.makeText(
             this,
             if (activo) "Selección ON: arrastrá para marcar, soltá para copiar"
@@ -707,14 +714,24 @@ class MainActivity : AppCompatActivity() {
         terminalView.requestFocus()
     }
 
-    /** ¿La copia al portapapeles la iniciaste VOS? True si estás en modo Sel, hay una selección
-     *  activa, o soltaste el Sel hace muy poco (la copia de tmux llega por OSC 52 con un pequeño
-     *  retraso). Si es false, el OSC 52 lo escribió el host por su cuenta → se bloquea (política A). */
-    private fun copiaIniciadaPorVos(): Boolean =
-        terminalView.isSelectionDragMode() ||
-            terminalView.isSelectingText() ||
-            (selDesactivadoEnMs != 0L &&
-                android.os.SystemClock.elapsedRealtime() - selDesactivadoEnMs < GRACIA_SELECCION_MS)
+    /** ¿La copia al portapapeles la iniciaste VOS? (política A + handshake de un solo uso)
+     *  - `isSelectingText()`: hay una selección nativa (long-press) activa → la copia es tuya.
+     *  - Handshake: soltaste un arrastre en modo Sel hace < [VENTANA_HANDSHAKE_MS] → aceptamos el
+     *    PRIMER OSC 52 (el que emite tmux al soltar) y lo CONSUMIMOS (la ventana se cierra), así un
+     *    host que spamea OSC 52 no se cuela ni ahora ni después.
+     *  Ya NO se usa el toggle persistente `isSelectionDragMode()`: mientras estaba prendido, cualquier
+     *  OSC 52 del host pasaba (era el bypass que reportó seguridad). Si es false → se bloquea. */
+    private fun copiaIniciadaPorVos(): Boolean {
+        if (terminalView.isSelectingText()) return true
+        val soltado = selDragSoltadoEnMs
+        if (soltado != 0L &&
+            android.os.SystemClock.elapsedRealtime() - soltado < VENTANA_HANDSHAKE_MS
+        ) {
+            selDragSoltadoEnMs = 0L   // un solo uso: consumir la ventana
+            return true
+        }
+        return false
+    }
 
     private fun abrirOtraPantalla(destino: Class<*>) {
         startActivity(Intent(this, destino).apply {

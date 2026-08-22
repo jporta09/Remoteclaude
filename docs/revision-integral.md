@@ -768,5 +768,16 @@ antes de la siguiente). Progreso:
     payload atacante descartado, debounce activo); **e2e en emulador VERDE** (`AvisosE2ETest`, 2/2 contra el
     fixture con corte real de SSH: la línea escrita con el canal caído se entrega al reconectar, y no re-emite
     lo ya visto). **Falta:** prueba en el celu con el plugin 1.8.0 instalado.
-- **Fase 2** · OSC52 handshake — pendiente. **Fase 3** · persistencia — pendiente. **Fase 4** · DevOps
-  (releases públicos) — pendiente. **Fase 5** · menores UX — pendiente.
+- **Fase 2 · OSC52 handshake — app v1.22.0 (vc 32) · CÓDIGO LISTO, pendiente prueba en celu.**
+  - ✅ **Clúster E** cerrado: **2a** el bypass del Sel-toggle persistente se reemplazó por un **handshake de
+    un solo uso** — un callback mínimo `onSelDragReleased()` (default en `TerminalViewClient`, disparado en el
+    `ACTION_UP` del Sel-drag de `TerminalView`) sella un timestamp, y `copiaIniciadaPorVos` acepta el PRIMER
+    OSC 52 dentro de 1.5 s y lo **consume**; `isSelectionDragMode()` ya NO se consulta (era el bypass).
+    **2b** `ClipboardE2ETest` reescrito (afirma política A: host bloqueado, Sel-toggle-sin-arrastre bloqueado,
+    handshake copia) — reemplaza los 2 tests stale que afirmaban el comportamiento pre-política-A. **2c** e2e
+    ahora gatea también en **push a main** (el hueco por el que la política A entró sin correr el e2e). **2d**
+    toast de bloqueo reformulado (seguridad + cómo copiar con Sel).
+  - Verificado: compila (JDK17); **e2e en emulador VERDE** (`ClipboardE2ETest` 3/3 contra el fixture real).
+    **Falta:** prueba en el celu (que el Sel real siga copiando y el host siga bloqueado).
+- **Fase 3** · persistencia — pendiente. **Fase 4** · DevOps (releases públicos) — pendiente.
+  **Fase 5** · menores UX — pendiente.

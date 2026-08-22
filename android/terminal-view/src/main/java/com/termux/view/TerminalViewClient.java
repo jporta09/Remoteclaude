@@ -40,6 +40,14 @@ public interface TerminalViewClient {
 
     void copyModeChanged(boolean copyMode);
 
+    /**
+     * RemoteMarvin: se soltó un arrastre en modo Sel (ACTION_UP/CANCEL) — tmux copiará por OSC 52 en
+     * un instante. La app usa este evento PRECISO para abrir una ventana de un-solo-uso que distingue
+     * TU copia (justo tras soltar) de una que el host disparó por su cuenta. Default no-op para no
+     * romper otras implementaciones del cliente.
+     */
+    default void onSelDragReleased() {}
+
 
 
     boolean onKeyDown(int keyCode, KeyEvent e, TerminalSession session);

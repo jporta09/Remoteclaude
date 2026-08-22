@@ -676,6 +676,9 @@ public final class TerminalView extends View {
                 case MotionEvent.ACTION_CANCEL:
                     removeCallbacks(mSelAutoScroll);
                     sendMouseEventCode(event, TerminalEmulator.MOUSE_LEFT_BUTTON, false);
+                    // Handshake OSC 52: tmux va a copiar por OSC 52 en un instante. Avisar a la app
+                    // para que abra su ventana de un-solo-uso (distingue tu copia de una del host).
+                    if (mClient != null) mClient.onSelDragReleased();
                     break;
             }
             return true;

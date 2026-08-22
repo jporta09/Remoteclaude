@@ -12,6 +12,11 @@ name: E2E
 # dice "sí" no es un canario.
 on:
   pull_request:
+  # También en push a main: trabajo que entra por push DIRECTO (sin PR) —como entró la política A
+  # de OSC 52 (v1.20.0)— no gatillaba el e2e, así que un control de seguridad podía mergear sin que
+  # su test corriera nunca. Ahora corre en cada push a main (sigue gateado por MARVIN_RUNNER).
+  push:
+    branches: [main]
   # Para poder correrla a mano sin abrir un PR (y para verificar el job la primera vez).
   workflow_dispatch:
   # El canario semanal sí se conserva, y ahora sobre el runner de verdad: sin PRs de por

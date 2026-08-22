@@ -33,6 +33,9 @@ class TerminalClients(
     // Seguridad OSC 52: ¿esta copia la iniciaste VOS (Sel / selección)? Si no, la escribió el host
     // por su cuenta y NO se copia (defensa contra secuestro de portapapeles). Ver copiarBloqueado.
     private val copiaLaPediste: () -> Boolean = { true },
+    // Handshake OSC 52: se soltó un arrastre en modo Sel (tmux va a copiar por OSC 52 enseguida).
+    // Abre una ventana de UN SOLO USO para aceptar esa copia y sólo esa (ver copiaIniciadaPorVos).
+    private val alSoltarSelDrag: () -> Unit = {},
 ) {
 
     /** Vos pediste la copia (Sel / selección): al portapapeles, con el "Copiado" de siempre. */
@@ -49,7 +52,8 @@ class TerminalClients(
     private fun copiarBloqueado(text: String) {
         Toast.makeText(
             act,
-            "Bloqueé una copia del host (no fue con Sel): \"${previewSeguro(text, 48)}\"",
+            "Seguridad: bloqueé una copia al portapapeles que pidió el host. " +
+                "Para copiar vos, usá Sel. Intento: \"${previewSeguro(text, 40)}\"",
             Toast.LENGTH_LONG,
         ).show()
     }
@@ -185,6 +189,7 @@ class TerminalClients(
         override fun shouldUseCtrlSpaceWorkaround(): Boolean = false
         override fun isTerminalViewSelected(): Boolean = true
         override fun copyModeChanged(copyMode: Boolean) {}
+        override fun onSelDragReleased() = alSoltarSelDrag()
         override fun onKeyDown(keyCode: Int, e: KeyEvent?, session: TerminalSession?): Boolean = false
         override fun onKeyUp(keyCode: Int, e: KeyEvent?): Boolean = false
         override fun onLongPress(event: MotionEvent?): Boolean = false

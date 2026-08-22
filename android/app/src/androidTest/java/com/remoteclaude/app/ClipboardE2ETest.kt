@@ -1,24 +1,29 @@
 package com.remoteclaude.app
 
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import androidx.test.core.app.ActivityScenario
-import androidx.test.espresso.Espresso.onView
-import androidx.test.espresso.assertion.ViewAssertions.matches
-import androidx.test.espresso.matcher.RootMatchers.isDialog
-import androidx.test.espresso.matcher.ViewMatchers.isDisplayed
-import androidx.test.espresso.matcher.ViewMatchers.withText
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import com.google.common.truth.Truth.assertThat
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 
 /**
- * OSC 52: el HOST puede pedir escribir el portapapeles del teléfono. Para una selección
- * de tmux es lo esperado, pero el buffer admite 1 MB, así que arriba de cierto tamaño la
- * app tiene que pedir confirmación en vez de copiar en silencio.
+ * OSC 52 — política A + handshake (v1.20.0 → v1.22.0). El HOST puede pedir escribir el portapapeles del
+ * teléfono por OSC 52, pero un proceso no confiable (un Claude inyectado, la salida de un archivo) podría
+ * secuestrarlo. Política A: **sólo se copia si la copia la iniciaste VOS**.
+ *
+ * "Vos" ya NO es "el modo Sel está prendido" (ese toggle persistente era el bypass que reportó seguridad):
+ * es una **ventana de un-solo-uso** que se abre al SOLTAR un arrastre en Sel (cuando tmux está por emitir
+ * su OSC 52) y se consume al primer OSC 52. Estos tests fijan ese contrato:
+ *  - host OSC 52 sin handshake → BLOQUEADO (no toca el portapapeles);
+ *  - Sel prendido SIN arrastre → sigue BLOQUEADO (bypass cerrado);
+ *  - tras soltar el arrastre → el OSC 52 de tmux SÍ copia.
  */
 @RunWith(AndroidJUnit4::class)
 class ClipboardE2ETest {
@@ -52,39 +57,74 @@ class ClipboardE2ETest {
 
     @After fun tearDown() { runCatching { fx.killAllTmux() } }
 
-    @Test fun unOsc52Chico_copiaAlPortapapeles() {
-        // Debajo del umbral: se copia (con aviso atribuido al host), verificamos el contenido.
+    /** Envía un OSC 52 del host que intenta copiar `payload`, seguido de un marcador; espera a que el
+     *  marcador aparezca en el panel (así el emulador ya procesó el OSC 52 que iba antes en el stream). */
+    private fun enviarOsc52DelHost(scenario: ActivityScenario<MainActivity>, payload: String, marcador: String) {
+        val cmd = "printf '\\033]52;c;%s\\a' \"\$(printf %s '$payload' | base64 -w0)\"; echo $marcador\n"
+        scenario.onActivity { a ->
+            val b = cmd.toByteArray(); a.currentSessionForTest()?.write(b, 0, b.size)
+        }
+        await(what = "el marcador $marcador llega al panel (OSC 52 ya procesado)") {
+            fx.capturePane("term 1").contains(marcador)
+        }
+    }
+
+    private fun portapapeles(scenario: ActivityScenario<MainActivity>): String {
+        var got = ""
+        scenario.onActivity { a ->
+            got = a.getSystemService(ClipboardManager::class.java)
+                ?.primaryClip?.getItemAt(0)?.text?.toString().orEmpty()
+        }
+        return got
+    }
+
+    private fun fijarSentinela(scenario: ActivityScenario<MainActivity>, s: String) {
+        scenario.onActivity { a ->
+            a.getSystemService(ClipboardManager::class.java)
+                ?.setPrimaryClip(ClipData.newPlainText("x", s))
+        }
+    }
+
+    @Test fun hostOsc52SinHandshake_seBloquea() {
         ActivityScenario.launch<MainActivity>(intent()).use { scenario ->
             await(what = "sesión creada") { fx.tmuxSessions().contains("term 1") }
-            val marca = "MARVIN_OSC52_OK"
+            fijarSentinela(scenario, "SENTINELA")
+            val n = System.nanoTime()
+            enviarOsc52DelHost(scenario, "SECUESTRO_$n", "FIN_$n")
+            // Sin que vos iniciaras la copia, el OSC 52 del host NO toca el portapapeles.
+            assertThat(portapapeles(scenario)).isEqualTo("SENTINELA")
+        }
+    }
+
+    @Test fun selPrendidoSinArrastre_tampocoCopia() {
+        // El bypass viejo: con Sel ON, cualquier OSC 52 del host pasaba. Ahora el toggle NO alcanza:
+        // hace falta el evento de SOLTAR un arrastre. Prendemos Sel y el host sigue bloqueado.
+        ActivityScenario.launch<MainActivity>(intent()).use { scenario ->
+            await(what = "sesión creada") { fx.tmuxSessions().contains("term 1") }
+            scenario.onActivity { it.activarSelForTest() }
+            fijarSentinela(scenario, "SENTINELA")
+            val n = System.nanoTime()
+            enviarOsc52DelHost(scenario, "SECUESTRO_$n", "FIN_$n")
+            assertThat(portapapeles(scenario)).isEqualTo("SENTINELA")
+        }
+    }
+
+    @Test fun trasSoltarElArrastre_elOsc52DeTmuxCopia() {
+        ActivityScenario.launch<MainActivity>(intent()).use { scenario ->
+            await(what = "sesión creada") { fx.tmuxSessions().contains("term 1") }
+            fijarSentinela(scenario, "SENTINELA")
+            val n = System.nanoTime()
+            val marca = "MARVIN_OK_$n"
             val cmd = "printf '\\033]52;c;%s\\a' \"\$(printf %s '$marca' | base64 -w0)\"\n"
             scenario.onActivity { a ->
                 val b = cmd.toByteArray(); a.currentSessionForTest()?.write(b, 0, b.size)
             }
-            await(what = "el host escribió el portapapeles") {
-                var got = ""
-                scenario.onActivity { a ->
-                    got = a.getSystemService(android.content.ClipboardManager::class.java)
-                        ?.primaryClip?.getItemAt(0)?.text?.toString().orEmpty()
-                }
-                got == marca
+            // Mantener la ventana del handshake abierta mientras el OSC 52 hace el round-trip por tmux:
+            // simula que acabás de soltar un arrastre en Sel. El primer OSC 52 aceptado copia.
+            await(what = "la copia iniciada por vos llega al portapapeles") {
+                scenario.onActivity { it.marcarSelDragSoltadoForTest() }
+                portapapeles(scenario) == marca
             }
-        }
-    }
-
-    @Test fun unOsc52Gigante_pideConfirmacion() {
-        ActivityScenario.launch<MainActivity>(intent()).use { scenario ->
-            await(what = "sesión creada") { fx.tmuxSessions().contains("term 1") }
-            // 150 KB decodificados: por encima del umbral de confirmación
-            val cmd = "printf '\\033]52;c;%s\\a' \"\$(head -c 150000 /dev/zero | base64 -w0)\"\n"
-            scenario.onActivity { a ->
-                val b = cmd.toByteArray()
-                a.currentSessionForTest()?.write(b, 0, b.size)
-            }
-            Thread.sleep(6000)
-            onView(withText("¿Copiar al portapapeles?"))
-                .inRoot(isDialog())
-                .check(matches(isDisplayed()))
         }
     }
 }
