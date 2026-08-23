@@ -6,6 +6,7 @@ FROM debian:bookworm-slim
 RUN apt-get update && apt-get install -y --no-install-recommends \
         openssh-server tmux ca-certificates procps \
         python3 python3-websockets \
+        iptables \
     && rm -rf /var/lib/apt/lists/*
 
 RUN useradd -m -s /bin/bash tester && echo 'tester:e2e' | chpasswd
@@ -33,9 +34,17 @@ RUN mkdir -p /home/tester/.local/bin \
     && chmod +x /home/tester/.local/bin/marvin-stt \
     && chown -R tester:tester /home/tester/.local
 
-# Corta la conexión de forma determinista (test de reconexión)
+# Corta la conexión de forma determinista (test de reconexión): mata el sshd de la sesión = cierre
+# LIMPIO (el kernel manda FIN/RST, el read se desbloquea con EOF).
 RUN printf '#!/bin/bash\n(sleep 1; pkill -u tester sshd) &\n' > /usr/local/bin/e2e-drop-ssh \
     && chmod +x /usr/local/bin/e2e-drop-ssh
+
+# Simula PATH-DEATH (half-open SIN RST): DROP en el puerto 22 → los paquetes se descartan en silencio,
+# la conexión existente queda medio-abierta y los connects nuevos (incl. el probe) fallan por timeout.
+# Es SELF-RESTORING: el DROP también corta el canal de control FixtureSsh, así que se quita solo tras N s
+# (requiere cap NET_ADMIN, ver docker-compose). Necesita iptables (instalado arriba).
+RUN printf '#!/bin/bash\n(sleep 1; iptables -A INPUT -p tcp --dport 22 -j DROP; sleep %s; iptables -D INPUT -p tcp --dport 22 -j DROP) &\n' "${E2E_BLACKHOLE_SECS:-30}" > /usr/local/bin/e2e-blackhole-ssh \
+    && chmod +x /usr/local/bin/e2e-blackhole-ssh
 
 # Las host keys las genera el postinst de Debian AL CONSTRUIR, o sea que quedarían
 # idénticas en las dos instancias. Se borran acá y se generan al arrancar cada

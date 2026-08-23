@@ -5,6 +5,8 @@ services:
     build: ./fixture
     container_name: marvin-e2e-fixture
     ports: ["127.0.0.1:2222:22"]
+    # NET_ADMIN: para que `e2e-blackhole-ssh` pueda hacer iptables DROP (simula path-death/half-open).
+    cap_add: ["NET_ADMIN"]
 
   fixture-rotated:
     build: ./fixture

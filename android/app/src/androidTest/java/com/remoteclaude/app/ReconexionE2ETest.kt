@@ -107,6 +107,39 @@ class ReconexionE2ETest {
         }
     }
 
+    @Test fun unHalfOpenEnPrimerPlano_seDetectaYReconecta() {
+        // Half-open (path-death SIN RST) estando EN PRIMER PLANO (F-SRE-1). Antes quedaba mudo (el
+        // keepalive sólo escribía; forzarReconexion sólo dispara al volver de background). Ahora el
+        // heurístico "mandé input y no volvió el eco" + un probe FUERA DE BANDA lo detectan y reconectan
+        // sin ir a background. `e2e-blackhole-ssh` hace un iptables DROP self-restoring (~30s).
+        ActivityScenario.launch<MainActivity>(intent()).use { esc ->
+            esperar("la sesión creada") { fixture.tmuxSessions().contains("term 1") }
+            val m0 = "pre-${System.currentTimeMillis()}"
+            esc.onActivity { a -> val c = "echo $m0\n".toByteArray(); a.currentSessionForTest()?.write(c, 0, c.size) }
+            esperar("que la sesión funciona antes del blackhole") { fixture.capturePane("term 1").contains(m0) }
+
+            fixture.exec("e2e-blackhole-ssh")     // path-death por ~30s, self-restoring
+            Thread.sleep(2_000)
+
+            // UN solo input para gatillar el heurístico (mandaste algo, no vuelve el eco). NO seguir
+            // escribiendo: si tipearas sin parar, el timer de "sin eco" nunca acumularía y no dispararía.
+            esc.onActivity { a -> val c = "x".toByteArray(); a.currentSessionForTest()?.write(c, 0, c.size) }
+
+            // Esperar a que detecte (heurístico ~10-17s) + reconecte cuando el blackhole se auto-restaura
+            // (~30s). Durante ese rato NO escribimos (para no resetear el timer). La Activity está RESUMED
+            // todo el tiempo: no se va a background, que es lo que prueba el fix.
+            Thread.sleep(38_000)
+
+            // Ya restaurado y (si el fix anda) reconectado: lo que tipees ahora tiene que llegar.
+            val marca = "post-halfopen-${System.currentTimeMillis()}"
+            esperar("que tras el half-open la app reconecte y el comando llegue", 45_000) {
+                esc.onActivity { a -> val c = "echo $marca\n".toByteArray(); a.currentSessionForTest()?.write(c, 0, c.size) }
+                fixture.capturePane("term 1").contains(marca)
+            }
+            assertThat(fixture.tmuxSessions().count { it == "term 1" }).isEqualTo(1)
+        }
+    }
+
     private fun esperar(que: String, ms: Long = 30_000, cond: () -> Boolean) {
         val fin = System.currentTimeMillis() + ms
         while (System.currentTimeMillis() < fin) {

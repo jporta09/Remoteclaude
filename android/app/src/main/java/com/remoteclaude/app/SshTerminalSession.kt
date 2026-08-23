@@ -79,6 +79,13 @@ class SshTerminalSession(
     @Volatile private var sshSession: Session? = null
     @Volatile private var stdin: OutputStream? = null
 
+    // Detección de half-open EN PRIMER PLANO (F-SRE-1): si mandaste input y no volvió NADA (ni el eco)
+    // por un rato, la conexión puede estar medio-abierta. En una conexión sana el eco vuelve al toque,
+    // así que `ultimoEnvio > ultimoByte` sostenido es señal de freeze. No se SONDEA la Connection (eso
+    // deadlockea, ver forzarReconexion) — se hace un probe fuera de banda (socket nuevo, ver sondear...).
+    @Volatile private var ultimoByteMs = 0L    // último input REAL recibido del remoto
+    @Volatile private var ultimoEnvioMs = 0L   // último input que mandó el usuario
+
     private val reconnectLock = Object()
     @Volatile private var waitingToReconnect = false
     // "Reconectá YA" (romper el backoff). Flag para que sea race-safe: si el pedido llega ANTES de
@@ -189,17 +196,33 @@ class SshTerminalSession(
                 reconexionAnunciada = false   // el próximo corte volverá a anunciar una vez
                 avisoVencidoDado = false      // idem para el aviso de acceso vencido
                 cambiarEstado(Estado.CONECTADO)
+                // Baseline limpio de los timers de half-open al (re)conectar.
+                val ahoraConn = System.currentTimeMillis()
+                ultimoByteMs = ahoraConn
+                ultimoEnvioMs = ahoraConn
 
                 // Keepalive: tráfico periódico para que el NAT/firewall (sobre todo en redes
-                // corporativas) no descarte el mapeo y la conexión no quede "half-open". Si el
-                // ping falla, la conexión está muerta -> cerrarla desbloquea el read y reconecta.
+                // corporativas) no descarte el mapeo y la conexión no quede "half-open". `sendIgnorePacket`
+                // sólo ESCRIBE (no espera respuesta), así que NO detecta half-open — para eso, cada ciclo
+                // corremos además el detector de half-open en primer plano (probe fuera de banda, F-SRE-1).
                 // Atado a 'c': cuando reconectamos (conn cambia) o cerramos, este hilo termina.
                 val thisConn = c
                 thread(name = "ssh-keepalive", isDaemon = true) {
                     try {
                         while (!userClosed && conn === thisConn) {
-                            Thread.sleep(10000)
-                            if (conn === thisConn) thisConn.sendIgnorePacket()
+                            Thread.sleep(KEEPALIVE_MS)
+                            if (conn !== thisConn) break
+                            thisConn.sendIgnorePacket()
+                            // Half-open en PRIMER PLANO: si mandaste input y no volvió nada (ni el eco),
+                            // sondeamos alcance con un socket NUEVO (NO la Connection: eso deadlockea).
+                            if (deberiaSondear()) {
+                                if (!sondearAlcanzable()) {
+                                    forzarReconexion()   // inalcanzable -> cierre directo -> reconecta
+                                    break
+                                } else {
+                                    ultimoByteMs = System.currentTimeMillis()   // vivo (sin eco): reset
+                                }
+                            }
                         }
                     } catch (_: Exception) {
                         if (conn === thisConn) closeCurrent()
@@ -211,6 +234,7 @@ class SshTerminalSession(
                 while (!userClosed) {
                     val n = out.read(buf)
                     if (n <= 0) break     // -1 = fin; 0 no debería pasar, pero no lo tratamos como dato
+                    ultimoByteMs = System.currentTimeMillis()   // input real del remoto (para el detector)
                     onTransportInput(buf, 0, n)
                 }
             } catch (e: Exception) {
@@ -326,10 +350,26 @@ class SshTerminalSession(
         stdin = null
     }
 
+    /** ¿Correr el probe de half-open? Sólo en primer plano y conectado, y si mandaste input pero no
+     *  volvió NADA (ni el eco) por más de [UMBRAL_SIN_ECO_MS]. Ver [sospechaHalfOpen]. */
+    private fun deberiaSondear(): Boolean =
+        sospechaHalfOpen(
+            EstadoApp.enPrimerPlano, estado == Estado.CONECTADO,
+            ultimoEnvioMs, ultimoByteMs, System.currentTimeMillis(), UMBRAL_SIN_ECO_MS,
+        )
+
+    /** Probe FUERA DE BANDA (socket nuevo, NO la Connection): ¿se alcanza el remoto? Resuelve el
+     *  endpoint (con Tailscale es 127.0.0.1:<forward>) y lee el banner SSH end-to-end. */
+    private fun sondearAlcanzable(): Boolean {
+        val (h, p) = try { TailscaleBridge.endpoint(host, port) } catch (_: Exception) { return false }
+        return sondearAlcanzableEn(h, p, PROBE_TIMEOUT_MS.toInt())
+    }
+
     override fun writeToTransport(data: ByteArray, offset: Int, count: Int) {
         // Corre en el hilo escritor del base. Si la conexión está caída, NO propagamos
         // la excepción: así el hilo escritor sigue vivo y drena la cola (evita que el
         // write() del main thread se bloquee), y al reconectar usa el stdin nuevo.
+        ultimoEnvioMs = System.currentTimeMillis()   // input del usuario (para el detector de half-open)
         val s = stdin ?: return
         try {
             s.write(data, offset, count)
@@ -381,4 +421,38 @@ class SshTerminalSession(
         val b = message.toByteArray(Charsets.UTF_8)
         onTransportInput(b, 0, b.size)
     }
+
+    private companion object {
+        const val KEEPALIVE_MS = 10_000L        // cada cuánto pinguea el NAT y corre el detector
+        const val UMBRAL_SIN_ECO_MS = 7_000L    // input sin respuesta > esto -> sospechar half-open
+        const val PROBE_TIMEOUT_MS = 5_000L     // connect+read del probe fuera de banda
+    }
+}
+
+/** ¿Se sospecha half-open? Puro y testeable: mandaste input DESPUÉS del último byte recibido y ya
+ *  pasó [umbralMs] sin que volviera nada (ni el eco). Sólo aplica en primer plano y conectado. */
+fun sospechaHalfOpen(
+    enPrimerPlano: Boolean,
+    conectado: Boolean,
+    ultimoEnvioMs: Long,
+    ultimoByteMs: Long,
+    now: Long,
+    umbralMs: Long,
+): Boolean =
+    enPrimerPlano && conectado &&
+        ultimoEnvioMs > ultimoByteMs &&
+        (now - ultimoEnvioMs) > umbralMs
+
+/** Probe de alcance FUERA DE BANDA: abre un socket NUEVO a host:port y lee ≥1 byte del banner SSH
+ *  (bytes end-to-end del remoto — con Tailscale, un connect a secas al forward local no prueba nada).
+ *  true = alcanzable; false = connect/read timeout o EOF. `use{}` + `soTimeout` garantizan que NO cuelga.
+ *  Top-level para testear sin instanciar la sesión. */
+fun sondearAlcanzableEn(host: String, port: Int, timeoutMs: Int): Boolean = try {
+    java.net.Socket().use { s ->
+        s.connect(java.net.InetSocketAddress(host, port), timeoutMs)
+        s.soTimeout = timeoutMs
+        s.getInputStream().read() >= 0   // ≥1 byte del banner = remoto vivo; -1 (EOF) o excepción = no
+    }
+} catch (_: Exception) {
+    false
 }
