@@ -245,13 +245,16 @@ class TerminalClients(
  *  Top-level para testearla sin Android. */
 fun hayPromptDeDecision(texto: String): Boolean {
     val cursor = Regex("""^\s*❯\s*\d+[.)]\s+\S""")
-    val opcion = Regex("""^\s*[❯>]?\s*\d+[.)]\s+\S""")
     val ultimas = texto.split("\n").map { it.trimEnd() }.filter { it.isNotBlank() }.takeLast(10)
     val tieneCursor = ultimas.any { cursor.containsMatchIn(it) }
-    val opciones = ultimas.count { opcion.containsMatchIn(it) }
-    val footerCancelar = ultimas.any { it.contains("to cancel", ignoreCase = true) }
-    // el cursor ❯-sobre-opción es específico de Claude; corroborado por el footer o una 2ª opción
-    return tieneCursor && (footerCancelar || opciones >= 2)
+    // Footer con el vocabulario de control de Claude (`to cancel/confirm/amend/explain`). Es el sello
+    // que distingue el selector de Claude de un menú numerado CUALQUIERA (gum/fzf/whiptail que también
+    // pintan `❯ 1. …`): antes bastaba con "2 opciones numeradas", y esos TUIs disparaban el modo lectura
+    // de gusto (G-U5). NO incluye "to interrupt" (ese es el spinner, no una decisión).
+    val footerClaude = ultimas.any {
+        Regex("""to (cancel|confirm|amend|explain)""", RegexOption.IGNORE_CASE).containsMatchIn(it)
+    }
+    return tieneCursor && footerClaude
 }
 
 /** Snippet de una línea para el preview de OSC 52 (mostrar QUÉ copió el host, no sólo el conteo):

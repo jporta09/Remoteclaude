@@ -825,8 +825,18 @@ antes de la siguiente). Progreso:
     <1s). Verificado: **8 unit + e2e blackhole real** (iptables DROP self-restoring en el fixture, corrida
     envuelta en `timeout 600`) — 4/4 verde, detecta en foreground y recupera, sin regresión de los 3 tests de
     corte-limpio. Lección guardada: leer las advertencias del código antes de tocar la reconexión.
-  - ⏸️ DIFERIDO aún: **5d** cap 6h/reboot del FGS (forward-looking, hoy exento con targetSdk 34),
-    **5h** modo lectura falso-positivo (sev 1, consecuencia mínima).
+  - ✅ **5d** cap 6h/reboot del FGS (v1.27.0): es forward-looking y `Service.onTimeout` NO existe en el SDK
+    34, así que no hay código para agregar hoy (estamos EXENTOS con targetSdk 34). Se DOCUMENTÓ el requisito
+    en `AvisosService` para cuando se suba a targetSdk 35+ (overridear `onTimeout` → parar limpio + avisar; y
+    NO auto-arrancar en boot — el modelo es reabrir la app). §1.5: el cap es real pero el código sería dead
+    code hoy; la doc es lo correcto.
+  - ✅ **5h** modo lectura falso-positivo (v1.27.0): `hayPromptDeDecision` ahora REQUIERE el footer con el
+    vocabulario de control de Claude (`to cancel/confirm/amend/explain`) — antes bastaba "≥2 opciones
+    numeradas" y un menú numerado CUALQUIERA (gum/fzf/whiptail con `❯ 1. …`) bajaba el teclado de gusto. Las
+    3 capturas REALES de Claude siguen disparando (todas tienen el footer); nuevo unit para el menú no-Claude.
+
+**§G CERRADO** (2026-08-23): todo el backlog de la 3ª pasada implementado, con CI/e2e/unit verde y las
+Fases 1-5 validadas on-device (salvo 5c/5e/5d/5h, shipeados tras la validación del stack de avisos).
 
 ### G.5 · Validación on-device (2026-08-23)
 

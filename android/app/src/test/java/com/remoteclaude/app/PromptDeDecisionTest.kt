@@ -74,4 +74,16 @@ class PromptDeDecisionTest {
         val txt = "❯ 1. Yes\n  2. No\n Esc to cancel\n$relleno"
         assertThat(hayPromptDeDecision(txt)).isFalse()
     }
+
+    @Test fun `un menu numerado no-Claude (gum-fzf, sin footer de Claude) NO dispara`() {
+        // ❯ sobre opciones numeradas pero SIN el footer de control de Claude: es un TUI cualquiera
+        // (gum/fzf/whiptail), no un selector de decisión de Claude. Antes disparaba por "2 opciones" (G-U5).
+        val txt = """
+            Elegí un archivo:
+            ❯ 1. informe.pdf
+              2. datos.csv
+              3. notas.txt
+        """.trimIndent()
+        assertThat(hayPromptDeDecision(txt)).isFalse()
+    }
 }

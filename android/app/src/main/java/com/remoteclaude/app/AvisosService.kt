@@ -104,6 +104,15 @@ class AvisosService : Service() {
             .addAction(Notification.Action.Builder(null, "Detener", detener).build())
             .setOngoing(true)
             .build()
+        // FORWARD-LOOKING (5d, §G): un FGS `dataSync` en Android 15 (API 35) tiene un CAP de ~6h/día —
+        // el sistema lo mata con Service.onTimeout(). HOY estamos EXENTOS porque targetSdk = 34 (el cap
+        // aplica sólo con targetSdk ≥ 35). No se puede manejar todavía: `Service.onTimeout` no existe en
+        // el SDK 34, así que overridearlo no compila.
+        // AL SUBIR targetSdk a 35+: (a) overridear `onTimeout(startId, fgsType)` para parar limpio y
+        // AVISAR ("los avisos en segundo plano se detuvieron —límite del sistema—, reabrí la app"), no
+        // morir en silencio; (b) NO agregar un receiver de RECEIVE_BOOT_COMPLETED para auto-arrancar tras
+        // reboot —arrancar un FGS sin que el usuario abra la app es agresivo y necesita reconstruir host/
+        // clave; el modelo es que el usuario reabre la app y reconecta— salvo que se decida lo contrario.
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
             startForeground(NOTIF_FG_ID, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
         } else {
