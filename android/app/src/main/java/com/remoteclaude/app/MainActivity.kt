@@ -127,7 +127,12 @@ class MainActivity : AppCompatActivity() {
         // ADITIVO: si el host tiene "Avisos en segundo plano", el canal lo mantiene vivo AvisosService
         // (foreground service, sobrevive a background/cierre → entrega en tiempo real) y acá NO lo
         // lanzamos, para no duplicar el tail. Si no, lo corre la Activity best-effort (default de siempre).
-        if (avisosBg) {
+        //
+        // "Detener" sticky: en un arranque FRESCO (no rotación) re-armamos, así un "Detener" previo no
+        // queda pegado. Si venís de recrear la Activity (rotación) y paraste los avisos, se respeta: NO
+        // se revive el FGS; cae al best-effort de la Activity.
+        if (savedInstanceState == null) AvisosService.rearmar(this)
+        if (avisosBg && !AvisosService.detenidoPorUsuario(this)) {
             AvisosService.iniciar(this, host, port, user, hostLabel)
         } else {
             AvisosService.detener(this)

@@ -810,10 +810,20 @@ antes de la siguiente). Progreso:
     **registran en el Diagnóstico** (no cambia tipos ni callers; encaja con la observabilidad de la tanda);
     **5b** target táctil del ⓘ ≥44dp (era ~21dp); **5a** helper inline bajo el toggle "🔔 Avisos en segundo
     plano" (qué hace / por qué prenderlo).
-  - ⏸️ DIFERIDO a una tanda CON prueba en el celu (tocan FGS/reconexión, riesgo alto sin validar on-device):
-    **5c** "Detener" del FGS sticky ante rotación; **5e** half-open en primer plano (F-SRE-1, sev 2); **5d**
-    cap 6h/reboot del FGS (forward-looking, hoy exento con targetSdk 34); **5h** modo lectura falso-positivo
-    (sev 1, consecuencia mínima).
+  - ✅ **5c** (v1.25.0): **"Detener" del FGS sticky** — al apretarlo se persiste un flag (`avisos/detenido`,
+    con extra `porUsuario` para distinguirlo del stop programático); `MainActivity.onCreate` re-arma en el
+    arranque FRESCO (`savedInstanceState==null`) y respeta el flag en la recreación (rotación), así el FGS ya
+    no revive con el toggle ON tras un Detener. Compila + unit verdes.
+  - ❌ **5e** half-open en primer plano (F-SRE-1, sev 2) — **INTENTADO Y REVERTIDO.** El fix propuesto
+    (keepalive con `ping()` acotado por timeout en vez de `sendIgnorePacket`) reintrodujo un **deadlock que el
+    propio código ya documentaba** en `forzarReconexion`: "cualquier operación de trilead toma el lock del
+    `Connection` y se cuelga contra el server congelado, y después `closeCurrent()` no puede tomar ese lock
+    (deadlock, verificado)". El e2e de half-open colgó 90 min por esto. Detectar half-open en FOREGROUND sin
+    sondear la Connection necesita otro mecanismo (probe en conexión aparte / read-timeout / heurística de
+    último-byte-recibido) → **queda para rediseño**. Lección: leer las advertencias del código antes de tocar
+    la reconexión.
+  - ⏸️ DIFERIDO aún: **5e** (rediseño), **5d** cap 6h/reboot del FGS (forward-looking, hoy exento con
+    targetSdk 34), **5h** modo lectura falso-positivo (sev 1, consecuencia mínima).
 
 ### G.5 · Validación on-device (2026-08-23)
 

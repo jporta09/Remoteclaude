@@ -30,6 +30,11 @@ class AvisosService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACCION_DETENER) {
+            // Si lo paraste VOS (botón "Detener" de la notif), recordalo: así recrear la Activity
+            // (rotación) NO revive el service con el toggle ON. Se re-arma en el próximo arranque
+            // fresco de la app (ver AvisosService.rearmar en MainActivity.onCreate). Si en cambio lo
+            // paró la app (toggle off / cambio de host), NO se marca.
+            if (intent.getBooleanExtra("porUsuario", false)) marcarDetenido(true)
             detenerTodo()
             return START_NOT_STICKY
         }
@@ -76,6 +81,9 @@ class AvisosService : Service() {
         stopSelf()
     }
 
+    private fun marcarDetenido(v: Boolean) =
+        getSharedPreferences(PREFS, MODE_PRIVATE).edit().putBoolean(KEY_DETENIDO, v).apply()
+
     private fun arrancarEnPrimerPlano(etiqueta: String) {
         asegurarCanal()
         val abrir = PendingIntent.getActivity(
@@ -83,7 +91,9 @@ class AvisosService : Service() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
         val detener = PendingIntent.getService(
-            this, 2, Intent(this, AvisosService::class.java).setAction(ACCION_DETENER),
+            this, 2,
+            Intent(this, AvisosService::class.java).setAction(ACCION_DETENER)
+                .putExtra("porUsuario", true),   // lo apretaste VOS -> queda "detenido" hasta re-armar
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
         val n = Notification.Builder(this, CANAL_FG)
@@ -112,6 +122,17 @@ class AvisosService : Service() {
         private const val CANAL_FG = "avisos-fg"
         private const val NOTIF_FG_ID = 4208
         private const val ACCION_DETENER = "com.remoteclaude.app.DETENER_AVISOS"
+        private const val PREFS = "avisos"
+        private const val KEY_DETENIDO = "detenido"
+
+        /** ¿El usuario paró los avisos con "Detener"? (para no revivir el FGS al recrear la Activity). */
+        fun detenidoPorUsuario(ctx: Context): Boolean =
+            ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean(KEY_DETENIDO, false)
+
+        /** Re-arma los avisos (los des-"detiene"): se llama en el arranque FRESCO de la app, así un
+         *  "Detener" no queda pegado para siempre — abrir la app de nuevo vuelve a habilitarlos. */
+        fun rearmar(ctx: Context) =
+            ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putBoolean(KEY_DETENIDO, false).apply()
 
         /** Prende el service para un host (idempotente). */
         fun iniciar(ctx: Context, host: String, port: Int, user: String, label: String) {
