@@ -814,3 +814,12 @@ antes de la siguiente). Progreso:
     **5c** "Detener" del FGS sticky ante rotación; **5e** half-open en primer plano (F-SRE-1, sev 2); **5d**
     cap 6h/reboot del FGS (forward-looking, hoy exento con targetSdk 34); **5h** modo lectura falso-positivo
     (sev 1, consecuencia mínima).
+
+### G.5 · Validación on-device (2026-08-23)
+
+El usuario probó en el celular (con `claude-personal`, app v1.24.1 + plugin 1.8.0) y **anduvo todo**:
+avisos "Claude te espera" (incluido plan-mode/R1 con debounce), toggle "Avisos en segundo plano" + su
+helper, ⓘ del Diagnóstico con el estado del canal, dictado (cerrar pestaña mientras dictás), y OSC 52 (Sel
+copia, host bloqueado; el fix del re-envío en cambio de pestaña, v1.24.1). Las Fases 1-4 + la parte segura
+de la 5 quedan **confirmadas en uso real**. Pendiente sólo lo DIFERIDO de la Fase 5 (5c/5e/5d/5h), que ya
+es elegible ahora que el stack de avisos está validado.
