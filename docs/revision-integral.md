@@ -778,7 +778,11 @@ antes de la siguiente). Progreso:
     ahora gatea también en **push a main** (el hueco por el que la política A entró sin correr el e2e). **2d**
     toast de bloqueo reformulado (seguridad + cómo copiar con Sel).
   - Verificado: compila (JDK17); **e2e en emulador VERDE** (`ClipboardE2ETest` 3/3 contra el fixture real).
-    **Falta:** prueba en el celu (que el Sel real siga copiando y el host siga bloqueado).
+  - **Fix en uso real (v1.24.1):** al copiar con Sel y cambiar de pestaña saltaba el cartel de "copia
+    bloqueada" — tmux (`set-clipboard on`) re-emite el MISMO contenido al re-adjuntar/redibujar, y ese
+    OSC 52 llegaba fuera de la ventana del handshake. Fix: si el contenido bloqueado es IDÉNTICO al que ya
+    está en el portapapeles, es un re-envío inofensivo → se ignora en silencio (sin debilitar seguridad:
+    un atacante no gana nada re-escribiendo lo mismo). La copia siempre funcionó; era falsa alarma.
 - **Fase 3 · Robustez de la persistencia del Diagnóstico — app v1.23.0 (vc 33) · CÓDIGO LISTO, pendiente celu.**
   - ✅ **Clúster B** cerrado: **3a** el acantilado de 64 KB (`f.writeText("")` borraba TODO) ahora **rota
     conservando la última mitad**; **3b** `persistir` es thread-safe (lock `archivoLock` que serializa el

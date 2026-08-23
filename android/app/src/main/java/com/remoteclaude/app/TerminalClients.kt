@@ -50,6 +50,15 @@ class TerminalClients(
      *  confiable— podría secuestrarte el portapapeles en silencio. Se avisa con un preview de lo que
      *  se intentó meter, para que lo notes. */
     private fun copiarBloqueado(text: String) {
+        // Re-envío inofensivo: tmux (set-clipboard on) re-emite el MISMO contenido que acabás de copiar
+        // al cambiar de pestaña o redibujar (el attachSession reajusta el tamaño y tmux re-sincroniza).
+        // Ese OSC 52 llega fuera de la ventana del handshake y caía acá, alarmando de gusto. Si es
+        // IDÉNTICO a lo que ya está en el portapapeles, no es un secuestro (el atacante no gana nada
+        // re-escribiendo lo mismo): lo ignoramos en silencio, sin cartel.
+        val actual = try {
+            act.getSystemService(ClipboardManager::class.java)?.primaryClip?.getItemAt(0)?.text?.toString()
+        } catch (_: Exception) { null }
+        if (text == actual) return
         Toast.makeText(
             act,
             "Seguridad: bloqueé una copia al portapapeles que pidió el host. " +
