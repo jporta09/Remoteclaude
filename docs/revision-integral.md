@@ -754,7 +754,7 @@ eliminar la ventana de gracia — §1.5 a su conclusión.
 El plan implementa TODO el backlog §G.2 en 5 fases, cada una un release separado (se prueba en el celu
 antes de la siguiente). Progreso:
 
-- **Fase 1 · Canal de alerta honesto — app v1.21.0 (vc 31) + plugin 1.8.0 · CÓDIGO LISTO, pendiente prueba en celu.**
+- **Fase 1 · Canal de alerta honesto — app v1.21.0 (vc 31) + plugin 1.8.0 · SHIPPED y VALIDADO on-device (§G.5).**
   - ✅ **Clúster A** cerrado en código: **1a** cursor por `ts` (recupera el hueco de reconexión, sin
     re-emit tras rotación) + siembra para no re-emitir historial; **1b** salud del canal en `Diagnostico`
     (categoría `avisos`: conectado/línea/caído — hace visible el silencio del config-scoping en la app);
@@ -768,7 +768,7 @@ antes de la siguiente). Progreso:
     payload atacante descartado, debounce activo); **e2e en emulador VERDE** (`AvisosE2ETest`, 2/2 contra el
     fixture con corte real de SSH: la línea escrita con el canal caído se entrega al reconectar, y no re-emite
     lo ya visto). **Falta:** prueba en el celu con el plugin 1.8.0 instalado.
-- **Fase 2 · OSC52 handshake — app v1.22.0 (vc 32) · CÓDIGO LISTO, pendiente prueba en celu.**
+- **Fase 2 · OSC52 handshake — app v1.22.0 (vc 32) · SHIPPED y VALIDADO on-device (§G.5).**
   - ✅ **Clúster E** cerrado: **2a** el bypass del Sel-toggle persistente se reemplazó por un **handshake de
     un solo uso** — un callback mínimo `onSelDragReleased()` (default en `TerminalViewClient`, disparado en el
     `ACTION_UP` del Sel-drag de `TerminalView`) sella un timestamp, y `copiaIniciadaPorVos` acepta el PRIMER
@@ -783,7 +783,7 @@ antes de la siguiente). Progreso:
     OSC 52 llegaba fuera de la ventana del handshake. Fix: si el contenido bloqueado es IDÉNTICO al que ya
     está en el portapapeles, es un re-envío inofensivo → se ignora en silencio (sin debilitar seguridad:
     un atacante no gana nada re-escribiendo lo mismo). La copia siempre funcionó; era falsa alarma.
-- **Fase 3 · Robustez de la persistencia del Diagnóstico — app v1.23.0 (vc 33) · CÓDIGO LISTO, pendiente celu.**
+- **Fase 3 · Robustez de la persistencia del Diagnóstico — app v1.23.0 (vc 33) · SHIPPED y VALIDADO on-device (§G.5).**
   - ✅ **Clúster B** cerrado: **3a** el acantilado de 64 KB (`f.writeText("")` borraba TODO) ahora **rota
     conservando la última mitad**; **3b** `persistir` es thread-safe (lock `archivoLock` que serializa el
     read-modify-write — antes varios hilos de red se pisaban, medido 8000→1538); **3c** `VigiaUi` deja de
@@ -791,7 +791,7 @@ antes de la siguiente). Progreso:
     cuelgue duplicado al reabrir (`cargarPersistidos` queda como migración/limpieza del archivo viejo).
   - Verificado: compila (JDK17) + unit tests verdes (2 nuevos: rotación conserva-mitad, persistencia
     concurrente no colapsa). **Falta:** prueba en el celu (ⓘ del Diagnóstico).
-- **Fase 4 · DevOps — 4a LISTO + shipped; 4b ESPERANDO OK del usuario.**
+- **Fase 4 · DevOps — 4a y 4b SHIPPED (repo público, CI/release en GitHub-hosted).**
   - ✅ **4a** guard de versionCode **fail-closed** (`release.yml`): distingue error HTTP/red (aborta tras 3
     reintentos) del bootstrap genuino (404 sin releases / 200 sin marcador → skip). Lógica verificada local.
   - ✅ **4b** repo PÚBLICO (elimina el PAT del celu). Antes del flip se detectó un riesgo que el
@@ -850,8 +850,8 @@ El usuario probó en el celular (con `claude-personal`, app v1.24.1 + plugin 1.8
 avisos "Claude te espera" (incluido plan-mode/R1 con debounce), toggle "Avisos en segundo plano" + su
 helper, ⓘ del Diagnóstico con el estado del canal, dictado (cerrar pestaña mientras dictás), y OSC 52 (Sel
 copia, host bloqueado; el fix del re-envío en cambio de pestaña, v1.24.1). Las Fases 1-4 + la parte segura
-de la 5 quedan **confirmadas en uso real**. Pendiente sólo lo DIFERIDO de la Fase 5 (5c/5e/5d/5h), que ya
-es elegible ahora que el stack de avisos está validado.
+de la 5 quedan **confirmadas en uso real**. Lo DIFERIDO de la Fase 5 (5c/5e/5d/5h) se shipeó después
+(v1.25.0–v1.27.0, ✅ abajo); del 5e falta sólo la comprobación informal en una zona muerta real.
 
 ## H · Dictado sin arranque en frío + contrato de host configurado (v1.29.0, 2026-08-24)
 
