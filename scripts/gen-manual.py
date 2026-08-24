@@ -212,10 +212,15 @@ S.append(P("Y dentro de <b>Claude Code</b>, instalá el plugin de RemoteMarvin �
            "subís, correr el navegador visible):"))
 S.append(C("/plugin marketplace add <ruta-del-repo>\n"
            "/plugin install remotemarvin@remotemarvin"))
-S.append(P("Para vincular el celu por QR necesitás un <b>OAuth client</b> de Tailscale "
-           "(no vence) cargado en el <font name='Mono' size='9'>.env</font> "
-           "(<font name='Mono' size='9'>TS_OAUTH_CLIENT_ID/SECRET</font>, tag "
-           "<font name='Mono' size='9'>tag:remotemarvin</font>). Ver "
+S.append(P("Las dos claves del <font name='Mono' size='9'>.env</font> salen de la "
+           "<b>página de Tailscale</b> (login.tailscale.com — es el único momento en que "
+           "hace falta entrar; en el celular nunca se hace login):"))
+S.append(B("<b>TS_AUTHKEY</b> (pone tu PC en el tailnet): <i>Admin console → Settings → "
+           "Keys → Generate</i>. Marcala <b>Reusable</b>; NO “Ephemeral”."))
+S.append(B("<b>OAuth client</b> (permite generar los QR para celulares; no vence): "
+           "<i>Admin console → Settings → OAuth clients → Generate</i>, con scope de "
+           "auth keys y el tag <font name='Mono' size='9'>tag:remotemarvin</font> → "
+           "<font name='Mono' size='9'>TS_OAUTH_CLIENT_ID/SECRET</font>. Detalle en "
            "<font name='Mono' size='9'>.env.example</font>."))
 S.append(P("Desinstalar (en la PC)", h2))
 S.append(P("Para deshacer todo lo anterior, el par de setup:"))
