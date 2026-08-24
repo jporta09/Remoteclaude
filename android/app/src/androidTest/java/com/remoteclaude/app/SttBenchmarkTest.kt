@@ -35,6 +35,19 @@ class SttBenchmarkTest {
     private val args: Bundle get() = InstrumentationRegistry.getArguments()
     private val audio: String get() = args.getString("sttAudio") ?: "viaje.wav"
 
+    /** Con -e sttVisible 1: lanza la pantalla del benchmark (cronómetro + estado + texto en vivo)
+     *  para grabar la corrida con screenrecord. Sin el arg, corre headless como siempre. */
+    private var ui: BenchActivity? = null
+    private fun lanzarUiSiCorresponde(titulo: String) {
+        if (args.getString("sttVisible") != "1") return
+        val esc = androidx.test.core.app.ActivityScenario.launch(BenchActivity::class.java)
+        val latch = CountDownLatch(1)
+        esc.onActivity { ui = it; latch.countDown() }
+        latch.await(10, TimeUnit.SECONDS)
+        ui?.poner(tit = titulo, est = "preparando…", txt = "")
+        Thread.sleep(1500)   // que la grabación arranque mostrando la pantalla lista
+    }
+
     @Before fun permisos() {
         // Es un EXPERIMENTO manual (am instrument con -e ...), no parte de la suite: sin args,
         // se salta — así `make e2e` en el emulador (sin reconocedor ni host) no lo arrastra.
@@ -101,6 +114,7 @@ class SttBenchmarkTest {
             "este equipo no tiene reconocedor on-device"
         }
         val lang = args.getString("sttLang") ?: "es-ES"
+        lanzarUiSiCorresponde("FÁBRICA on-device ($lang)")
         val main = Handler(Looper.getMainLooper())
         val fin = CountDownLatch(1)
         val partes = mutableListOf<String>()
@@ -161,6 +175,7 @@ class SttBenchmarkTest {
                 } else {
                     actual = t
                 }
+                ui?.poner(txt = (partes + actual).joinToString(" "))
             }
             override fun onReadyForSpeech(params: Bundle?) { Log.i("STTBENCH", "[${ms()}ms] onReadyForSpeech") }
             override fun onBeginningOfSpeech() { Log.i("STTBENCH", "[${ms()}ms] onBeginningOfSpeech") }
@@ -178,17 +193,27 @@ class SttBenchmarkTest {
             rec = SpeechRecognizer.createOnDeviceSpeechRecognizer(ctx)
             rec.setRecognitionListener(listener)
             rec.startListening(intent)
+            ui?.poner(est = "▶ audio sonando — transcribe EN VIVO")
+            ui?.arrancarTimer()
             // arrancar el audio apenas el reconocedor quedó escuchando
             mp = reproducir {
                 playbackTermino = true
                 tPlaybackFin = System.currentTimeMillis()
                 Log.i("STTBENCH", "[${ms()}ms] fin de reproducción")
+                ui?.poner(est = "⏱ fin del audio — esperando el resultado FINAL…")
+                ui?.arrancarTimer()   // el reloj grande pasa a medir la latencia post-audio
                 // Si en 4s no llegó el final, forzarlo: stopListening cierra el segmento actual.
                 main.postDelayed({ if (fin.count > 0) { Log.i("STTBENCH", "forzando stopListening"); runCatching { rec.stopListening() } } }, 4_000)
                 main.postDelayed({ if (fin.count > 0) { Log.i("STTBENCH", "rendido: cierro con lo acumulado"); cerrarSegmento(""); fin.countDown() } }, 15_000)
             }
         }
         val ok = fin.await(120, TimeUnit.SECONDS)
+        ui?.let {
+            val seg = it.frenarTimer()
+            it.poner(est = "✔ FINAL — %.1f s después del fin del audio".format(seg),
+                txt = (partes + actual).filter { p -> p.isNotBlank() }.joinToString(" "))
+            Thread.sleep(4000)   // que la grabación muestre el resultado congelado
+        }
         main.post { runCatching { rec.destroy() }; runCatching { mp?.release() } }
         val texto = partes.joinToString(" ")
         Log.i("STTBENCH", "== FABRICA ($audio, lang=$lang) ==")
@@ -202,16 +227,23 @@ class SttBenchmarkTest {
     @Test fun appHostGpu() {
         val host = requireNotNull(args.getString("sttHost")) { "falta -e sttHost" }
         val user = requireNotNull(args.getString("sttUser")) { "falta -e sttUser" }
+        lanzarUiSiCorresponde("APP → GPU del host")
         val grabador = WavRecorder()
         check(grabador.start()) { "no arrancó el WavRecorder (¿permiso de mic?)" }
         val fin = CountDownLatch(1)
         var tPlaybackFin = 0L
         val main = Handler(Looper.getMainLooper())
         var mp: MediaPlayer? = null
-        main.post { mp = reproducir { tPlaybackFin = System.currentTimeMillis(); fin.countDown() } }
+        main.post {
+            ui?.poner(est = "▶ audio sonando — el mic graba (WavRecorder, como el botón Dictar)")
+            ui?.arrancarTimer()
+            mp = reproducir { tPlaybackFin = System.currentTimeMillis(); fin.countDown() }
+        }
         check(fin.await(120, TimeUnit.SECONDS)) { "no terminó la reproducción" }
         val wav = requireNotNull(grabador.stop()) { "el grabador no devolvió WAV" }
         main.post { runCatching { mp?.release() } }
+        ui?.poner(est = "⏱ soltaste el botón: SSH + subida + GPU + vuelta…", txt = "")
+        ui?.arrancarTimer()
         // TOFU del endpoint LAN del experimento: el primer contacto pinea la clave del host
         // (rol que en la app cumple la terminal); transcribe() después sólo compara.
         val pre = com.trilead.ssh2.Connection(host, 22)
@@ -222,6 +254,11 @@ class SttBenchmarkTest {
         val t0 = System.currentTimeMillis()
         val texto = control.transcribe(wav)
         val t1 = System.currentTimeMillis()
+        ui?.let {
+            val seg = it.frenarTimer()
+            it.poner(est = "✔ transcripción lista — %.1f s de ida y vuelta".format(seg), txt = texto)
+            Thread.sleep(4000)
+        }
         Log.i("STTBENCH", "== APP->HOST GPU ($audio) ==")
         Log.i("STTBENCH", "wavBytes=${wav.size} latenciaRoundTripMs=${t1 - t0} " +
             "(desde fin de audio; incluye SSH+subida+GPU+vuelta)")

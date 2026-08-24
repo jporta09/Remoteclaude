@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Manifest SOLO de debug: la pantalla del benchmark visible de STT (experimento manual,
+     la lanza SttBenchmarkTest con -e sttVisible 1). Vive en el sourceset debug para tener
+     el classpath completo de la app; el APK de release no la incluye. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application>
+        <activity
+            android:name=".BenchActivity"
+            android:exported="false"
+            android:screenOrientation="portrait"
+            android:theme="@android:style/Theme.Material.NoActionBar.Fullscreen" />
+    </application>
+</manifest>
