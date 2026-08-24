@@ -892,3 +892,19 @@ server se despertaba recién DESPUÉS del dictado que lo encontró caído.
   180s + fallback a batch al vencerse + 3 reintentos espaciados en la app (antes un timeout dejaba
   el mic muerto hasta la próxima reconexión). El gate de host-configurado pasó por el fallback
   (`marvin-stt` presente) en un host con setup anterior al marker.
+
+## Pendientes vivos (2026-08-24, post-v1.29.0)
+
+1. **F10 · Expiry de Tailscale**: validar contra el tailnet real ("Expire key now"), el caso
+   reinicio-tras-vencer y la UX de re-enrolar. Guía: `docs/validar-expiry-tailscale.md`.
+2. **5e · Half-open en primer plano, en el mundo real**: shipped (v1.26.0) y con E2E verde; falta la
+   comprobación informal en una zona muerta de señal (o blackhole con iptables en el host real).
+3. **5c · "Detener" sticky ante rotación**: shipped (v1.25.0); falta la comprobación informal
+   (Detener en la notif del FGS + rotar pantalla → no debe revivir; arranque fresco lo rearma).
+4. **A+/A− de fuente discoverable**: el contenido largo (planes de Claude) se ve chico en el celu y
+   la única palanca de la app es el tamaño de fuente, hoy sólo por pinch — hacerlo descubrible
+   (p.ej. botones A+/A− en algún menú). Es la palanca app-side del refinamiento "planes ilegibles"
+   (el layout del plan en sí es del TUI de Claude Code, no nuestro).
+5. **Auditoría de metodología de los agentes-perfil**: nadie señaló que el paso a paso del admin de
+   Tailscale faltaba en el manual (¿evaluaron el onboarding sin caminarlo desde cero?). Ver memoria
+   `chequear-como-evaluaron-onboarding-agentes`.
