@@ -241,9 +241,12 @@ S.append(B("En la PC: <font name='Mono' size='9'>./scripts/ts-link-qr.sh</font> 
 S.append(B("En la app: tocá la <b>línea de estado de Tailscale</b> → <b>Escanear QR</b> → "
            "apuntá la cámara. El estado pasa a <b>conectada ✓</b>."))
 S.append(B("Queda guardado: reconecta solo en cada arranque, no re-escaneás más."))
-S.append(B("El acceso de Tailscale <b>vence a los ~180 días</b>. Cuando pasa, la terminal te "
-           "lo avisa (“el acceso de Tailscale venció — reescaneá el QR”) en vez de quedar "
-           "reintentando en silencio: volvé a escanear un QR nuevo y listo."))
+S.append(B("El acceso de Tailscale del celu <b>no vence solo</b> (los nodos con tag tienen el "
+           "vencimiento deshabilitado por defecto). Si alguna vez vence o lo revocás desde la "
+           "consola, la terminal te lo avisa (“el acceso de Tailscale venció — reescaneá el "
+           "QR”) en vez de quedar reintentando en silencio: volvé a escanear un QR nuevo y "
+           "listo. Ojo: si estabas conectado, el aviso puede tardar unos minutos en aparecer "
+           "(la sesión viva sigue hasta el próximo re-handshake)."))
 
 # --- 5. Terminal ------------------------------------------------------------
 S.append(P("La terminal", h1))

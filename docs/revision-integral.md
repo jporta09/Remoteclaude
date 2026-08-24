@@ -895,12 +895,18 @@ server se despertaba recién DESPUÉS del dictado que lo encontró caído.
 
 ## Pendientes vivos (2026-08-24, post-v1.29.0)
 
-1. **F10 · Expiry de Tailscale**: validar contra el tailnet real ("Expire key now"), el caso
-   reinicio-tras-vencer y la UX de re-enrolar. Guía: `docs/validar-expiry-tailscale.md`.
-2. **5e · Half-open en primer plano, en el mundo real**: shipped (v1.26.0) y con E2E verde; falta la
-   comprobación informal en una zona muerta de señal (o blackhole con iptables en el host real).
-3. **5c · "Detener" sticky ante rotación**: shipped (v1.25.0); falta la comprobación informal
-   (Detener en la notif del FGS + rotar pantalla → no debe revivir; arranque fresco lo rearma).
+1. ~~**F10 · Expiry de Tailscale**~~ → **VALIDADO mid-sesión (2026-08-24)**, 3/3 criterios en vivo
+   contra el tailnet real (expire por API; aviso + ERROR en Diagnóstico + re-enrolado QR). Hallazgos
+   y método en `docs/validar-expiry-tailscale.md` (nodos con tag NO expiran por default — manual
+   corregido; la expulsión de una sesión viva tarda ~18 min; QR de terminal puede no escanear →
+   `ts-link-qr.sh --png`). Quedan de F10: **reinicio-tras-vencer** (a codear: mantener NeedsLogin en
+   vez de derribar el nodo) y la UX de re-enrolar de un toque.
+2. ~~**5e · Half-open en primer plano**~~ → **VALIDADO en el mundo real (2026-08-24)**: blackhole de
+   iptables en el host real (`-I INPUT 1`, ojo: con `-A` el tráfico de la app entra por loopback y
+   esquiva la regla), tipeo en la conexión muerta → detección a los ~14s → "reconectando…" →
+   reenganche de tmux intacto al restaurarse.
+3. ~~**5c · "Detener" sticky ante rotación**~~ → **VALIDADO (2026-08-24)** por adb: Detener paró el
+   FGS, la rotación NO lo revivió, y el arranque fresco lo rearmó.
 4. **A+/A− de fuente discoverable**: el contenido largo (planes de Claude) se ve chico en el celu y
    la única palanca de la app es el tamaño de fuente, hoy sólo por pinch — hacerlo descubrible
    (p.ej. botones A+/A− en algún menú). Es la palanca app-side del refinamiento "planes ilegibles"

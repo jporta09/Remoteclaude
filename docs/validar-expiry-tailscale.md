@@ -81,3 +81,36 @@ Si los tres se cumplen, la detección **mid-sesión** queda validada y la fila 5
 - `android/.../TailscaleBridge.kt` → `estado()` / `accesoVencido()` / `accesoVencidoDeEstado()`.
 - `android/.../SshTerminalSession.kt` → aviso una vez por episodio en el loop de reconexión.
 - Backlog: `docs/revision-integral.md`, fila 550 (`◑ PARCIAL (F10)`).
+
+---
+
+## RESULTADO (2026-08-24): validación mid-sesión APROBADA ✅
+
+Los tres criterios se cumplieron en vivo (S23 real, tailnet real):
+
+1. ✅ El aviso apareció en la terminal, una sola vez, en vez de reconexión muda.
+2. ✅ El evento ERROR quedó en el Diagnóstico: `tailscale: el acceso de Tailscale venció (node
+   key expirada) — hay que reescanear el QR` (19:25).
+3. ✅ Re-escanear el QR restauró la conexión (nodo nuevo `expired=false online=true`, terminal
+   reconectada sola).
+
+**Hallazgos del test (importantes para el modelo mental):**
+
+- **Los nodos con tag NO expiran por default.** Tailscale deshabilita el key expiry para
+  dispositivos tagueados (`tag:remotemarvin`) — la consola los muestra "Expiry disabled". El
+  escenario "vence a los ~180 días" sólo ocurre si se habilita expiry a mano en el nodo (o si el
+  admin expira/revoca). El manual se corrigió acorde.
+- **La consola NO ofrece "Expire key now"** para estos nodos (creados por OAuth client): el menú
+  de Machine settings no lo trae. Se expira por API: `POST /api/v2/device/{id}/expire` con un API
+  access token de la cuenta (el OAuth client del .env NO alcanza: scope sólo de auth keys, da 403).
+  El node ID sale del estado de Tailscale del host (peer del celu).
+- **La expulsión no es inmediata**: con una sesión WireGuard viva, el nodo expirado siguió
+  funcionando ~18 minutos (hasta el siguiente re-handshake con el control plane). Recién ahí la
+  reconexión falla y el aviso dispara. En uso real (cambio de red al moverse) el re-handshake es
+  inmediato, así que el aviso aparece enseguida; el caso lento es "quieto en la misma red".
+- **El QR ANSI de la terminal puede no engancharse** con la cámara (contraste/fuente): el
+  re-enrolado falló hasta usar el QR como imagen. Fix shipped: `ts-link-qr.sh --png`.
+
+**Sigue pendiente** (ya estaba en "Límites conocidos"): reinicio-tras-vencer (el nodo no levanta y
+`Estado()` da "Detenido" — hay que mantenerlo en NeedsLogin para poder detectarlo) y la UX de
+re-enrolar de un toque desde el aviso.
