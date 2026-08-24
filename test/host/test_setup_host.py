@@ -169,3 +169,23 @@ def test_no_confunde_publickey_con_password_por_substring(tmp_path):
     env = ssh_falso(tmp_path, "Permission denied (publickey,gssapi-with-mic).")
     r = correr('sshd_acepta_password && echo ACEPTA || echo "rc=$?"', tmp_path, env)
     assert "rc=1" in r.stdout, r.stdout + r.stderr
+
+
+# --- escribir_marker_setup ------------------------------------------------------------
+
+def test_el_marker_de_setup_se_escribe_con_fecha(tmp_path):
+    r = correr(f'escribir_marker_setup "{tmp_path}"', tmp_path)
+    assert r.returncode == 0, r.stderr
+    marker = tmp_path / ".config" / "marvin" / "setup-ok"
+    assert marker.exists(), "el setup exitoso debe dejar el marker que la app verifica"
+    assert marker.read_text().startswith("setup-host ")
+
+
+def test_setup_host_exige_uv(tmp_path):
+    """Sin uv el setup FALLA (exit 1): un host 'configurado a medias' (sin dictado) era
+    exactamente el estado que el gate de conexión de la app quiere impedir."""
+    script = os.path.join(os.path.dirname(LIB), "setup-host.sh")
+    contenido = open(script).read()
+    assert 'exit 1' in contenido.split('falta uv')[1][:400], \
+        "el bloque de uv faltante tiene que salir con error, no saltear el STT"
+    assert "SALTAR_STT" not in contenido, "no debe quedar el modo 'saltear STT en silencio'"

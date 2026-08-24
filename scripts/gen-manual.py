@@ -343,13 +343,15 @@ S.append(P("Mantené apretado <b>Dictar</b> (el micrófono) y hablá: al soltar,
            "aparece en una <b>burbuja</b> con dos botones. <b>Insertar</b> la escribe en la terminal "
            "(<b>sin Enter</b>, para que la revises y edites antes de mandarla); <b>Descartar</b> la "
            "tira sin escribir nada. Así, si el dictado entendió cualquier cosa, no toca tu prompt."))
-S.append(B("Si la PC tiene GPU, vas viendo el texto <b>en vivo</b> en la burbuja mientras hablás; "
-           "al soltar aparecen Insertar/Descartar."))
+S.append(B("Al conectar, la app <b>despierta el motor</b> en la PC y el botón dice "
+           "“Preparando…” (deshabilitado) mientras el modelo carga — menos de un minuto. "
+           "Cuando se habilita, el motor está listo de verdad: el <b>primer</b> dictado ya "
+           "sale con el texto <b>en vivo</b> en la burbuja mientras hablás (con GPU)."))
 S.append(B("El audio se transcribe <b>en tu PC</b> (faster-whisper), no en un servicio de "
            "terceros, y viaja por tu propia conexión."))
-S.append(B("El motor se apaga solo tras un rato sin uso para liberar la memoria de la "
-           "placa; se enciende de nuevo al dictar. Si preferís que quede <b>siempre "
-           "encendido</b> (responde al instante, a costa de ~2 GB de VRAM), activá "
+S.append(B("Mientras la app está abierta el motor queda despierto; al cerrarla, se apaga "
+           "solo tras unos minutos y libera la memoria de la placa. Si preferís que quede "
+           "<b>siempre encendido</b> aun sin la app (a costa de ~2 GB de VRAM), activá "
            "“⚡ Dictado siempre encendido” editando el host — el modo vive en la PC, no en "
            "el teléfono."))
 S.append(B("El botón te habla con el color: <b>rojo</b> = grabando, <b>verde</b> = "

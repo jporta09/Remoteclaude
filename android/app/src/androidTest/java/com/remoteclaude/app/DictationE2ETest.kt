@@ -85,4 +85,15 @@ class DictationE2ETest {
             "cp ~/.local/bin/marvin-stt.bak2 ~/.local/bin/marvin-stt; chmod +x ~/.local/bin/marvin-stt")
         assertThat(control.sttMode("status")).contains("modo")
     }
+
+    @Test fun despertarStt_enUnHostSinLive_respondeBatchViaPrewarm() {
+        // El fixture no tiene systemctl → la rama live se saltea → el prewarm de silencio
+        // pega en el stub de marvin-stt (que valida el RIFF del WAV) y responde OK.
+        assertThat(control.despertarStt()).isEqualTo("batch")
+    }
+
+    @Test fun despertarStt_sinClienteEnElHost_respondeSinStt() {
+        fixture.exec("mv ~/.local/bin/marvin-stt ~/.local/bin/marvin-stt.bak")
+        assertThat(control.despertarStt()).isEqualTo("sin-stt")
+    }
 }

@@ -291,6 +291,44 @@ class RemoteControl(
     }
 
     /**
+     * Despierta el motor de dictado del host y ESPERA (server-side) a que el modelo quede
+     * cargado. Un solo exec SSH; la espera corre en el host, no acá en polling.
+     *
+     * Devuelve la última línea: "vivo" (WhisperLiveKit escuchando en :6092 — y ese puerto
+     * recién escucha con el modelo YA cargado), "batch" (sin live pero el prewarm del
+     * cliente batch respondió: modelo en memoria), "sin-stt" (host sin dictado — no
+     * debería pasar con el gate de host-configurado) o "timeout". "" si el exec falló.
+     * BLOQUEA hasta ~2 min: llamar desde un thread.
+     */
+    fun despertarStt(): String {
+        // Ventana del live: 180s — el frío TOTAL medido en el host real fue ~105s (uv
+        // resolviendo deps ~35s + carga del modelo ~65s); con 90s perdía por segundos.
+        // Si el live vence igual, se prueba el batch (el mic con ALGO cargado > nada).
+        // El WAV de silencio del prewarm se genera con printf (1s, 16kHz mono s16le):
+        // header RIFF fijo + 32000 bytes de ceros — el mismo truco de setup-host pero sin
+        // depender de python3 en el host.
+        val script = """
+            export XDG_RUNTIME_DIR=/run/user/${'$'}(id -u)
+            HAY_LIVE=0
+            if systemctl --user cat marvin-stt-live.service >/dev/null 2>&1; then
+              HAY_LIVE=1
+              systemctl --user start marvin-stt-live.service >/dev/null 2>&1
+              for _ in ${'$'}(seq 1 180); do
+                (exec 3<>/dev/tcp/127.0.0.1/6092) 2>/dev/null && { echo vivo; exit 0; }
+                sleep 1
+              done
+            fi
+            if [ -x ~/.local/bin/marvin-stt ]; then
+              { printf 'RIFF\x24\x7d\x00\x00WAVEfmt \x10\x00\x00\x00\x01\x00\x01\x00\x80\x3e\x00\x00\x00\x7d\x00\x00\x02\x00\x10\x00data\x00\x7d\x00\x00'
+                head -c 32000 /dev/zero; } | ~/.local/bin/marvin-stt >/dev/null 2>&1 \
+                && { echo batch; exit 0; }
+            fi
+            [ "${'$'}HAY_LIVE" = "1" ] && echo timeout || echo sin-stt
+        """.trimIndent()
+        return exec(script).trim().lines().lastOrNull()?.trim() ?: ""
+    }
+
+    /**
      * Modo de energía del daemon de dictado: "status" | "always" | "ondemand".
      * Devuelve el mensaje del cliente (o vacío si el host no tiene marvin-stt). BLOQUEA.
      */

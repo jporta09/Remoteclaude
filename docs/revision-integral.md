@@ -852,3 +852,43 @@ helper, ⓘ del Diagnóstico con el estado del canal, dictado (cerrar pestaña m
 copia, host bloqueado; el fix del re-envío en cambio de pestaña, v1.24.1). Las Fases 1-4 + la parte segura
 de la 5 quedan **confirmadas en uso real**. Pendiente sólo lo DIFERIDO de la Fase 5 (5c/5e/5d/5h), que ya
 es elegible ahora que el stack de avisos está validado.
+
+## H · Dictado sin arranque en frío + contrato de host configurado (v1.29.0, 2026-08-24)
+
+Derivado del benchmark de STT on-device (2026-08-24, S23 real por bucle acústico parlante→mic):
+GPU caliente 2,9s con calidad muy superior, pero frío 34–75s; y el modo EN VIVO (parciales +
+calidad GPU: primer parcial a 3,5s) sólo aparecía del segundo dictado en adelante, porque el
+server se despertaba recién DESPUÉS del dictado que lo encontró caído.
+
+- **Despertar al conectar + invariante del mic** (decisión del usuario: "mic habilitado ⇔ motor
+  con el modelo cargado"): `RemoteControl.despertarStt()` — un solo exec SSH que arranca el live
+  y espera server-side el LISTEN de :6092 (que recién existe con el modelo cargado — verificado:
+  uvicorn hace listen después del lifespan) → "vivo"; sin live, prewarm de silencio al batch →
+  "batch"; nada → "sin-stt". `DictationController.motor` (PREPARANDO|VIVO|BATCH|SIN_STT) gobierna
+  el botón: "Preparando…" deshabilitado hasta el veredicto (estado del mic ahora PERSISTE en
+  KeypadView — antes se perdía al recrear la fila con el QWERTY). Disparo en
+  `alCambiarEstadoConexion` con throttle de 60s.
+- **Keepalive por conexión sostenida** (el usuario rechazó un archivo de toque por feo; se exploró
+  y había mejor): `SttPresencia` mantiene UNA conexión TCP ociosa al :6092 vía `PortTunnel`
+  mientras la app está al frente. El idle-exit del wrapper ya cuenta ESTABLISHED como uso, y el
+  uvicorn instalado no cierra conexiones mudas (su timer de keep-alive se arma recién tras una
+  respuesta — verificado en h11_impl). Sin estado en el host: la app muere → la conexión cae →
+  a los 10 min se libera la VRAM sola.
+- **Host configurado = requisito bloqueante** (decisión del usuario: los casos "sin setup-host" y
+  "setup sin uv" no deben poder existir): `setup-host.sh` ahora FALLA sin uv (antes `SALTAR_STT`
+  salteaba en silencio → host a medias) y escribe el marker `~/.config/marvin/setup-ok` al final;
+  la app lo verifica en cada conexión (`hostConfigurado`, fallback `-x ~/.local/bin/marvin-stt`
+  para setups previos al marker; fail-open ante error del exec) y sin él bloquea la sesión con
+  mensaje accionable. Sin GPU no hay bloqueo: el batch ya cae solo a cpu/int8.
+- Tests: `MotorSttTest` (parser+gate puros), pytest de setup (marker + uv obligatorio),
+  `SetupGateE2ETest` (host pelado no abre sesión; el mic arranca deshabilitado y se habilita con
+  el motor listo), `despertarStt` e2e contra el fixture ("batch" / "sin-stt"). Fixture con marker.
+- **Validado ON-DEVICE (S23, 2026-08-24)**: ciclo completo en frío — la app despertó el server al
+  conectar, mic "Preparando…" deshabilitado → habilitado a los ~65s, PRIMER dictado con parciales
+  en vivo, keepalive verificado (180s de app al frente con idle=120s de prueba y el server vivo,
+  conexión ESTABLISHED visible en `ss`), y decaimiento (app a background → presencia cortada →
+  idle-exit a los ~120s liberando la VRAM). Hallazgo de la 1ª pasada corregido antes del ship: la
+  ventana de espera del live era 90s y el frío total real es ~105s (uv ~35s + modelo ~65s) — ahora
+  180s + fallback a batch al vencerse + 3 reintentos espaciados en la app (antes un timeout dejaba
+  el mic muerto hasta la próxima reconexión). El gate de host-configurado pasó por el fallback
+  (`marvin-stt` presente) en un host con setup anterior al marker.

@@ -107,3 +107,15 @@ sshd_acepta_password() {
     esac
     return 1
 }
+
+# Marker de "host configurado": la app lo verifica al CONECTAR y bloquea hosts sin setup.
+# Va en función (y no inline en setup-host.sh) para poder testearlo: escribirlo al final
+# del setup es el contrato — si el setup falló antes (set -e), el marker no queda.
+escribir_marker_setup() {
+    local repo="${1:-.}"
+    install -d "$HOME/.config/marvin"
+    printf 'setup-host %s %s\n' \
+        "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+        "$(git -C "$repo" rev-parse --short HEAD 2>/dev/null || echo sin-git)" \
+        > "$HOME/.config/marvin/setup-ok"
+}

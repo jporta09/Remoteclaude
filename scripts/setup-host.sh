@@ -183,19 +183,18 @@ echo "==> stt-daemon (dictado por voz de la app: WAV -> texto con faster-whisper
 # Bajo demanda: lo arranca el cliente `marvin-stt` en el primer dictado y se apaga solo
 # tras 10 min sin uso (idle-exit = salida limpia; por eso sin Restart= ni autostart).
 # GPU (CUDA float16) si hay driver NVIDIA; si no, CPU int8 — el daemon decide solo.
-# uv es lo que ejecuta los daemons de dictado. Antes, si faltaba, igual se escribían las
-# units apuntando a una ruta inexistente y el dictado fallaba recién al usarlo, con un error
-# de systemd que no explica nada. Ahora se avisa acá y se saltea instalarlas.
+# uv es lo que ejecuta los daemons de dictado, y el dictado es parte del contrato del
+# host: la app BLOQUEA la conexión a hosts sin configurar (marker setup-ok, más abajo).
+# Antes, sin uv, se salteaban las units en silencio y quedaba un host "configurado a
+# medias" — permitir ese estado era exactamente el bug. Ahora sin uv el setup FALLA.
 UV_BIN="$(command -v uv || true)"
 if [ -z "$UV_BIN" ] && [ -x "$HOME/.local/bin/uv" ]; then UV_BIN="$HOME/.local/bin/uv"; fi
-SALTAR_STT=0
 if [ -z "$UV_BIN" ]; then
-    SALTAR_STT=1
-    echo "    !! falta uv: NO se instalan los daemons de dictado."
+    echo "    ERROR: falta uv, y sin uv no hay dictado (requisito del host)."
     echo "       Instalalo con:  curl -LsSf https://astral.sh/uv/install.sh | sh"
     echo "       y volvé a correr este script."
+    exit 1
 fi
-if [ "$SALTAR_STT" != "1" ]; then
 STT_PY="$(cd "$(dirname "$0")" && pwd)/marvin-stt.py"
 # Restart=on-failure: revive crashes pero respeta el idle-exit (salida limpia).
 # [Install]: permite `marvin-stt mode always` (enable = arranca en boot); por default
@@ -219,9 +218,11 @@ ln -sf "$(cd "$(dirname "$0")" && pwd)/marvin-stt" "$HOME/.local/bin/marvin-stt"
 echo "    instalado (cliente: marvin-stt; daemon bajo demanda en :6091)"
 
 echo "==> stt-live (dictado EN VIVO: parciales por WebSocket mientras hablás)"
-# WhisperLiveKit en :6092. Sin idle-exit propio: en modo ondemand queda apagado y la
-# app lo arranca fire-and-forget al primer dictado; `marvin-stt mode always` lo deja
-# resident junto al batch (VRAM: ~2GB batch + ~2GB live, entra en una placa de 6GB).
+# WhisperLiveKit en :6092, con idle-exit propio (marvin-stt-live.py lo apaga tras
+# MARVIN_STT_LIVE_IDLE=600s sin uso — una conexión establecida cuenta como uso, y la
+# app sostiene una mientras está en primer plano). La app lo despierta al conectar;
+# `marvin-stt mode always` lo deja resident junto al batch (VRAM: ~2GB batch + ~2GB
+# live, entra en una placa de 6GB).
 STT_LIVE_PY="$(cd "$(dirname "$0")" && pwd)/marvin-stt-live.py"
 escribir_unidad marvin-stt-live.service <<EOF
 [Unit]
@@ -257,7 +258,12 @@ PY
   rm -f "$PREWARM_WAV"
 ) >"$PREWARM_LOG" 2>&1 &
 echo "    prewarm del modelo en background (log: $PREWARM_LOG)"
-fi
+
+# Marker de "host configurado": la app lo verifica al conectar y BLOQUEA hosts sin setup
+# (antes se conectaba igual y las features fallaban de a una, cada cual con su error).
+# Se escribe al FINAL: si algo de arriba falló (set -e), el marker no queda.
+escribir_marker_setup "$(dirname "$0")"
+echo "==> marker de host configurado: ~/.config/marvin/setup-ok"
 
 cat <<'EOF'
 

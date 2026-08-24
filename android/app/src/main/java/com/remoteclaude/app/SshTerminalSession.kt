@@ -155,6 +155,25 @@ class SshTerminalSession(
                     onAuthFailed?.invoke()
                     break
                 }
+                // Host CONFIGURADO es requisito para abrir la sesión: sin el marker de
+                // setup-host, cada feature fallaría de a una con su propio error críptico
+                // (dictado, docs, avisos). Mejor un solo mensaje claro acá. El fallback a
+                // ~/.local/bin/marvin-stt cubre hosts configurados antes de que existiera
+                // el marker. Se chequea en CADA conexión (barato) para que "corrí el setup
+                // y reintenté" funcione sin reiniciar la app.
+                if (!hostConfigurado(c)) {
+                    status(
+                        "\r\n[Este host no está configurado para RemoteMarvin]\r\n" +
+                            "[Corré scripts/setup-host.sh en el host y reintentá.]\r\n",
+                    )
+                    Diagnostico.registrar(
+                        Diagnostico.Nivel.ERROR, "setup",
+                        "$host:$port — sin marker de setup-host: conexión bloqueada",
+                    )
+                    userClosed = true
+                    cambiarEstado(Estado.CAIDO)
+                    break
+                }
                 // Aviso de sesión perdida: si esto es una RECONEXIÓN y la sesión tmux ya no
                 // existe en el host, el server se reinició (reboot/OOM/kill) y `tmux new -A`
                 // va a crear una NUEVA vacía. Antes eso pasaba mudo en la misma pestaña y
@@ -407,6 +426,21 @@ class SshTerminalSession(
     /** ¿La sesión tmux sigue viva en el host? Chequeo rápido no interactivo sobre la misma
      *  conexión. Ante cualquier duda devuelve true (no avisar): mejor callar que un falso
      *  "se perdió la sesión" que asuste sin motivo. */
+    // ¿El host pasó por setup-host? Marker nuevo, o el cliente de dictado (hosts con un
+    // setup anterior al marker). Fail-open ante error del exec: un chequeo que no pudo
+    // correr no debe bloquear una conexión que sí funciona.
+    private fun hostConfigurado(c: Connection): Boolean = try {
+        val chk = c.openSession()
+        chk.execCommand(
+            "test -f ~/.config/marvin/setup-ok -o -x ~/.local/bin/marvin-stt && echo CONFIGURADO",
+        )
+        val out = String(chk.stdout.readBytes(), Charsets.UTF_8)
+        chk.close()
+        out.contains("CONFIGURADO")
+    } catch (_: Exception) {
+        true
+    }
+
     private fun tmuxSesionVive(c: Connection): Boolean = try {
         val chk = c.openSession()
         chk.execCommand("tmux has-session -t " + ShellQuote.sq(tmuxSession) + " 2>/dev/null && echo VIVE")

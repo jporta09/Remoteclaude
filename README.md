@@ -26,7 +26,10 @@ permisos especiales es lo que vos hagas con `sudo` dentro de tu propia sesión.
 - **Teclado para programar.** Esc, Tab, Ctrl, Alt, flechas, Home/End/PgUp/PgDn y **⇧Tab**
   (la secuencia que Claude Code lee para cambiar de modo).
 - **Dictado por voz.** Mantenés 🎤 y hablás: el texto aparece en la terminal como si lo
-  hubieras tipeado. Con GPU en el host hay parciales en vivo mientras hablás.
+  hubieras tipeado. Con GPU en el host hay parciales en vivo mientras hablás. La app
+  despierta el motor al conectar y habilita el mic recién con el modelo cargado — el
+  primer dictado ya sale en vivo (y el host debe estar configurado con `setup-host.sh`:
+  sin eso la conexión se bloquea con instrucciones).
 - **Visor de escritorio 🖥.** Un navegador *headed* corre en el host sobre una pantalla
   virtual aislada y lo mirás desde el celular. Útil para ver tests de Playwright, o para
   scraping que necesita display real.

@@ -46,6 +46,13 @@ class KeypadView(ctx: Context, private val io: Io) : LinearLayout(ctx) {
 
     /** Tamaño de los íconos de esta fila, a juego con el texto de 13sp. */
     private val TAM_ICONO = 15f
+
+    // Estado persistente del botón de dictado (ver estadoMicrofono). Arranca DESHABILITADO:
+    // el invariante es "habilitado ⇔ motor con el modelo cargado", y al abrir la app el
+    // motor todavía se está despertando (DictationController.prepararStt lo resuelve).
+    private var micTexto = "Preparando…"
+    private var micColor = Paleta.KEY_FG
+    private var micHabilitado = false
     private var overflow = false
     private var tecladoArriba = false
 
@@ -105,14 +112,24 @@ class KeypadView(ctx: Context, private val io: Io) : LinearLayout(ctx) {
         if (altActivo) alternarAlt()
     }
 
-    /** Estado visible del botón de dictado (lo maneja [DictationController]). */
-    fun estadoMicrofono(texto: String, color: Int) {
+    /** Estado visible del botón de dictado (lo maneja [DictationController]). Se PERSISTE
+     *  en campos porque poblarFilaShift() recrea el botón (abrir/cerrar el QWERTY) y sin
+     *  eso el estado — incluido "deshabilitado hasta que el motor cargue" — se perdía. */
+    fun estadoMicrofono(texto: String, color: Int, habilitado: Boolean = true) {
+        micTexto = texto; micColor = color; micHabilitado = habilitado
+        aplicarEstadoMicrofono()
+    }
+
+    private fun aplicarEstadoMicrofono() {
         botonMic?.let {
             // En reposo el ícono va a dos tonos (acento de marca); en un estado (grabando,
             // transcribiendo) se tinta monocromo al color del estado, como el manual.
-            val tinte = if (color == Paleta.KEY_FG) null else color
-            it.text = Iconos.etiqueta(context, Iconos.MICROFONO, tinte, TAM_ICONO, texto)
-            it.setTextColor(color)
+            val tinte = if (micColor == Paleta.KEY_FG) null else micColor
+            it.text = Iconos.etiqueta(context, Iconos.MICROFONO, tinte, TAM_ICONO, micTexto)
+            it.setTextColor(micColor)
+            // Deshabilitado no recibe touch (el push-to-talk ni arranca) y se atenúa.
+            it.isEnabled = micHabilitado
+            it.alpha = if (micHabilitado) 1f else 0.4f
         }
     }
 
@@ -193,10 +210,10 @@ class KeypadView(ctx: Context, private val io: Io) : LinearLayout(ctx) {
         }
         filaShift.addView(botonSel)
         botonMic = teclaAncha("Dictar") {}.also {
-            it.text = Iconos.etiqueta(context, Iconos.MICROFONO, null, TAM_ICONO, "Dictar")
             it.contentDescription = "Dictar: mantené apretado para hablar"
             it.setOnTouchListener { _, ev -> io.tocaronMicrofono(ev) }
         }
+        aplicarEstadoMicrofono()   // re-aplica el estado persistido al botón recién creado
         filaShift.addView(botonMic)
         // Enter al final de la fila (como en un teclado físico): confirma sin tener que
         // levantar el QWERTY del sistema — p.ej. aprobar un prompt de Claude tras scrollear.

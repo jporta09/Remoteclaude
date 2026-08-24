@@ -118,12 +118,21 @@ else
         if [ -n "${DISPLAY:-}" ]; then E2E_GPU=host; else E2E_GPU=swiftshader_indirect; fi
     fi
     echo "   gpu: $E2E_GPU${DISPLAY:+ (DISPLAY=$DISPLAY)}"
+    # Si YA hay un emulador booteado en el puerto (E2E_KEEP=1 de una corrida previa, o uno
+    # levantado a mano), se reusa: relanzar con -wipe-data lo pisaría y pagaría otro cold
+    # boot de ~4 min al pedo.
+    if [ "$("$ADB" -s "$ANDROID_SERIAL" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" = "1" ]; then
+        echo "   emulador ya booteado en $ANDROID_SERIAL: se reusa"
+    else
     __NV_PRIME_RENDER_OFFLOAD=1 __GLX_VENDOR_LIBRARY_NAME=nvidia \
     "$EMU" -avd "$AVD" -no-window -no-audio -no-boot-anim -no-snapshot -wipe-data \
         -memory "${E2E_MEM:-2048}" -cores "${E2E_CORES:-2}" -gpu "$E2E_GPU" \
         -port "$PORT" >/tmp/e2e-emulator.log 2>&1 &
+    fi
     echo "   esperando boot…"
-    for _ in $(seq 1 40); do
+    # 72×5s = 6 min: el cold boot (-wipe-data) se midió en ~4 min con la máquina cargada —
+    # el tope anterior (200s) cortaba un boot que iba bien.
+    for _ in $(seq 1 72); do
         [ "$("$ADB" -s "$ANDROID_SERIAL" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" = "1" ] && break
         sleep 5
     done

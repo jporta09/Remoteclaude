@@ -34,6 +34,12 @@ RUN mkdir -p /home/tester/.local/bin \
     && chmod +x /home/tester/.local/bin/marvin-stt \
     && chown -R tester:tester /home/tester/.local
 
+# Marker de "host configurado" (setup-host.sh lo escribe al final): la app lo verifica al
+# conectar y sin él BLOQUEA la sesión — el fixture lo trae para que los E2E conecten.
+RUN mkdir -p /home/tester/.config/marvin \
+    && printf 'setup-host e2e-fixture\n' > /home/tester/.config/marvin/setup-ok \
+    && chown -R tester:tester /home/tester/.config
+
 # Corta la conexión de forma determinista (test de reconexión): mata el sshd de la sesión = cierre
 # LIMPIO (el kernel manda FIN/RST, el read se desbloquea con EOF).
 RUN printf '#!/bin/bash\n(sleep 1; pkill -u tester sshd) &\n' > /usr/local/bin/e2e-drop-ssh \

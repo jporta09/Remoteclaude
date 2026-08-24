@@ -28,6 +28,7 @@ import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import com.termux.view.TerminalView
+import kotlin.concurrent.thread
 
 /**
  * La pantalla de terminal: arma el layout y conecta las piezas.
@@ -60,6 +61,8 @@ class MainActivity : AppCompatActivity() {
     /** Cuándo se soltó el último arrastre en modo Sel (elapsedRealtime). Abre una ventana de UN SOLO
      *  USO para aceptar la copia OSC 52 que tmux emite al soltar, y sólo esa (handshake, no toggle). */
     @Volatile private var selDragSoltadoEnMs = 0L
+    // Throttle del despertar-STT (el callback de estado dispara por pestaña y por reconexión).
+    @Volatile private var ultimoDespertarStt = -60_000L
 
     private lateinit var control: RemoteControl
     private lateinit var keyPair: java.security.KeyPair
@@ -327,12 +330,15 @@ class MainActivity : AppCompatActivity() {
             val afueraMs = android.os.SystemClock.elapsedRealtime() - pausadoEnMs
             if (pausadoEnMs != 0L && afueraMs > UMBRAL_FORZAR_RECONEXION_MS) tabs.forzarReconexiones()
         }
+        // La presencia del dictado sigue al foreground (mantiene despierto al server en vivo).
+        if (::dictado.isInitialized) dictado.enPrimerPlano(true)
     }
 
     override fun onPause() {
         EstadoApp.enPrimerPlano = false
         pausadoEnMs = android.os.SystemClock.elapsedRealtime()
         if (::vigia.isInitialized) vigia.pausar()
+        if (::dictado.isInitialized) dictado.enPrimerPlano(false)
         super.onPause()
     }
 
@@ -375,6 +381,10 @@ class MainActivity : AppCompatActivity() {
     /** Sesión activa. La usan los tests instrumentados para escribir en la terminal. */
     @androidx.annotation.VisibleForTesting
     fun currentSessionForTest(): SshTerminalSession? = tabs.sesionActiva
+
+    /** El keypad, para que los tests verifiquen el estado del mic (gate del dictado). */
+    @androidx.annotation.VisibleForTesting
+    fun keypadForTest(): KeypadView = keypad
 
     /** Contenido visible de la terminal. Lo usan los tests instrumentados. */
     @androidx.annotation.VisibleForTesting
@@ -489,6 +499,16 @@ class MainActivity : AppCompatActivity() {
         if (demoPendiente && tabs.sesionActiva?.estado == SshTerminalSession.Estado.CONECTADO) {
             demoPendiente = false
             terminalView.post { Tour.lanzar(this, "terminal", pasosDemo()) { mostrarTeclado() } }
+        }
+        // Despertar el motor de dictado al (re)conectar, y habilitar el mic recién cuando el
+        // modelo esté cargado. Throttle de 60s: este callback dispara por CADA pestaña y por
+        // cada reconexión, y despertarStt ya es idempotente (server vivo responde en ~1s).
+        if (tabs.sesionActiva?.estado == SshTerminalSession.Estado.CONECTADO) {
+            val ahora = android.os.SystemClock.elapsedRealtime()
+            if (ahora - ultimoDespertarStt > 60_000) {
+                ultimoDespertarStt = ahora
+                thread { dictado.prepararStt() }
+            }
         }
     }
 

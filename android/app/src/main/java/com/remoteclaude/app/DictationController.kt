@@ -40,6 +40,15 @@ class DictationController(
     // @Volatile: lo toca el callback onChunk del grabador (otro hilo) además del hilo de UI.
     @Volatile private var vivo: LiveDictation? = null
 
+    // Invariante del botón: HABILITADO ⇔ hay un motor con el modelo cargado en el host.
+    // Arranca PREPARANDO (deshabilitado); prepararStt() lo resuelve al conectar.
+    @Volatile var motor: MotorStt = MotorStt.PREPARANDO
+        private set
+    @Volatile private var preparando = false
+    // Conexión ociosa que sostiene despierto al server en vivo mientras la app está al
+    // frente (su idle-exit cuenta una conexión establecida como uso).
+    private val presencia = SttPresencia(act, host, port, user, keyPair)
+
     // La pestaña a la que está atado el dictado en curso (grabando o con preview pendiente). Si la
     // cerrás, hay que cancelar: si no, el texto quedaba huérfano o iba a la pestaña equivocada.
     @Volatile private var sesionEnJuego: SshTerminalSession? = null
@@ -62,6 +71,52 @@ class DictationController(
     fun soltar() {
         grabador.cancel()
         vivo?.cancel(); vivo = null
+        presencia.cerrar()
+    }
+
+    /**
+     * Despierta el motor de dictado del host y habilita el mic recién cuando el modelo está
+     * CARGADO (el server en vivo escucha, o el batch respondió el prewarm). Llamar desde un
+     * thread al conectar (MainActivity); reentrante-seguro y re-ejecutable (reconexiones).
+     */
+    fun prepararStt() {
+        if (preparando) return
+        preparando = true
+        try {
+            act.runOnUiThread {
+                teclado()?.estadoMicrofono("Preparando…", Paleta.KEY_FG, habilitado = false)
+            }
+            // Reintentos: "timeout"/error no son veredicto — el server puede estar todavía
+            // cargando (frío total medido: ~105s) y el próximo intento lo encuentra listo.
+            // Sin esto, un timeout dejaba el mic muerto hasta la próxima reconexión.
+            for (intento in 1..3) {
+                val r = try { control.despertarStt() } catch (_: Exception) { "" }
+                motor = motorDeStt(r)
+                Diagnostico.registrar(
+                    if (motor == MotorStt.SIN_STT) Diagnostico.Nivel.AVISO else Diagnostico.Nivel.INFO,
+                    "dictado", "motor de dictado: $motor (host respondió '$r', intento $intento)",
+                )
+                if (motor != MotorStt.PREPARANDO) break
+                Thread.sleep(20_000)
+            }
+            act.runOnUiThread {
+                when (motor) {
+                    MotorStt.VIVO, MotorStt.BATCH -> micEnReposo()
+                    // Sin motor: queda deshabilitado con el rótulo de siempre (atenuado por
+                    // el disabled del botón); el porqué vive en Diagnóstico.
+                    else -> teclado()?.estadoMicrofono("Dictar", Paleta.KEY_FG, habilitado = false)
+                }
+            }
+            if (motor == MotorStt.VIVO) presencia.abrir() else presencia.cerrar()
+        } finally {
+            preparando = false
+        }
+    }
+
+    /** La app volvió al frente / se fue atrás: la presencia sigue al foreground. */
+    fun enPrimerPlano(alFrente: Boolean) {
+        if (!alFrente) presencia.cerrar()
+        else if (motor == MotorStt.VIVO) presencia.abrir()
     }
 
     fun avisarPermisoConcedido() {
@@ -70,6 +125,9 @@ class DictationController(
 
     private fun empezar() {
         if (transcribiendo) return
+        // Cinturón además del botón deshabilitado (el estado del teclado se re-crea y podría
+        // perder un frame): sin motor cargado no se graba.
+        if (!puedeGrabar(motor)) return
         // Si había un preview pendiente y el usuario vuelve a dictar, ese preview se descarta
         // (no lo dejamos colgado ni lo insertamos solo).
         if (previewPendiente) { ocultarBurbuja(); micEnReposo() }
@@ -228,3 +286,20 @@ class DictationController(
  *  Top-level para poder testearlo sin instanciar la Activity. */
 fun sanitizarDictado(texto: String?): String =
     (texto ?: "").replace(Regex("\\p{Cntrl}"), " ").replace(Regex(" +"), " ").trim()
+
+/** Qué motor de dictado tiene el host. El invariante del botón: habilitado ⇔ VIVO o BATCH
+ *  (modelo cargado). PREPARANDO = despertando; SIN_STT = el host no tiene dictado. */
+enum class MotorStt { PREPARANDO, VIVO, BATCH, SIN_STT }
+
+/** Mapea la respuesta de `despertarStt()` del host. "timeout" o error ("") quedan en
+ *  PREPARANDO: no es un veredicto — un reintento (reconexión) puede resolverlo.
+ *  Top-level para testearlo sin Android. */
+fun motorDeStt(respuesta: String): MotorStt = when (respuesta.trim()) {
+    "vivo" -> MotorStt.VIVO
+    "batch" -> MotorStt.BATCH
+    "sin-stt" -> MotorStt.SIN_STT
+    else -> MotorStt.PREPARANDO
+}
+
+/** La decisión del gate de grabación, pura y testeable. */
+fun puedeGrabar(motor: MotorStt): Boolean = motor == MotorStt.VIVO || motor == MotorStt.BATCH
