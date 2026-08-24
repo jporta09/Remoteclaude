@@ -279,7 +279,7 @@ class MainActivity : AppCompatActivity() {
         ),
         Tour.Paso(
             "Una fila que aparece y desaparece",
-            "Shift, Sel y Dictar viven en esta fila. Cuando el teclado del sistema " +
+            "Shift, Sel, Dictar y Enter viven en esta fila. Cuando el teclado del sistema " +
                 "está abierto, la fila se oculta para dejar espacio; al cerrarlo, vuelve.",
             blanco = { keypad.vistaFilaShift() },
         ),

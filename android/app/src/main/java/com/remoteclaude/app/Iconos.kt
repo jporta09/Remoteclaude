@@ -29,6 +29,7 @@ object Iconos {
     val MICROFONO = R.drawable.ic_marvin_microfono
     val SELECCION = R.drawable.ic_marvin_seleccion
     val SHIFT = R.drawable.ic_marvin_shift
+    val ENTER = R.drawable.ic_marvin_enter
     val REENGANCHAR = R.drawable.ic_marvin_reenganchar
     val CERRAR = R.drawable.ic_marvin_cerrar
 

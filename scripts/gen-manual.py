@@ -248,7 +248,9 @@ S.append(B("<b>Multi-pestaña</b>: varias sesiones a la vez, con “+”. Cada h
            "sus pestañas, y con “⟳” reenganchás las que quedaron vivas."))
 S.append(B("<b>Teclado extra</b>: Ctrl / Alt / Shift, flechas, Tab y ⇧Tab — las teclas "
            "que un teclado de celu no tiene. Ctrl, Alt y Shift quedan <i>pegados</i>: los "
-           "tocás y modifican la tecla siguiente."))
+           "tocás y modifican la tecla siguiente. Y <b>Enter</b>, al final de la fila de "
+           "Shift: confirma sin tener que levantar el teclado del sistema (p.ej. aprobar "
+           "un prompt de Claude después de scrollear)."))
 S.append(B("El <b>›</b> del borde derecho da vuelta la fila: aparecen <b>Home / End / "
            "PgUp / PgDn</b> — que además son las teclas de scroll de Claude Code."))
 S.append(B("<b>Zoom</b>: pellizcá para agrandar o achicar la letra de la terminal."))

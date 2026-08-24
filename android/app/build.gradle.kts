@@ -20,8 +20,10 @@ android {
         applicationId = "com.remoteclaude.app"
         minSdk = 26
         targetSdk = 34
-        versionCode = 38
-        versionName = "1.27.0"
+        // 39/40 fueron los vc de v1.28.0/v1.29.0, publicados brevemente y revertidos:
+        // se saltean para que cualquier celu que los haya instalado actualice igual.
+        versionCode = 41
+        versionName = "1.28.0"
         testInstrumentationRunner = "com.remoteclaude.app.MarvinTestRunner"
         // Producción: sólo arm64 (es lo que corre en el teléfono). El AAR además trae
         // x86_64, que se incluye únicamente en debug para que el emulador corra NATIVO

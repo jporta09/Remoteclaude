@@ -1,0 +1,15 @@
+<!-- Enter: el retorno (↵) en el vocabulario de la marca. Dos partes con significado: el cuerpo
+     DOBLE (el canal en U del stem del shift, acá doblado en L con el chaflán a 45° del isotipo)
+     que BAJA desde la línea de arriba y vuelve al margen — la bajada es lo que hace que un Enter
+     sea un Enter y no un ← (backspace) — y el remate: la pieza del logo (triángulo macizo verde
+     + barra blanca al lado, la A rotada 90° por cálculo, nunca espejada) apuntando al margen.
+     El cuerpo va equidistante del centro de la CABEZA COMPLETA (triángulo + barra, eje 12.18),
+     no del ápex — igual que el stem del shift, que se centra con su conjunto y no con el ▲.
+     Grilla 24, trazo 2, dos tonos, sólo rectas y diagonales. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp"
+    android:viewportWidth="24" android:viewportHeight="24">
+    <path android:pathData="M14.5,9.78 H16.38 L17.2,8.96 V5.05 H22 V10.94 L18.36,14.58 H14.5" android:strokeColor="#FFF2F2F2" android:strokeWidth="2" android:strokeLineCap="round" android:strokeLineJoin="round" android:fillColor="@android:color/transparent"/>
+    <path android:pathData="M5.07,14.13 L12.77,10.33 V17.93 Z" android:fillColor="#FF71BF44" android:strokeColor="#FF71BF44" android:strokeWidth="1.1" android:strokeLineJoin="round"/>
+    <path android:pathData="M12.54,7.25 L2.17,12.00" android:strokeColor="#FFF2F2F2" android:strokeWidth="1.9" android:strokeLineCap="round" android:strokeLineJoin="round" android:fillColor="@android:color/transparent"/>
+</vector>

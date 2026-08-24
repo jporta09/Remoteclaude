@@ -198,6 +198,13 @@ class KeypadView(ctx: Context, private val io: Io) : LinearLayout(ctx) {
             it.setOnTouchListener { _, ev -> io.tocaronMicrofono(ev) }
         }
         filaShift.addView(botonMic)
+        // Enter al final de la fila (como en un teclado físico): confirma sin tener que
+        // levantar el QWERTY del sistema — p.ej. aprobar un prompt de Claude tras scrollear.
+        filaShift.addView(
+            teclaAncha("Enter") { io.enviarTecla(KeyEvent.KEYCODE_ENTER) }.also {
+                it.text = Iconos.etiqueta(context, Iconos.ENTER, null, TAM_ICONO, "Enter")
+            },
+        )
     }
 
     private fun crearChevron() = Button(context).apply {
