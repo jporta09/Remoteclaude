@@ -834,6 +834,12 @@ antes de la siguiente). Progreso:
     vocabulario de control de Claude (`to cancel/confirm/amend/explain`) — antes bastaba "≥2 opciones
     numeradas" y un menú numerado CUALQUIERA (gum/fzf/whiptail con `❯ 1. …`) bajaba el teclado de gusto. Las
     3 capturas REALES de Claude siguen disparando (todas tienen el footer); nuevo unit para el menú no-Claude.
+    - **Falso-NEGATIVO detectado en uso real (2026-08-24, v1.28.2)**: los selectores de PLAN MODE no traen
+      ese footer — la aprobación del plan dice `shift+tab to approve …` / `ctrl+g to edit in VS Code`, y el
+      "Ready to submit your answers?" de las preguntas no trae footer — y el teclado no bajaba. Se capturó
+      la firma real (tmux + `claude --permission-mode plan`) y se extendió la alternación a
+      `approve|edit|submit`; 2 units nuevos con las capturas. El anti-falso-positivo de G-U5 se mantiene
+      (sigue exigiendo cursor `❯ n.` + vocabulario `to <verbo>`).
 
 **§G CERRADO** (2026-08-23): todo el backlog de la 3ª pasada implementado, con CI/e2e/unit verde y las
 Fases 1-5 validadas on-device (salvo 5c/5e/5d/5h, shipeados tras la validación del stack de avisos).

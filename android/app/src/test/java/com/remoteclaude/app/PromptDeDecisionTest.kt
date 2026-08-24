@@ -43,6 +43,35 @@ class PromptDeDecisionTest {
         assertThat(hayPromptDeDecision(txt)).isTrue()
     }
 
+    @Test fun `aprobacion de PLAN MODE real (captura) dispara`() {
+        // Su footer NO dice "to cancel": el sello es "shift+tab to approve" / "ctrl+g to edit".
+        val txt = """
+             Claude has written up a plan and is ready
+             to execute. Would you like to proceed?
+
+             ❯ 1. Yes, and use auto mode
+               2. Yes, manually approve edits
+               3. Tell Claude what to change
+                  shift+tab to approve with this
+                  feedback
+
+             ctrl+g to edit in VS Code · ~/.claude-perso
+             nal/plans/arm-un-plan-para-compiled-pony.md
+        """.trimIndent()
+        assertThat(hayPromptDeDecision(txt)).isTrue()
+    }
+
+    @Test fun `Ready to submit de las preguntas del plan (captura) dispara`() {
+        // Este selector no trae footer de control: el sello es el header "Ready to submit".
+        val txt = """
+            Ready to submit your answers?
+
+            ❯ 1. Submit answers
+              2. Cancel
+        """.trimIndent()
+        assertThat(hayPromptDeDecision(txt)).isTrue()
+    }
+
     @Test fun `el spinner (esc to interrupt) NO dispara`() {
         // el ❯ del prompt de entrada + "esc to interrupt" no es un selector esperando decisión
         val txt = """

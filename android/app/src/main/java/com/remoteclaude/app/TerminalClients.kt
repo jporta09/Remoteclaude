@@ -247,12 +247,16 @@ fun hayPromptDeDecision(texto: String): Boolean {
     val cursor = Regex("""^\s*❯\s*\d+[.)]\s+\S""")
     val ultimas = texto.split("\n").map { it.trimEnd() }.filter { it.isNotBlank() }.takeLast(10)
     val tieneCursor = ultimas.any { cursor.containsMatchIn(it) }
-    // Footer con el vocabulario de control de Claude (`to cancel/confirm/amend/explain`). Es el sello
-    // que distingue el selector de Claude de un menú numerado CUALQUIERA (gum/fzf/whiptail que también
+    // Footer con el vocabulario de control de Claude (`to cancel/confirm/…`). Es el sello que
+    // distingue el selector de Claude de un menú numerado CUALQUIERA (gum/fzf/whiptail que también
     // pintan `❯ 1. …`): antes bastaba con "2 opciones numeradas", y esos TUIs disparaban el modo lectura
     // de gusto (G-U5). NO incluye "to interrupt" (ese es el spinner, no una decisión).
+    // `approve`/`edit`/`submit` vienen de los selectores de PLAN MODE (capturas reales): la aprobación
+    // del plan ("shift+tab to approve …", "ctrl+g to edit in VS Code") y el "Ready to submit your
+    // answers?" de las preguntas del plan, que no traen el footer clásico y quedaban afuera.
     val footerClaude = ultimas.any {
-        Regex("""to (cancel|confirm|amend|explain)""", RegexOption.IGNORE_CASE).containsMatchIn(it)
+        Regex("""to (cancel|confirm|amend|explain|approve|edit|submit)""", RegexOption.IGNORE_CASE)
+            .containsMatchIn(it)
     }
     return tieneCursor && footerClaude
 }
