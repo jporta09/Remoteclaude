@@ -328,7 +328,9 @@ S.append(B("<b>Baja el teclado sola</b> apenas aparece el selector de opciones, 
            "contexto completo antes de decidir (tocá la terminal para volver a escribir)."))
 S.append(B("Si la app está en <b>segundo plano</b> cuando Claude queda esperando, te llega una "
            "<b>notificación</b> (“Claude te espera”). Tocala y la app vuelve al frente con el "
-           "prompt a la vista. La primera vez, Android te pide permiso para notificarte."))
+           "prompt a la vista. La primera vez, Android te pide permiso para notificarte. "
+           "Sólo avisan las <b>pestañas de la app</b>: un Claude que corra en el host por fuera "
+           "de ellas no te suena el teléfono."))
 S.append(B("Ese aviso es <b>best-effort</b>: si el teléfono duerme un rato puede demorar o perderse. "
            "Para que llegue <b>al instante aunque tengas la app cerrada o el teléfono guardado</b>, "
            "activá “🔔 Avisos en segundo plano” editando el host: deja corriendo un servicio liviano "

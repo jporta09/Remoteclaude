@@ -42,6 +42,10 @@ class NotificacionesRemotas(
     private val key: KeyPair,
     private val enPrimerPlano: () -> Boolean,
     private val etiqueta: String = host,
+    // Sesiones tmux que son PESTAÑAS de la app en este host. El hook del host escribe por CUALQUIER
+    // Claude del config (uno lanzado en un tmux ajeno también aparece en notify.jsonl); notificar
+    // eso confunde ("¿de dónde vino esto?"). Sólo avisamos por lo que la app maneja.
+    private val sesionesDeLaApp: () -> Set<String> = { emptySet() },
 ) {
     @Volatile private var corriendo = false
     private var hilo: Thread? = null
@@ -141,6 +145,17 @@ class NotificacionesRemotas(
         if (enPrimerPlano()) return
         val msg = obj.optString("message").ifBlank { "Claude está esperando una decisión" }
         val sesion = obj.optString("session")
+        // Sólo sesiones DE LA APP. `session` viene del hook (`tmux display-message '#S'`); las pestañas
+        // de la app SIEMPRE corren dentro de tmux con su nombre ("term N" o renombrada), así que un
+        // aviso sin sesión (Claude fuera de tmux) o con una sesión que no es pestaña es de un Claude
+        // ajeno: se descarta (el cursor ya avanzó, no se re-emite).
+        if (sesion.isBlank() || sesion !in sesionesDeLaApp()) {
+            Diagnostico.registrar(
+                Diagnostico.Nivel.INFO, "avisos",
+                "aviso ignorado (sesión ajena: ${sesion.ifBlank { "sin tmux" }})",
+            )
+            return
+        }
         notificar(msg, sesion)
     }
 

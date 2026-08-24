@@ -46,6 +46,7 @@ class AvisosService : Service() {
         }
         val port = intent.getIntExtra("port", 22)
         val etiqueta = intent.getStringExtra("label") ?: host
+        val hostId = intent.getStringExtra("hostId") ?: "default"
 
         arrancarEnPrimerPlano(etiqueta)
 
@@ -54,12 +55,20 @@ class AvisosService : Service() {
         if (notifs == null || hostActual != host) {
             notifs?.detener()
             hostActual = host
+            val appCtx = applicationContext
             notifs = NotificacionesRemotas(
-                ctx = applicationContext,
+                ctx = appCtx,
                 host = host, port = port, user = user,
                 key = KeyStoreSsh.getOrCreateKeyPair(),
                 enPrimerPlano = { EstadoApp.enPrimerPlano },
                 etiqueta = etiqueta,
+                // Mismas pestañas persistidas que lee la Activity: sólo avisan las sesiones de la app.
+                sesionesDeLaApp = {
+                    TabPlan.parseSaved(
+                        appCtx.getSharedPreferences("remotemarvin", MODE_PRIVATE)
+                            .getString("tabs_$hostId", ""),
+                    ).toSet()
+                },
             ).also { it.iniciar() }
         }
         // Si el proceso se mata, que reintente con el mismo intent (recupera host/port/user).
@@ -144,10 +153,11 @@ class AvisosService : Service() {
             ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putBoolean(KEY_DETENIDO, false).apply()
 
         /** Prende el service para un host (idempotente). */
-        fun iniciar(ctx: Context, host: String, port: Int, user: String, label: String) {
+        fun iniciar(ctx: Context, host: String, port: Int, user: String, label: String, hostId: String) {
             val i = Intent(ctx, AvisosService::class.java)
                 .putExtra("hostname", host).putExtra("port", port)
                 .putExtra("user", user).putExtra("label", label)
+                .putExtra("hostId", hostId)
             ContextCompat.startForegroundService(ctx, i)
         }
 

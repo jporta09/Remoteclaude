@@ -133,12 +133,22 @@ class MainActivity : AppCompatActivity() {
         // se revive el FGS; cae al best-effort de la Activity.
         if (savedInstanceState == null) AvisosService.rearmar(this)
         if (avisosBg && !AvisosService.detenidoPorUsuario(this)) {
-            AvisosService.iniciar(this, host, port, user, hostLabel)
+            AvisosService.iniciar(this, host, port, user, hostLabel, hostId)
         } else {
             AvisosService.detener(this)
+            val appCtx = applicationContext
+            val idHost = hostId
             notifsRemotas = NotificacionesRemotas(
-                ctx = applicationContext, host = host, port = port, user = user, key = keyPair,
+                ctx = appCtx, host = host, port = port, user = user, key = keyPair,
                 enPrimerPlano = { EstadoApp.enPrimerPlano }, etiqueta = hostLabel,
+                // Se leen de prefs (no de `tabs`, que acá aún no existe): TabsController las
+                // persiste en cada cambio, así el set está siempre al día.
+                sesionesDeLaApp = {
+                    TabPlan.parseSaved(
+                        appCtx.getSharedPreferences("remotemarvin", Context.MODE_PRIVATE)
+                            .getString("tabs_$idHost", ""),
+                    ).toSet()
+                },
             ).also { it.iniciar() }
         }
         clients = TerminalClients(
