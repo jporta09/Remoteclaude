@@ -224,6 +224,54 @@ class SttBenchmarkTest {
         check(errorFatal == null) { "SpeechRecognizer error=$errorFatal (12/13 = falta el paquete de idioma offline)" }
     }
 
+    /** El camino EN VIVO real del Dictar (fase 2): LiveDictation streamea el PCM por túnel SSH
+     *  a WhisperLiveKit y los parciales van apareciendo mientras suena el audio. Mide (a) el
+     *  primer parcial y (b) el final tras "soltar el botón". Requiere el server vivo arriba
+     *  (si no, falla explícito — ese caso es el fallback batch, medido en appHostGpu). */
+    @Test fun appHostGpuVivo() {
+        val host = requireNotNull(args.getString("sttHost")) { "falta -e sttHost" }
+        val user = requireNotNull(args.getString("sttUser")) { "falta -e sttUser" }
+        lanzarUiSiCorresponde("APP → GPU EN VIVO (streaming)")
+        val main = Handler(Looper.getMainLooper())
+        var t0Play = 0L
+        var tPrimerParcial = 0L
+        val live = LiveDictation(ctx, host, 22, user, KeyStoreSsh.getOrCreateKeyPair()) { txt ->
+            if (tPrimerParcial == 0L && txt.isNotBlank()) tPrimerParcial = System.currentTimeMillis()
+            Log.i("STTBENCH", "[+${System.currentTimeMillis() - t0Play}ms] parcial: '${txt.takeLast(70)}'")
+            ui?.poner(txt = txt.takeLast(600))
+        }
+        check(live.start()) { "el server en vivo no está disponible (¿marvin-stt-live caído? ese caso es el batch)" }
+        val grabador = WavRecorder()
+        check(grabador.start(onChunk = { live.feed(it) })) { "no arrancó el WavRecorder" }
+        val fin = CountDownLatch(1)
+        var mp: MediaPlayer? = null
+        main.post {
+            ui?.poner(est = "▶ audio sonando — streaming al host, parciales EN VIVO")
+            ui?.arrancarTimer()
+            t0Play = System.currentTimeMillis()
+            mp = reproducir { fin.countDown() }
+        }
+        check(fin.await(120, TimeUnit.SECONDS)) { "no terminó la reproducción" }
+        val tFinAudio = System.currentTimeMillis()
+        grabador.stop()
+        main.post { runCatching { mp?.release() } }
+        ui?.poner(est = "⏱ soltaste el botón — esperando el flush final del server…")
+        ui?.arrancarTimer()
+        val texto = live.stop()
+        val tFinal = System.currentTimeMillis()
+        ui?.let {
+            val seg = it.frenarTimer()
+            it.poner(est = "✔ FINAL — %.1f s tras soltar · 1er parcial a los %.1f s de empezar"
+                .format(seg, (tPrimerParcial - t0Play) / 1000.0), txt = texto ?: "(vacío)")
+            Thread.sleep(4000)
+        }
+        Log.i("STTBENCH", "== APP->HOST GPU EN VIVO ($audio) ==")
+        Log.i("STTBENCH", "primerParcialMs=${tPrimerParcial - t0Play} (desde que arrancó el audio)")
+        Log.i("STTBENCH", "flushFinalMs=${tFinal - tFinAudio} (desde el fin del audio)")
+        Log.i("STTBENCH", "texto: $texto")
+        check(!texto.isNullOrBlank()) { "el streaming no devolvió texto" }
+    }
+
     @Test fun appHostGpu() {
         val host = requireNotNull(args.getString("sttHost")) { "falta -e sttHost" }
         val user = requireNotNull(args.getString("sttUser")) { "falta -e sttUser" }
