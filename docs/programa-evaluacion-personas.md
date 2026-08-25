@@ -104,6 +104,38 @@ Aplica a todos los perfiles, pero **sobre todo a Seguridad y Arquitecto de IA**,
 proponen fixes a mecanismos: cada vez que vayas a decir "endurecé X", chequeá antes si X debería
 existir.
 
+### 1.6 Caminá la superficie, no la leas
+
+Evaluar una superficie **leyendo el código o la doc con el sistema ya configurado NO es evaluarla**:
+es auditar la implementación, no la experiencia. Para onboarding, setup y cualquier flujo de
+"primera vez", el método es **ejecutarlo desde cero** (o lo más cerca posible: HOME-sandbox con
+fakes de systemctl/docker — técnica ya probada por DevOps —, contenedor descartable) y anotar cada
+punto donde un usuario real se trabaría.
+
+Dos reglas concretas:
+
+1. **Todo paso que mande a una consola web de un tercero** (admin de Tailscale, PAT de GitHub,
+   editar una ACL JSON) **es superficie de onboarding de primera clase**: hay que verificar que el
+   artefacto que el usuario LEE (manual, guía rápida in-app, demo) lo explique paso a paso.
+   **Delegar a `.env.example` (o a cualquier archivo del repo) NO cuenta como documentado** — el
+   usuario que está enrolando el celu no está leyendo comentarios de un dotfile.
+2. **Paridad entre superficies**: un fix de documentación tiene que aterrizar en TODAS las
+   superficies que enseñan lo mismo (manual ↔ guía rápida in-app ↔ demo ↔ README). Un manual
+   corregido con una demo vieja es una contradicción que confunde más que el hueco original.
+
+**Caso real (TS_AUTHKEY / OAuth client, 2026-08-24):** en TRES pasadas ningún perfil señaló que el
+manual no explicaba que hay que entrar a login.tailscale.com dos veces (generar TS_AUTHKEY y crear
+el OAuth client) — el paso a paso vivía sólo en `.env.example`, y DevOps lo tenía delante (su
+"camino real" lo lista) pero lo dio por documentado justamente por estar ahí. La causa estructural:
+el charter "instalar desde cero" de §2.E se declaró inejecutable en la pasada 1 (no había VM) y
+desapareció de las tablas de foco de las pasadas 2 y 3; el MOOT de H3 ("asume entorno dev ya es
+correcto") se sobre-extendió de "sabe usar una terminal" a "el setup del host no se evalúa". Lo
+trajo el usuario, no la evaluación — el mismo patrón que OSC 52 (§1.5). **Acotación del MOOT de
+H3**: un dev sabe correr `docker compose up`; NO adivina en qué submenú del admin de Tailscale se
+generan las dos claves. La próxima pasada debe reponer el charter de onboarding-desde-cero para
+DevOps y Usuario final, ejecutado con HOME-sandbox o contenedor descartable (compatible con
+"revertí todo").
+
 ---
 
 ## 2. Los perfiles

@@ -21,6 +21,7 @@ import (
 	"sync"
 	"time"
 
+	"tailscale.com/ipn/ipnstate"
 	"tailscale.com/net/netmon"
 	"tailscale.com/tsnet"
 )
@@ -37,7 +38,18 @@ var (
 	// está levantando (la app daría por buenos forwards que aún no pueden dialear).
 	upDone chan struct{}
 	upErr  error
+	// Foto del estado tomada justo antes de derribar un nodo cuyo Up venció ESTANDO en
+	// NeedsLogin/expired (reinicio-tras-vencer, fila 550): sin esto, tras el teardown
+	// Estado() daba "Detenido" para siempre y la app no podía distinguir "key vencida —
+	// reescaneá el QR" de un nodo apagado común. Sólo se guarda la foto si era de
+	// vencido (un timeout por mala red queda en "Starting" y NO se guarda: no mentimos).
+	// Se limpia en Stop() y al arrancar un Start nuevo.
+	ultimoEstado string
 )
+
+// Ventana de espera de Up. Variable (y no constante) sólo para que los tests no tengan
+// que esperar el minuto entero de un Up condenado a fallar.
+var upTimeout = 60 * time.Second
 
 // Android (API 30+) bloquea net.Interfaces() de Go (lee la tabla de rutas por netlink y
 // da "permission denied"), lo que rompe tsnet.Up. La solución oficial de Tailscale es
@@ -115,9 +127,16 @@ func Start(authKey, stateDir, hostname string) error {
 			mu.Unlock()
 			return err
 		}
+		// Start ya terminó: devolver su resultado real (leído bajo el lock). Con nil a
+		// secas, un Up fallido quedaba tapado y el caller daba por levantado un nodo que
+		// no lo está. (Hoy un Up fallido derriba el nodo, así que acá upErr es nil en la
+		// práctica — esto es defensa por si ese invariante cambia.)
+		err := upErr
 		mu.Unlock()
-		return nil
+		return err
 	}
+	// Intento nuevo: la foto sticky del episodio anterior deja de valer.
+	ultimoEstado = ""
 	// En Android no hay dir por defecto escribible para los logs de tsnet (HOME,
 	// /var/lib, /tmp fallan) y logpolicy.LogsDir PANICKEA. TS_LOGS_DIR se chequea
 	// primero: lo apuntamos al stateDir de la app (escribible).
@@ -148,13 +167,21 @@ func Start(authKey, stateDir, hostname string) error {
 
 	// Timeout: con una key válida pre-autorizada conecta en segundos; si es inválida no
 	// queremos colgar para siempre, devolvemos error y limpiamos.
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), upTimeout)
 	defer cancel()
 	if _, err := s.Up(ctx); err != nil {
+		// ANTES de derribar el nodo: si el backend quedó en NeedsLogin/expired (key
+		// vencida o consumida), fotografiar ese estado para que Estado() lo siga
+		// reportando tras el teardown (reinicio-tras-vencer). El sample usa un ctx corto
+		// propio: el de Up ya está vencido.
+		foto := fotoSiVencido(s)
 		mu.Lock()
 		mine := srv == s
 		if mine {
 			srv = nil
+			if foto != "" {
+				ultimoEstado = foto
+			}
 		}
 		mu.Unlock()
 		// Sólo cerramos si seguimos siendo el server vigente: si Stop() se adelantó, ya lo
@@ -165,6 +192,28 @@ func Start(authKey, stateDir, hostname string) error {
 		return finish(err)
 	}
 	return finish(nil)
+}
+
+// fotoSiVencido consulta el estado del server y devuelve la línea de Estado() SOLO si el
+// backend está en NeedsLogin o con la key expirada; "" en cualquier otro caso (mala red,
+// Starting, error de consulta). Así el sticky nunca miente "vencido" por un timeout de red.
+func fotoSiVencido(s *tsnet.Server) string {
+	lc, err := s.LocalClient()
+	if err != nil {
+		return ""
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	st, err := lc.StatusWithoutPeers(ctx)
+	if err != nil || st == nil {
+		return ""
+	}
+	expired := st.Self != nil && st.Self.Expired
+	if st.BackendState != "NeedsLogin" && !expired {
+		return ""
+	}
+	linea := formatearEstado(st)
+	return linea
 }
 
 // Running indica si el nodo está levantado.
@@ -189,8 +238,14 @@ func Running() bool {
 func Estado() string {
 	mu.Lock()
 	s := srv
+	sticky := ultimoEstado
 	mu.Unlock()
 	if s == nil {
+		// Nodo apagado: si el último episodio terminó VENCIDO (reinicio-tras-vencer),
+		// reportarlo — la app necesita mostrar "reescaneá el QR", no un "Detenido" mudo.
+		if sticky != "" {
+			return sticky
+		}
 		return "Detenido;0;0"
 	}
 	lc, err := s.LocalClient()
@@ -204,6 +259,11 @@ func Estado() string {
 	if err != nil || st == nil {
 		return "Desconocido;0;0"
 	}
+	return formatearEstado(st)
+}
+
+// formatearEstado arma la línea "<backendState>;<expired 0|1>;<keyExpiryEpoch|0>".
+func formatearEstado(st *ipnstate.Status) string {
 	expired := "0"
 	var exp int64
 	if st.Self != nil {
@@ -281,6 +341,8 @@ func Stop() {
 	srv = nil
 	listeners := lns
 	lns = nil
+	// Stop es deliberado (re-enrolado/teardown): el sticky de "vencido" deja de valer.
+	ultimoEstado = ""
 	mu.Unlock()
 
 	// Cerrar los listeners despierta a sus goroutines de accept, que terminan solas.

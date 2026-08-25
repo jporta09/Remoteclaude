@@ -6,6 +6,9 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
+
+	"tailscale.com/ipn/ipnstate"
 )
 
 // --- SetInterfaces: es el parseo que alimenta a tsnet en Android -------------------
@@ -137,5 +140,62 @@ func TestEstadoSinNodoEsDetenido(t *testing.T) {
 	// El contrato es de 3 campos separados por ';': la app lo parsea así.
 	if n := strings.Count(got, ";"); n != 2 {
 		t.Fatalf("el formato debe tener 3 campos (2 ';'), tiene %d", n)
+	}
+}
+
+// --- Estado sticky de "vencido" (reinicio-tras-vencer, fila 550) --------------------
+
+func TestEstadoStickyDeVencidoSobreviveAlTeardown(t *testing.T) {
+	mu.Lock()
+	srv = nil
+	ultimoEstado = "NeedsLogin;1;1787000000"
+	mu.Unlock()
+	if got := Estado(); got != "NeedsLogin;1;1787000000" {
+		t.Fatalf("con sticky de vencido y nodo apagado esperaba la foto, dio %q", got)
+	}
+	mu.Lock()
+	ultimoEstado = ""
+	mu.Unlock()
+}
+
+func TestStopLimpiaElSticky(t *testing.T) {
+	mu.Lock()
+	srv = nil
+	ultimoEstado = "NeedsLogin;1;1787000000"
+	mu.Unlock()
+	Stop()
+	if got := Estado(); got != "Detenido;0;0" {
+		t.Fatalf("Stop debe limpiar el sticky (re-enrolado arranca limpio); Estado dio %q", got)
+	}
+}
+
+func TestUnStartNuevoLimpiaElSticky(t *testing.T) {
+	mu.Lock()
+	srv = nil
+	ultimoEstado = "NeedsLogin;1;1787000000"
+	mu.Unlock()
+	// Start con key vacía va a fallar (timeout acortado para no esperar el minuto real),
+	// pero ANTES limpia el sticky del episodio anterior: lo que importa acá es ese
+	// efecto, no el resultado del Up.
+	viejo := upTimeout
+	upTimeout = 2 * time.Second
+	defer func() { upTimeout = viejo }()
+	_ = Start("", t.TempDir(), "test-sticky")
+	Stop() // por si llegó a levantar algo
+	mu.Lock()
+	limpio := ultimoEstado == "" ||
+		// si el propio Start volvió a fotografiar un NeedsLogin real, también vale:
+		// lo prohibido es que sobreviva la foto VIEJA de 1787000000
+		!strings.Contains(ultimoEstado, "1787000000")
+	mu.Unlock()
+	if !limpio {
+		t.Fatal("un Start nuevo debe descartar la foto sticky del episodio anterior")
+	}
+}
+
+func TestFormatearEstado(t *testing.T) {
+	got := formatearEstado(&ipnstate.Status{BackendState: "Running"})
+	if got != "Running;0;0" {
+		t.Fatalf("sin Self esperaba \"Running;0;0\", dio %q", got)
 	}
 }

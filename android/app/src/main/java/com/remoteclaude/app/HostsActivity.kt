@@ -37,13 +37,9 @@ class HostsActivity : AppCompatActivity() {
     private val bodyFont by lazy { resources.getFont(R.font.ubuntu) }        // cuerpo de texto (marca)
 
     // Scanner de QR (ZXing): el resultado es la auth key de Tailscale (ts-link-qr en la PC).
+    // La validación/aplicación vive en EnrolarTailscale (compartida con el ⟲ de la terminal).
     private val qrScanner = registerForActivityResult(ScanContract()) { result ->
-        val key = result.contents
-        when {
-            key.isNullOrBlank() -> {}   // cancelado
-            key.startsWith("tskey-") -> applyTailscaleKey(key.trim())
-            else -> Toast.makeText(this, "El QR no es una auth key de Tailscale", Toast.LENGTH_LONG).show()
-        }
+        if (EnrolarTailscale.aplicar(this, result.contents)) refrescarVpnEscalonado()
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -147,10 +143,11 @@ class HostsActivity : AppCompatActivity() {
         Tour.Paso(
             "Preparación de la PC",
             "Antes de conectarse, la PC debe configurarse una única vez: clone el " +
-                "repositorio de RemoteMarvin y ejecute estos comandos. Dejan listos " +
-                "SSH, tmux y los servicios; el manual completo quedará luego " +
-                "disponible en Documentos.",
-            codigo = "bash scripts/setup-host.sh\ndocker compose up -d --build",
+                "repositorio de RemoteMarvin y ejecute estos comandos. El archivo .env " +
+                "requiere una clave de la página de Tailscale (el único paso con login, " +
+                "detallado en la Guía rápida y en .env.example). El manual completo " +
+                "quedará luego disponible en Documentos.",
+            codigo = "bash scripts/setup-host.sh\ncp .env.example .env\ndocker compose up -d --build",
         ),
         Tour.Paso(
             "Las skills de Claude",
@@ -192,18 +189,37 @@ class HostsActivity : AppCompatActivity() {
 
     private val vpnPoll = Runnable { updateVpnStatus() }
 
+    // Cache de "el acceso venció": TailscaleBridge.accesoVencido() consulta el nodo por JNI
+    // (hasta 5s) y updateVpnStatus corre en el main thread — sondear ahí sería un ANR en
+    // potencia. Un hilo corto lo refresca y repinta; la UI sólo lee el flag.
+    @Volatile private var vencidoCache = false
+    private fun refrescarVencido() {
+        thread(name = "vpn-vencido") {
+            val v = try { TailscaleBridge.accesoVencido() } catch (_: Exception) { false }
+            if (v != vencidoCache) {
+                vencidoCache = v
+                runOnUiThread { if (!isFinishing && !isDestroyed) updateVpnStatus() }
+            }
+        }
+    }
+
     private fun updateVpnStatus() {
         val (txt, color) = when {
             !TailscaleBridge.isEnabled() ->
                 "🔒 VPN: directa · tocá para usar Tailscale embebido" to R.color.marvin_muted
             TailscaleBridge.isReady() ->
                 "🔒 Tailscale: conectada ✓" to R.color.marvin_green
+            // Antes de la rama de error: el reinicio-tras-vencer termina en un error de
+            // timeout de Up, pero la causa REAL (key vencida) la reporta el estado sticky.
+            vencidoCache ->
+                "🔒 Tailscale: acceso vencido — tocá y reescaneá el QR" to R.color.marvin_red
             TailscaleBridge.error() != null ->
                 "🔒 Tailscale: error — ${TailscaleBridge.error()} · tocá" to R.color.marvin_amber
             else -> "🔒 Tailscale: conectando…" to R.color.marvin_amber
         }
         vpnStatus.text = txt
         vpnStatus.setTextColor(getColor(color))
+        refrescarVencido()
         // Mientras conecta, refrescar solo hasta que muestre conectada ✓ (o error).
         vpnStatus.removeCallbacks(vpnPoll)
         if (TailscaleBridge.isEnabled() && !TailscaleBridge.isReady() && TailscaleBridge.error() == null) {
@@ -236,15 +252,7 @@ class HostsActivity : AppCompatActivity() {
                 if (typed.isNotEmpty() || current.isBlank()) applyTailscaleKey(typed)
             }
             .setNeutralButton("Escanear QR") { _, _ ->
-                qrScanner.launch(
-                    ScanOptions().apply {
-                        setDesiredBarcodeFormats(ScanOptions.QR_CODE)
-                        setPrompt("Apuntá al QR de la PC (ts-link-qr)")
-                        setBeepEnabled(false)
-                        setOrientationLocked(false)
-                        setCaptureActivity(PortraitCaptureActivity::class.java)
-                    }
-                )
+                qrScanner.launch(EnrolarTailscale.opciones())
             }
             .setNegativeButton("Cancelar", null)
             .show()
@@ -253,6 +261,13 @@ class HostsActivity : AppCompatActivity() {
     /** Guarda la auth key, reinicia el nodo embebido y refresca el estado. */
     private fun applyTailscaleKey(key: String) {
         TailscaleBridge.configure(this, key)
+        vencidoCache = false   // episodio nuevo: el sticky viejo ya no aplica
+        refrescarVpnEscalonado()
+    }
+
+    /** Repinta el estado ya, a los 3s y a los 9s (el nodo tarda en levantar). */
+    private fun refrescarVpnEscalonado() {
+        vencidoCache = false
         updateVpnStatus()
         vpnStatus.postDelayed({ updateVpnStatus() }, 3000)
         vpnStatus.postDelayed({ updateVpnStatus() }, 9000)
@@ -545,7 +560,11 @@ class HostsActivity : AppCompatActivity() {
 
         titulo("1 · En la PC: preparar el host (una sola vez)")
         parrafo("Cloná el repo de RemoteMarvin y corré (dentro de la carpeta clonada):")
-        comando("git clone https://github.com/jporta09/Remoteclaude\ncd Remoteclaude\nbash scripts/setup-host.sh\ndocker compose up -d --build")
+        comando("git clone https://github.com/jporta09/Remoteclaude\ncd Remoteclaude\nbash scripts/setup-host.sh\ncp .env.example .env   # completá TS_AUTHKEY (ver abajo)\ndocker compose up -d --build")
+        parrafo("Las claves del .env salen de la página de Tailscale (login.tailscale.com — "
+            + "es el único momento con login; en el teléfono nunca): TS_AUTHKEY en Settings → "
+            + "Keys → Generate (marcala Reusable), y el OAuth client para los QR en Settings → "
+            + "OAuth clients → Generate. El paso a paso está en .env.example.")
 
         titulo("2 · Autorizar el teléfono")
         parrafo("Al agregar/conectar un host, la app muestra su clave SSH pública (ícono de "
@@ -553,9 +572,10 @@ class HostsActivity : AppCompatActivity() {
             + "nunca sale del teléfono (Android Keystore).")
 
         titulo("3 · (Opcional) Conectar desde cualquier red — Tailscale")
-        parrafo("En la PC generá un QR de un solo uso y escanealo desde la línea “VPN” de "
-            + "esta pantalla. No hace falta IP fija ni abrir puertos.")
-        comando("./scripts/ts-link-qr.sh")
+        parrafo("En la PC generá un QR de un solo uso (requiere el OAuth client cargado en el "
+            + ".env) y escanealo desde la línea “VPN” de esta pantalla. No hace falta IP fija "
+            + "ni abrir puertos. Si a la cámara le cuesta el QR de la terminal: --png.")
+        comando("./scripts/ts-link-qr.sh --png")
 
         titulo("4 · Agregar el host y conectar")
         parrafo("Tocá “+ Agregar host”: nombre, host/IP, puerto y tu usuario de la PC "

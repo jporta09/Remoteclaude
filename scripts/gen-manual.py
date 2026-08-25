@@ -261,6 +261,16 @@ S.append(B("<b>Teclado extra</b>: Ctrl / Alt / Shift, flechas, Tab y ⇧Tab — 
            "un prompt de Claude después de scrollear)."))
 S.append(B("El <b>›</b> del borde derecho da vuelta la fila: aparecen <b>Home / End / "
            "PgUp / PgDn</b> — que además son las teclas de scroll de Claude Code."))
+S.append(B("<b>Leer un plan largo de Claude</b>: en el diálogo de aprobación, "
+           "<font name='Mono' size='9'>Ctrl+G</font> abre el plan en un editor (nano) — "
+           "con scroll y ajuste de línea cómodos en el teléfono; podés editarlo y al salir "
+           "sigue el flujo. Para buscar en lo ya escrito: "
+           "<font name='Mono' size='9'>Ctrl+O</font> entra al modo transcripción "
+           "(<font name='Mono' size='9'>/</font> busca, "
+           "<font name='Mono' size='9'>{ }</font> salta entre tus mensajes, "
+           "<font name='Mono' size='9'>v</font> abre TODO en el editor, "
+           "<font name='Mono' size='9'>q</font> sale). La app deja "
+           "<font name='Mono' size='9'>EDITOR=nano</font> listo en sus sesiones nuevas."))
 S.append(B("<b>Zoom</b>: pellizcá para agrandar o achicar la letra de la terminal."))
 S.append(B("<b>Renombrar una pestaña</b>: dejá apretado el nombre. Renombra también la "
            "sesión tmux en el host."))

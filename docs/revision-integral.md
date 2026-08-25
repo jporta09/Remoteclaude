@@ -907,10 +907,36 @@ server se despertaba recién DESPUÉS del dictado que lo encontró caído.
    reenganche de tmux intacto al restaurarse.
 3. ~~**5c · "Detener" sticky ante rotación**~~ → **VALIDADO (2026-08-24)** por adb: Detener paró el
    FGS, la rotación NO lo revivió, y el arranque fresco lo rearmó.
-4. **A+/A− de fuente discoverable**: el contenido largo (planes de Claude) se ve chico en el celu y
-   la única palanca de la app es el tamaño de fuente, hoy sólo por pinch — hacerlo descubrible
-   (p.ej. botones A+/A− en algún menú). Es la palanca app-side del refinamiento "planes ilegibles"
-   (el layout del plan en sí es del TUI de Claude Code, no nuestro).
-5. **Auditoría de metodología de los agentes-perfil**: nadie señaló que el paso a paso del admin de
-   Tailscale faltaba en el manual (¿evaluaron el onboarding sin caminarlo desde cero?). Ver memoria
-   `chequear-como-evaluaron-onboarding-agentes`.
+4. ~~**A+/A− de fuente discoverable**~~ → **DESCARTADO (2026-08-25, decisión del usuario tras
+   cuestionar la premisa)**: la demo ya enseña el pinch y el dolor real ("planes chicos") es del TUI
+   de Claude Code. En su lugar se documentó lo que Claude Code YA trae para leer cómodo en 46
+   columnas: **Ctrl+G** abre el plan en el editor en el diálogo de aprobación (≥2.1.243) y **Ctrl+O**
+   es el transcript mode con búsqueda (≥2.1.142); las sesiones nuevas de la app exportan
+   `EDITOR=nano` por default para que Ctrl+G funcione (v1.30.0), y el manual lo explica.
+5. ~~**Auditoría de metodología de los agentes-perfil**~~ → **HECHA (2026-08-25)**, hipótesis
+   confirmada con causa estructural: el charter §2.E "instalar desde cero" se declaró inejecutable
+   en la pasada 1 y desapareció de las tablas de foco; el MOOT de H3 se sobre-extendió; y "está en
+   `.env.example`" contó como documentado (DevOps tenía los pasos delante). Corregido: **playbook
+   §1.6 "Caminá la superficie, no la leas"** + defs actualizadas (devops ejecuta con HOME-sandbox,
+   usuario-final = primer uso del sistema COMPLETO, ux-devex = paridad entre superficies). La
+   próxima pasada repone el charter de onboarding. Residual de producto cerrado en v1.30.0: el
+   quickstart in-app y la demo ahora mencionan `.env` + las claves del admin de Tailscale.
+
+## I · Reinicio-tras-vencer + re-enrolar de un toque (v1.30.0, 2026-08-25)
+
+Cierra los dos restos de F10 (fila 550):
+
+- **Estado sticky en el bridge Go** (`marvints.go`): al fallar `Up` se fotografía el estado del
+  backend ANTES del teardown y, si era `NeedsLogin`/expired, `Estado()` lo sigue reportando con el
+  nodo apagado (antes: "Detenido" para siempre → la detección no podía disparar al reabrir la app).
+  La foto NO se guarda si el fallo fue por red (Starting) — el sticky nunca miente "vencido". Se
+  limpia en `Stop()` y al arrancar un `Start` nuevo. Elegido sobre "mantener el nodo vivo en
+  NeedsLogin" porque eso cuesta batería (printAuthURLLoop despierta cada 5s indefinidamente).
+  + fix defensivo: `Start` idempotente ya no devuelve `nil` a secas (devuelve el `upErr` real).
+  Tests Go nuevos (sticky/limpieza/formato) con `upTimeout` acortable para no esperar el minuto.
+- **App**: `EnrolarTailscale.kt` (scanner compartido); callback `onAccesoVencido` de la sesión →
+  la barra muta a **"⟲ Reescanear QR"** (rojo, lanza el scanner directo; una reconexión OK apaga el
+  episodio); `HostsActivity` gana la rama **"acceso vencido — tocá y reescaneá"** en rojo (flag
+  cacheado fuera del main thread: `accesoVencido()` es JNI de hasta 5s, sondear en `updateVpnStatus`
+  era un ANR en potencia). El banner de la terminal ahora apunta al ⟲.
+- Validación on-device pendiente al momento de escribir esto (expire por API + force-stop + reabrir).

@@ -114,3 +114,21 @@ Los tres criterios se cumplieron en vivo (S23 real, tailnet real):
 **Sigue pendiente** (ya estaba en "Límites conocidos"): reinicio-tras-vencer (el nodo no levanta y
 `Estado()` da "Detenido" — hay que mantenerlo en NeedsLogin para poder detectarlo) y la UX de
 re-enrolar de un toque desde el aviso.
+
+---
+
+## Reinicio-tras-vencer (v1.30.0): cómo validarlo
+
+Con el estado sticky del bridge (v1.30.0), el caso "cerrar y reabrir la app ya vencida" quedó
+cubierto. Para validarlo en vivo:
+
+1. Expirá el nodo del celu por API (la consola no trae el botón para nodos OAuth+tag):
+   generá un API access token en Settings → Keys y usá `POST /api/v2/device/<id>/expire`
+   (el node ID sale del estado de Tailscale del host). Revocá el token al terminar.
+2. **Cerrá la app del todo** (force-stop o deslizarla de recientes) y reabrila.
+3. Esperado en la pantalla de hosts: la línea de la VPN pasa a **"acceso vencido — tocá y
+   reescaneá el QR"** en rojo (tras el timeout de levantar el nodo, ~60s; antes de v1.30.0
+   quedaba "conectando…"/"error" sin causa). En la terminal: el banner de vencido + la barra
+   con **⟲ Reescanear QR**.
+4. Re-enrolar de un toque: tocá ⟲ → scanner → `./scripts/ts-link-qr.sh --png` en la PC →
+   escanear → reconecta sola.

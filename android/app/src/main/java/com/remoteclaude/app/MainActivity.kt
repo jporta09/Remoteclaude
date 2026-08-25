@@ -482,7 +482,26 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         },
+        onAccesoVencido = { runOnUiThread { accesoVencido = true; pintarBarra() } },
     )
+
+    // El acceso de Tailscale venció: la barra muestra ⟲ Reescanear QR. Lo prende el
+    // callback de la sesión (donde ya se detecta, sin sondas JNI en el main thread) y lo
+    // apaga una reconexión exitosa.
+    @Volatile private var accesoVencido = false
+
+    // Re-enrolar de un toque: scanner de QR desde la terminal (mismo flujo que en hosts).
+    private val qrScanner = registerForActivityResult(
+        com.journeyapps.barcodescanner.ScanContract(),
+    ) { result ->
+        if (EnrolarTailscale.aplicar(this, result.contents)) {
+            accesoVencido = false
+            pintarBarra()
+            Toast.makeText(this, "Re-vinculando Tailscale…", Toast.LENGTH_SHORT).show()
+            // onResume (al volver del scanner) ya reintenta; esto fuerza también las caídas.
+            tabs.forzarReconexiones()
+        }
+    }
 
     @Volatile private var sesionPerdidaCount = 0
 
@@ -514,16 +533,35 @@ class MainActivity : AppCompatActivity() {
 
     /** Pinta la barra según el estado REAL de la pestaña activa (no del extra del Intent). */
     private fun pintarBarra() {
-        val (sufijo, color) = when (tabs.sesionActiva?.estado) {
-            SshTerminalSession.Estado.CONECTADO -> "" to Paleta.ACCENT
-            SshTerminalSession.Estado.RECONECTANDO -> " · reconectando…" to getColor(R.color.marvin_amber)
-            SshTerminalSession.Estado.CAIDO -> " · sin conexión" to Paleta.REC_FG
+        val estado = tabs.sesionActiva?.estado
+        // Una reconexión exitosa apaga el episodio de "vencido" (se re-enroló, o el nodo
+        // volvió): el flag lo prende el callback de la sesión, nunca una sonda acá (JNI).
+        if (estado == SshTerminalSession.Estado.CONECTADO) accesoVencido = false
+        val (sufijo, color) = when {
+            accesoVencido -> " · acceso vencido" to Paleta.REC_FG
+            estado == SshTerminalSession.Estado.CONECTADO -> "" to Paleta.ACCENT
+            estado == SshTerminalSession.Estado.RECONECTANDO -> " · reconectando…" to getColor(R.color.marvin_amber)
+            estado == SshTerminalSession.Estado.CAIDO -> " · sin conexión" to Paleta.REC_FG
             else -> " · conectando…" to getColor(R.color.marvin_amber)   // CONECTANDO o null
         }
         barraLabel.text = "‹  $hostLabel$sufijo"
         barraLabel.setTextColor(color)
-        barraReconectar.visibility =
-            if (tabs.sesionActiva?.estado == SshTerminalSession.Estado.CAIDO) View.VISIBLE else View.GONE
+        // Con el acceso vencido, el botón de la barra muta a ⟲ Reescanear QR (reconectar
+        // no serviría de nada); si no, es el ↻ Reconectar de siempre para el estado CAIDO.
+        if (accesoVencido) {
+            barraReconectar.text = "⟲ Reescanear QR"
+            barraReconectar.contentDescription = "Reescanear el QR de Tailscale"
+            barraReconectar.setTextColor(Paleta.REC_FG)
+            barraReconectar.setOnClickListener { qrScanner.launch(EnrolarTailscale.opciones()) }
+            barraReconectar.visibility = View.VISIBLE
+        } else {
+            barraReconectar.text = "↻ Reconectar"
+            barraReconectar.contentDescription = "Reconectar"
+            barraReconectar.setTextColor(getColor(R.color.marvin_amber))
+            barraReconectar.setOnClickListener { tabs.reconectarActiva() }
+            barraReconectar.visibility =
+                if (estado == SshTerminalSession.Estado.CAIDO) View.VISIBLE else View.GONE
+        }
     }
 
     /** La clave del host cambió: la conexión YA fue rechazada; acá sólo se decide qué hacer. */

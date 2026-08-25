@@ -37,6 +37,9 @@ class SshTerminalSession(
     // terminal lo entierra el redibujo de tmux, así que se necesita un Toast. Pasa el
     // nombre de la sesión para que la UI sólo avise por la pestaña activa.
     private val onSesionPerdida: ((String) -> Unit)? = null,
+    // El acceso de Tailscale venció (una vez por episodio, junto con el banner): la UI
+    // muestra el ⟲ Reescanear QR en la barra. Corre en el hilo ssh-loop.
+    private val onAccesoVencido: (() -> Unit)? = null,
 ) : TerminalSession(5000, client) {
 
     /** Estado real de la conexión SSH, leído por la UI. */
@@ -205,8 +208,12 @@ class SshTerminalSession(
                 // historial no junta basura. Sólo afecta sesiones creadas por la app (el env
                 // se fija al CREAR la sesión tmux); en la PC manda el settings.json de cada
                 // uno, y dentro de una sesión /tui default lo revierte si alguien lo prefiere.
+                // EDITOR con default: el Ctrl+G de Claude Code (abrir el plan en el editor —
+                // la forma cómoda de LEER un plan largo en 46 columnas) y la 'v' del
+                // transcript mode necesitan un editor; sshd no pasa EDITOR y la mayoría de
+                // los hosts no lo setean. ${EDITOR:-nano} respeta el del usuario si existe.
                 s.execCommand(
-                    "MARVIN_DISPLAY=localhost:6099 CLAUDE_CODE_NO_FLICKER=1 " +
+                    "EDITOR=\"\${EDITOR:-nano}\" MARVIN_DISPLAY=localhost:6099 CLAUDE_CODE_NO_FLICKER=1 " +
                         "tmux -u new -A -D -s " + ShellQuote.sq(tmuxSession)
                 )
                 sshSession = s
@@ -289,14 +296,15 @@ class SshTerminalSession(
             // reconectar no va a lograr nada: se avisa una vez con una causa accionable.
             if (!avisoVencidoDado && attempt >= 2 && TailscaleBridge.accesoVencido()) {
                 status(
-                    "\r\n[el acceso de Tailscale venció — reescaneá el QR desde la línea de " +
-                        "estado de Tailscale para volver a habilitar la conexión]\r\n"
+                    "\r\n[el acceso de Tailscale venció — tocá ⟲ Reescanear QR en la barra " +
+                        "de arriba para volver a habilitar la conexión]\r\n"
                 )
                 Diagnostico.registrar(
                     Diagnostico.Nivel.ERROR, "tailscale",
                     "el acceso de Tailscale venció (node key expirada) — hay que reescanear el QR",
                 )
                 avisoVencidoDado = true
+                onAccesoVencido?.invoke()
             }
             val waitMs = minOf(1000L * attempt, 8000L)
             synchronized(reconnectLock) {
