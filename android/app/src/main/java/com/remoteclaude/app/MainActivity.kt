@@ -69,6 +69,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var barraHost: View
     private lateinit var barraLabel: TextView
     private lateinit var barraReconectar: TextView
+    private lateinit var barraLogo: ImageView
     private var demoPendiente = false
     private val prefs by lazy { getSharedPreferences("remotemarvin", Context.MODE_PRIVATE) }
     private val monoFont: Typeface by lazy { resources.getFont(R.font.mononoki) }
@@ -538,7 +539,10 @@ class MainActivity : AppCompatActivity() {
         // volvió): el flag lo prende el callback de la sesión, nunca una sonda acá (JNI).
         if (estado == SshTerminalSession.Estado.CONECTADO) accesoVencido = false
         val (sufijo, color) = when {
-            accesoVencido -> " · acceso vencido" to Paleta.REC_FG
+            // Sin sufijo: el botón ⟲ Reescanear QR ya ocupa la barra y el texto largo
+            // quedaba aplastado en 5 renglones (visto en vivo, S23). El rojo del título
+            // + el ⟲ + el banner de la terminal comunican el estado igual.
+            accesoVencido -> "" to Paleta.REC_FG
             estado == SshTerminalSession.Estado.CONECTADO -> "" to Paleta.ACCENT
             estado == SshTerminalSession.Estado.RECONECTANDO -> " · reconectando…" to getColor(R.color.marvin_amber)
             estado == SshTerminalSession.Estado.CAIDO -> " · sin conexión" to Paleta.REC_FG
@@ -562,6 +566,10 @@ class MainActivity : AppCompatActivity() {
             barraReconectar.visibility =
                 if (estado == SshTerminalSession.Estado.CAIDO) View.VISIBLE else View.GONE
         }
+        // Con un botón de acción en la barra (⟲ o ↻) el espacio es escaso: el logo
+        // decorativo se lo cede al título, que si no quedaba partido en renglones.
+        barraLogo.visibility =
+            if (barraReconectar.visibility == View.VISIBLE) View.GONE else View.VISIBLE
     }
 
     /** La clave del host cambió: la conexión YA fue rechazada; acá sólo se decide qué hacer. */
@@ -687,6 +695,10 @@ class MainActivity : AppCompatActivity() {
             typeface = monoFont
             setTextColor(Paleta.ACCENT)
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+            // Nunca partir el título en renglones (visto en vivo: "MiPC" quedaba "Mi/PC"
+            // cuando el botón de acción achica el espacio); si no entra, ellipsis.
+            isSingleLine = true
+            ellipsize = android.text.TextUtils.TruncateAt.END
         }
         addView(barraLabel, LinearLayout.LayoutParams(0, Paleta.WRAP, 1f))
         // "Reconectar" aparece SOLO cuando la conexión cayó (auth/host-key): antes no había
@@ -721,10 +733,11 @@ class MainActivity : AppCompatActivity() {
                 startActivity(Intent(this@MainActivity, DiagnosticoActivity::class.java))
             }
         }, LinearLayout.LayoutParams(Paleta.WRAP, Paleta.WRAP))
-        addView(ImageView(this@MainActivity).apply {
+        barraLogo = ImageView(this@MainActivity).apply {
             setImageResource(R.drawable.marvin_isologo_bar)
             adjustViewBounds = true
-        }, LinearLayout.LayoutParams(Paleta.WRAP, dp(22)))
+        }
+        addView(barraLogo, LinearLayout.LayoutParams(Paleta.WRAP, dp(22)))
     }
 
     /** Burbuja del dictado en vivo: los parciales mientras sostenés 🎤. */

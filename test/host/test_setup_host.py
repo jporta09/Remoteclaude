@@ -185,7 +185,8 @@ def test_setup_host_exige_uv(tmp_path):
     """Sin uv el setup FALLA (exit 1): un host 'configurado a medias' (sin dictado) era
     exactamente el estado que el gate de conexión de la app quiere impedir."""
     script = os.path.join(os.path.dirname(LIB), "setup-host.sh")
-    contenido = open(script).read()
+    with open(script) as f:
+        contenido = f.read()
     assert 'exit 1' in contenido.split('falta uv')[1][:400], \
         "el bloque de uv faltante tiene que salir con error, no saltear el STT"
     assert "SALTAR_STT" not in contenido, "no debe quedar el modo 'saltear STT en silencio'"

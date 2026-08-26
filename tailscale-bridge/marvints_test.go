@@ -2,6 +2,7 @@ package marvints
 
 import (
 	"encoding/hex"
+	"fmt"
 	"net"
 	"strings"
 	"sync"
@@ -197,5 +198,41 @@ func TestFormatearEstado(t *testing.T) {
 	got := formatearEstado(&ipnstate.Status{BackendState: "Running"})
 	if got != "Running;0;0" {
 		t.Fatalf("sin Self esperaba \"Running;0;0\", dio %q", got)
+	}
+}
+
+func TestErrorDeAuthRechazada(t *testing.T) {
+	casos := []struct {
+		err  error
+		want bool
+	}{
+		// El error real observado en vivo (S23, 2026-08-25) al reabrir con la key vencida.
+		{fmt.Errorf("tsnet.Up: backend: invalid key: API key kxxYWHgmQ921CNTRL not valid"), true},
+		{fmt.Errorf("register request: node key expired"), true},
+		// Problemas de red: NO son vencido.
+		{fmt.Errorf("tsnet.Up: context deadline exceeded"), false},
+		{fmt.Errorf("dial tcp: connection refused"), false},
+		{fmt.Errorf("lookup controlplane.tailscale.com: no such host"), false},
+		{nil, false},
+	}
+	for _, c := range casos {
+		if got := errorDeAuthRechazada(c.err); got != c.want {
+			t.Errorf("errorDeAuthRechazada(%v) = %v, esperaba %v", c.err, got, c.want)
+		}
+	}
+}
+
+func TestFotoDeFallo(t *testing.T) {
+	// La foto del estado, si existe, manda (venga el error que venga).
+	if got := fotoDeFallo("NeedsLogin;1;99", fmt.Errorf("da igual")); got != "NeedsLogin;1;99" {
+		t.Fatalf("con foto esperaba la foto, dio %q", got)
+	}
+	// Sin foto pero con rechazo de auth: se sintetiza el vencido.
+	if got := fotoDeFallo("", fmt.Errorf("backend: invalid key: API key k1 not valid")); got != "NeedsLogin;1;0" {
+		t.Fatalf("con rechazo de auth esperaba \"NeedsLogin;1;0\", dio %q", got)
+	}
+	// Sin foto y con error de red: nada — no se miente vencido.
+	if got := fotoDeFallo("", fmt.Errorf("context deadline exceeded")); got != "" {
+		t.Fatalf("con error de red esperaba \"\", dio %q", got)
 	}
 }

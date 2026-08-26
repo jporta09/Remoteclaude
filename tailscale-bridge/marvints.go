@@ -14,6 +14,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"log"
 	"net"
 	"os"
 	"strconv"
@@ -173,8 +174,10 @@ func Start(authKey, stateDir, hostname string) error {
 		// ANTES de derribar el nodo: si el backend quedó en NeedsLogin/expired (key
 		// vencida o consumida), fotografiar ese estado para que Estado() lo siga
 		// reportando tras el teardown (reinicio-tras-vencer). El sample usa un ctx corto
-		// propio: el de Up ya está vencido.
-		foto := fotoSiVencido(s)
+		// propio: el de Up ya está vencido. Si la foto no alcanza, el propio error de Up
+		// puede ser la evidencia (ver fotoDeFallo).
+		foto := fotoDeFallo(fotoSiVencido(s), err)
+		log.Printf("marvints: Up falló (%v); foto=%q", err, foto)
 		mu.Lock()
 		mine := srv == s
 		if mine {
@@ -214,6 +217,35 @@ func fotoSiVencido(s *tsnet.Server) string {
 	}
 	linea := formatearEstado(st)
 	return linea
+}
+
+// fotoDeFallo decide qué sticky guardar cuando Up falló: la foto del estado si dio
+// vencido, y si no, el propio error de Up cuando es un rechazo de credenciales del
+// control plane. Ese segundo camino existe porque se observó EN VIVO (S23, 2026-08-25)
+// que el arranque con la node key ya vencida no muere por timeout: tsnet intenta
+// re-registrarse con la auth key guardada, el control la rechaza en segundos
+// ("invalid key: API key … not valid") y en ese instante el backend todavía no pasó a
+// NeedsLogin — la foto sale vacía. Un rechazo de credenciales significa exactamente
+// "hay que reescanear el QR", así que se sintetiza el vencido igual.
+func fotoDeFallo(foto string, err error) string {
+	if foto != "" {
+		return foto
+	}
+	if errorDeAuthRechazada(err) {
+		return "NeedsLogin;1;0"
+	}
+	return ""
+}
+
+// errorDeAuthRechazada reconoce los errores de Up que son un rechazo de auth del control
+// plane (key inválida/vencida), y NO problemas de red (timeout, DNS, refused) — sobre esos
+// no hay que mentir "vencido".
+func errorDeAuthRechazada(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "invalid key") || strings.Contains(msg, "key expired")
 }
 
 // Running indica si el nodo está levantado.

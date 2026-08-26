@@ -123,12 +123,28 @@ Con el estado sticky del bridge (v1.30.0), el caso "cerrar y reabrir la app ya v
 cubierto. Para validarlo en vivo:
 
 1. Expirá el nodo del celu por API (la consola no trae el botón para nodos OAuth+tag):
-   generá un API access token en Settings → Keys y usá `POST /api/v2/device/<id>/expire`
+   generá un API access token en Settings → Keys. **OJO (validado 2026-08-25): los nodos con
+   tag traen `keyExpiryDisabled` y ahí `/expire` devuelve 200 pero es un NO-OP** — primero
+   habilitá el expiry y recién después expirá:
+   `POST /api/v2/device/<id>/key {"keyExpiryDisabled": false}` →
+   `POST /api/v2/device/<id>/expire`
    (el node ID sale del estado de Tailscale del host). Revocá el token al terminar.
 2. **Cerrá la app del todo** (force-stop o deslizarla de recientes) y reabrila.
 3. Esperado en la pantalla de hosts: la línea de la VPN pasa a **"acceso vencido — tocá y
-   reescaneá el QR"** en rojo (tras el timeout de levantar el nodo, ~60s; antes de v1.30.0
-   quedaba "conectando…"/"error" sin causa). En la terminal: el banner de vencido + la barra
-   con **⟲ Reescanear QR**.
+   reescaneá el QR"** en rojo en ~10s (validado: 9s — el control rechaza la re-registración
+   con `invalid key` al toque, no espera el timeout de 60s; antes de v1.30.0 quedaba
+   "conectando…"/"error" sin causa). En la terminal: el banner de vencido + la barra con
+   **⟲ Reescanear QR** (título "‹ Host" en rojo, sin sufijo — el texto largo se aplastaba).
 4. Re-enrolar de un toque: tocá ⟲ → scanner → `./scripts/ts-link-qr.sh --png` en la PC →
-   escanear → reconecta sola.
+   escanear → reconecta sola (nodo nuevo en la tailnet; los vencidos viejos se borran de la
+   consola cuando quieras).
+
+Matices que van a aparecer al validar (todos vistos en vivo, 2026-08-25):
+
+- **Si matás y reabrís la app MUY rápido tras el expire** (antes de que el netmap con el
+  vencimiento le llegue), puede levantar "conectada ✓" con el estado cacheado — es el mismo
+  período de gracia de ~15-20 min de la sesión WireGuard viva; el control la echa solo después.
+- **Si la auth key guardada todavía es válida** (escaneada hace poco: son de un solo uso y
+  10 min), tsnet se re-registra solo y la app SE CURA SIN AVISO (self-heal, aparece un nodo
+  nuevo en la tailnet). El "acceso vencido" sólo aparece cuando de verdad hace falta reescanear
+  — que es exactamente el comportamiento deseado.

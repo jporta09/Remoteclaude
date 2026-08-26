@@ -939,4 +939,23 @@ Cierra los dos restos de F10 (fila 550):
   episodio); `HostsActivity` gana la rama **"acceso vencido — tocá y reescaneá"** en rojo (flag
   cacheado fuera del main thread: `accesoVencido()` es JNI de hasta 5s, sondear en `updateVpnStatus`
   era un ANR en potencia). El banner de la terminal ahora apunta al ⟲.
-- Validación on-device pendiente al momento de escribir esto (expire por API + force-stop + reabrir).
+- **VALIDADO EN VIVO (S23, 2026-08-25)** con dos hallazgos que cambiaron el diseño:
+  1. **El arranque-tras-vencer real no muere por timeout**: tsnet intenta re-registrarse con la
+     auth key guardada y el control plane la rechaza en segundos (`invalid key: API key … not
+     valid`) — y en ese instante el backend todavía no pasó a `NeedsLogin`, así que la foto del
+     estado salía vacía. Fix: `fotoDeFallo`/`errorDeAuthRechazada` — si la foto no da vencido pero
+     el error de `Up` es un rechazo de credenciales del control ("invalid key"/"key expired"), se
+     sintetiza el sticky igual (un rechazo de credenciales significa exactamente "reescaneá el
+     QR"; los errores de red NO matchean y no mienten vencido). Con esto la línea roja aparece a
+     los **~9 segundos** de abrir la app.
+  2. **`POST /device/:id/expire` sobre un nodo con `keyExpiryDisabled` (el default con tags) da
+     200 pero es un no-op**: para simular el vencimiento hay que mandar antes
+     `POST /device/:id/key {"keyExpiryDisabled": false}` (doc de validación actualizada).
+  Flujo completo validado: línea roja en hosts a los 9s → banner en terminal + **⟲ Reescanear
+  QR** en la barra → un toque → scanner → QR de `ts-link-qr.sh --png` → nodo nuevo activo con
+  conexión directa y el tmux reatachado solo. Cosmético corregido en vivo: el sufijo "· acceso
+  vencido" del título quedaba aplastado en 5 renglones por el botón ⟲ — se quitó (título rojo +
+  ⟲ + banner ya comunican el estado).
+  Bonus observado: si la auth key guardada TODAVÍA es válida al reabrir, tsnet se re-registra
+  solo y la app se cura sin intervención (self-heal) — el vencido sólo aparece cuando de verdad
+  hace falta reescanear.
