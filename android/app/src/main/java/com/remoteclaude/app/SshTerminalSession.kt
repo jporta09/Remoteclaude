@@ -177,6 +177,9 @@ class SshTerminalSession(
                     cambiarEstado(Estado.CAIDO)
                     break
                 }
+                // Aviso proactivo del expiry del nodo del HOST (SRE-4p-1): el celu no lo ve,
+                // pero el host sí, y en las semanas previas al corte todavía es alcanzable.
+                avisarSiExpiraHostPronto(c)
                 // Aviso de sesión perdida: si esto es una RECONEXIÓN y la sesión tmux ya no
                 // existe en el host, el server se reinició (reboot/OOM/kill) y `tmux new -A`
                 // va a crear una NUEVA vacía. Antes eso pasaba mudo en la misma pestaña y
@@ -453,6 +456,45 @@ class SshTerminalSession(
         true
     }
 
+    // SRE-4p-1: el nodo del HOST se enrola sin tag y su key vence a ~180 días; el celu NO puede
+    // detectarlo (sólo ve su propio nodo embebido, no los peers). Pero el HOST sí ve su expiry,
+    // y en las SEMANAS PREVIAS al corte todavía es alcanzable — así que acá, una vez por sesión,
+    // se lee el expiry del nodo del host y se avisa proactivamente si falta poco y el nodo no
+    // tiene tag (con tag el expiry queda deshabilitado, no vence). Best-effort: cualquier fallo
+    // (sin docker/jq/contenedor, o docker sin permiso) es SILENCIO — nunca una falsa alarma.
+    @Volatile private var expiryHostChequeado = false
+
+    private fun avisarSiExpiraHostPronto(c: Connection) {
+        if (expiryHostChequeado) return
+        expiryHostChequeado = true
+        try {
+            val chk = c.openSession()
+            chk.execCommand(
+                "docker exec remoteclaude-ts tailscale status --json 2>/dev/null | " +
+                    "jq -r 'if (.Self.Tags // [] | length) > 0 then \"TAGGED\" " +
+                    "elif .Self.KeyExpiry == null then \"NOEXP\" " +
+                    "else (((.Self.KeyExpiry | fromdateiso8601) - now) / 86400 | floor | tostring) end' " +
+                    "2>/dev/null",
+            )
+            val out = String(chk.stdout.readBytes(), Charsets.UTF_8).trim()
+            chk.close()
+            val dias = out.toIntOrNull() ?: return   // TAGGED / NOEXP / vacío -> no avisar
+            if (dias in 0..UMBRAL_EXPIRY_HOST_DIAS) {
+                status(
+                    "\r\n[el acceso Tailscale de la PC vence en $dias día(s) — renovalo en la PC " +
+                        "(agregale el tag al nodo, o deshabilitá el key expiry en la consola) o " +
+                        "vas a perder la conexión remota]\r\n",
+                )
+                Diagnostico.registrar(
+                    Diagnostico.Nivel.AVISO, "tailscale",
+                    "el nodo del host vence en $dias días (sin tag) — renovar antes del corte",
+                )
+            }
+        } catch (_: Exception) {
+            // best-effort: sin docker/jq/permiso, no se avisa (y no se rompe la conexión)
+        }
+    }
+
     private fun tmuxSesionVive(c: Connection): Boolean = try {
         val chk = c.openSession()
         chk.execCommand("tmux has-session -t " + ShellQuote.sq(tmuxSession) + " 2>/dev/null && echo VIVE")
@@ -472,6 +514,7 @@ class SshTerminalSession(
         const val KEEPALIVE_MS = 10_000L        // cada cuánto pinguea el NAT y corre el detector
         const val UMBRAL_SIN_ECO_MS = 7_000L    // input sin respuesta > esto -> sospechar half-open
         const val PROBE_TIMEOUT_MS = 5_000L     // connect+read del probe fuera de banda
+        const val UMBRAL_EXPIRY_HOST_DIAS = 21  // avisar si el nodo del host vence en <= esto
 
         // El ERROR de "acceso vencido" a Diagnóstico se registra UNA vez por EPISODIO (no por
         // pestaña): N pestañas pierden la tailnet a la vez y llenaban el post-mortem con N

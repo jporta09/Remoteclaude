@@ -76,6 +76,36 @@ else
   echo "  ❌ no puedo escribir $notify"; ok=0
 fi
 
+# Expiry del nodo Tailscale del HOST (SRE-4p-1): si el nodo se enroló SIN tag, su node key
+# vence a ~180 días y un día el celu deja de conectar sin ningún aviso (el stack de "acceso
+# vencido" de la app cubre sólo el nodo del celu, no el del host). El host SÍ ve su propio
+# expiry: acá lo mostramos para que se renueve a tiempo (con tag / disable key expiry no vence).
+echo
+echo "Nodo Tailscale del host:"
+if command -v docker >/dev/null 2>&1 && [ "$tiene_jq" = 1 ]; then
+  st=$(docker exec remoteclaude-ts tailscale status --json 2>/dev/null)
+  if [ -n "$st" ]; then
+    tagged=$(printf '%s' "$st" | jq -r '(.Self.Tags // [] | length) > 0' 2>/dev/null)
+    exp=$(printf '%s' "$st" | jq -r '.Self.KeyExpiry // "null"' 2>/dev/null)
+    if [ "$tagged" = "true" ] || [ "$exp" = "null" ]; then
+      echo "  ✅ key expiry deshabilitado (nodo con tag o sin vencimiento): no vence"
+    else
+      dias=$(printf '%s' "$st" | jq -r '(((.Self.KeyExpiry|fromdateiso8601) - now)/86400|floor)' 2>/dev/null)
+      if [ -n "$dias" ] && [ "$dias" -le 21 ] 2>/dev/null; then
+        echo "  🟡 el acceso Tailscale de la PC vence en $dias día(s) — renovalo: agregale el tag"
+        echo "     al nodo (o deshabilitá el key expiry en la consola), o el celu dejará de conectar."
+        ok=0
+      else
+        echo "  ✅ el acceso Tailscale de la PC vence en ${dias:-?} día(s) (con margen)"
+      fi
+    fi
+  else
+    echo "  ⚪ no pude leer el contenedor remoteclaude-ts (¿docker sin permiso, o no corre?)"
+  fi
+else
+  echo "  ⚪ sin docker o jq: no puedo chequear el expiry del nodo del host"
+fi
+
 echo
 if [ "$algun_habilitado" = 0 ]; then
   echo "🔴 Ningún config tiene remotemarvin habilitado: la app NO recibirá avisos."
