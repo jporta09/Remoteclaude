@@ -110,3 +110,19 @@ jobs:
       - name: Tests (con detector de carreras)
         working-directory: tailscale-bridge
         run: go test -race ./...
+      - name: AAR al día con el source Go (DEVOPS-2)
+        working-directory: tailscale-bridge
+        run: |
+          # El .sha256 del AAR es del binario (gomobile no reconstruye byte-a-byte) y sólo
+          # detecta corrupción. Este chequeo compara el HASH DEL SOURCE Go con el que grabó
+          # build-aar.sh: si alguien editó el bridge y olvidó reconstruir el AAR, falla acá
+          # en vez de shipear un bridge viejo en silencio. No necesita gomobile/NDK.
+          esperado=$(cat ../android/app/libs/marvints.aar.srchash 2>/dev/null || echo MISSING)
+          actual=$({ for f in *.go; do case "$f" in *_test.go) ;; *) sha256sum "$f" ;; esac; done; sha256sum go.mod go.sum 2>/dev/null; } | sort | sha256sum | awk '{print $1}')
+          if [ "$esperado" != "$actual" ]; then
+            echo "::error::El AAR (android/app/libs/marvints.aar) está DESACTUALIZADO respecto del source Go."
+            echo "El bridge cambió sin reconstruir el AAR. Corré: (cd tailscale-bridge && ./build-aar.sh) y commiteá .aar + .sha256 + .srchash."
+            echo "esperado=$esperado  actual=$actual"
+            exit 1
+          fi
+          echo "AAR al día con el source Go ✓ ($actual)"

@@ -72,3 +72,11 @@ echo "    tamaño:   $(du -h "$OUT" | cut -f1)"
 echo "    sha256:   $(sha256sum "$OUT" | cut -c1-16)…"
 sha256sum "$OUT" | awk '{print $1}' > "$OUT.sha256"
 echo "    (checksum en $(basename "$OUT").sha256, versionado: sirve para detectar drift)"
+
+# Hash DETERMINÍSTICO del source Go que entra al AAR (los .go no-test + go.mod/go.sum). El
+# .sha256 de arriba es del BINARIO, que gomobile no reconstruye byte-a-byte, así que no sirve
+# para detectar "editaron el bridge y olvidaron reconstruir el AAR". Este sí: CI lo re-computa
+# del source y lo compara, sin necesitar gomobile/NDK (DEVOPS-2).
+srchash_go() { { for f in *.go; do case "$f" in *_test.go) ;; *) sha256sum "$f" ;; esac; done; sha256sum go.mod go.sum 2>/dev/null; } | sort | sha256sum | awk '{print $1}'; }
+srchash_go > "$OUT.srchash"
+echo "    (srchash del source Go en $(basename "$OUT").srchash — CI lo re-verifica)"
