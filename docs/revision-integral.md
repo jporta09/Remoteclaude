@@ -899,8 +899,8 @@ server se despertaba recién DESPUÉS del dictado que lo encontró caído.
    contra el tailnet real (expire por API; aviso + ERROR en Diagnóstico + re-enrolado QR). Hallazgos
    y método en `docs/validar-expiry-tailscale.md` (nodos con tag NO expiran por default — manual
    corregido; la expulsión de una sesión viva tarda ~18 min; QR de terminal puede no escanear →
-   `ts-link-qr.sh --png`). Quedan de F10: **reinicio-tras-vencer** (a codear: mantener NeedsLogin en
-   vez de derribar el nodo) y la UX de re-enrolar de un toque.
+   `ts-link-qr.sh --png`). Los dos restos de F10 (**reinicio-tras-vencer** y el re-enrolar de un
+   toque) se codearon y VALIDARON en vivo en v1.30.0 → ver §I. Con esto F10 queda COMPLETA.
 2. ~~**5e · Half-open en primer plano**~~ → **VALIDADO en el mundo real (2026-08-24)**: blackhole de
    iptables en el host real (`-I INPUT 1`, ojo: con `-A` el tráfico de la app entra por loopback y
    esquiva la regla), tipeo en la conexión muerta → detección a los ~14s → "reconectando…" →
