@@ -922,6 +922,64 @@ server se despertaba recién DESPUÉS del dictado que lo encontró caído.
    próxima pasada repone el charter de onboarding. Residual de producto cerrado en v1.30.0: el
    quickstart in-app y la demo ahora mencionan `.env` + las claves del admin de Tailscale.
 
+## L · 4ª pasada COMPLETA — 8 perfiles sobre v1.28->v1.30 + fixes de hoy (2026-08-27)
+
+Primera pasada integral desde la 3a (pre-v1.28). Corrida en dos olas de 4 (el limite de sesion
+corto el primer intento de 8 en paralelo). TODOS los hallazgos fueron verificados por el
+coordinador contra el codigo antes de asentarse (regla [[verificar-claims-de-agentes]]); un lead
+del coordinador (ventana de carrera en finish) fue REFUTADO por dev ejecutando y reencuadrado al
+camino real (supersede). Repos limpios, sin commits de agentes.
+
+Tema dominante: la feature de v1.30.0 (ciclo de vencido / re-enrol) fue validada en vivo pero NO
+estresada en concurrencia ni en el caso LAN-directa; ahi se concentra el grueso.
+
+### Cluster de concurrencia del re-enrol (configure()), todos CONFIRMADOS
+| Sev | ID | Hallazgo | Fix propuesto |
+|---|---|---|---|
+| 3 | DEV-4A | DATA RACE (-race, deterministico): Stop()->old.Close() (marvints.go:385) concurrente con el thread tailscale-up viejo aun en s.Up(); configure() hace stop()+init() sin joinear | Guardar el cancel del ctx de Up; Stop() llama cancel() (no Close() concurrente); el goroutine de Up cierra su propio server tras retornar (closer unico) |
+| 2 | DEV-4B | Clobber logico de upDone/upErr por el camino de SUPERSEDE (finish corre siempre, marvints.go:195, incluso mine==false) -> un 3er Start lee error rancio | finish limpia solo si upDone==done |
+| 1-2 | DEV-4C | readyLatch reasignado (TailscaleBridge.kt:144); el thread viejo lo cuenta por campo -> libera el latch nuevo antes de tiempo | Capturar el latch como local, no leer el campo |
+
+### UX-model del vencido (QA + UX convergen)
+| Sev | ID | Hallazgo | Fix propuesto |
+|---|---|---|---|
+| 2-3 | QA4-1 / UX-1 | Fuentes de verdad distintas: terminal honesto (alcanzabilidad real, se auto-cura) vs hosts pinta rojo con estado crudo del nodo. Con host por LAN divergen PERMANENTE (verde vs rojo) -> fatiga de alarma | HostsActivity.updateVpnStatus espeja la auto-cura: suprimir rojo con conexion viva/isReady; degradar a ambar; reencuadrar el texto (lo que vencio es el enrolamiento, no el acceso; los de LAN siguen) |
+| 1-2 | QA4-2 | Re-enrol confirma OPTIMISTA (accesoVencido=false + toast antes de reconectar) y aplicar acepta cualquier tskey- sin validar | Mantener el estado vencido hasta que una reconexion REAL por tailnet confirme; validar forma/largo de la key |
+| 2 | A4-1 | Re-enrol reconfigura identidad de red SIN mostrar a que tailnet/login entras (ASI09 consent-sin-info); ademas prima al usuario a aceptar el mismatch de host-key (coartada). NO es vector de inyeccion (camera-gated + pinning SSH gatean el peor caso) | Surfacar tailnet/login tras configure; NO ablandar el dialogo de mismatch durante un re-enrol |
+| 1 | QA4-3 | HostsActivity filtra el error CRUDO del control-plane (con id de key) en ambar; el repoll se corta al latchear error() -> edge pegado en ambar | No filtrar el error crudo; no cortar el repoll cuando la causa puede ser vencido |
+| 1 | QA4-4 | El ERROR de vencido a Diagnostico se registra POR PESTANA (N tabs = N entradas por 1 evento); combina con el acantilado de 64KB | Dedup por episodio, no por sesion |
+| 1 | UX-2 | El glifo de reescanear (U+27F2) puede verse como tofu en equipos != S23 | Fallback textual/glifo mas portable |
+| 1(nota) | QA4-5 | El epoch de KeyExpiry se transmite (campo 3) pero no se compara con now | Defendible (evita clock-skew); nota de completitud |
+
+### Punto ciego del expiry del HOST (SRE + DevOps, CONFIRMADO en vivo)
+| Sev | ID | Hallazgo | Fix propuesto |
+|---|---|---|---|
+| 3 | SRE-4p-1 | Todo el stack de vencido mira solo Self (StatusWithoutPeers) -> el celu NUNCA ve el expiry del nodo del HOST. Cuando el host vence (sin tag), el celu queda en [reconectando...] eterno, indistinguible de PC apagada; y no se registra en Diagnostico si nunca llego a CONECTADO | Host-side: el comando por-conexion lee .Self.KeyExpiry y avisa a <N dias; + linea en marvin-doctor |
+| 3 | (op) | El nodo YA enrolado del usuario (remoteclaude, sin tag, vence 2026-12-12 confirmado en vivo) no lo cubre ningun fix (los de hoy son solo para instalaciones nuevas) | ACCION del usuario: consola -> Disable key expiry (1 clic) |
+| 1 | SRE-4p-2 | La ruta sintetica del sticky depende de matchear texto en INGLES del control-plane (marvints.go:248) -> fragil ante cambio de wording, sin telemetria | Ampliar patrones + senal si deja de matchear |
+
+### Operabilidad (DevOps, CONFIRMADOS)
+| Sev | ID | Hallazgo | Fix propuesto |
+|---|---|---|---|
+| 2 | S8 | La auth key se pasa por ARGV a qrencode (ts-link-qr.sh:80,85) -> legible en /proc/<pid>/cmdline. Los OAuth secrets si van por stdin (inconsistencia) | pipe por stdin (printf de la key hacia qrencode) |
+| 1 | DEVOPS-1 | El teardown deja huerfano marvin-doctor (setup instala 4, teardown-host.sh:41 quita 3) | Sumar marvin-doctor a la lista |
+| 2 | DEVOPS-2 | El AAR prebuilt no tiene verificacion source<->binary en CI (el .sha256 es auto-referencial) | Reconstruir/validar el AAR en CI contra el HEAD del bridge |
+
+### Checks previos re-verificados: SOSTIENEN (muestreo)
+H1 (barra no miente), D5 (@Volatile dictado), DEV-N2/N3 (VigiaUi/Diagnostico thread-safe), TB3
+(frontera no confiable + hook mejorado), OSC52 politica A, H-3P-5 CERRADO (marvin-notify no
+propaga el message de Claude), guard de versionCode fail-closed, repo publico (Obtainium sin PAT),
+WS-A, chevron 48dp, H5 label QR unificado en las 4 superficies, Enter con paridad demo+manual,
+5e half-open, keepalive dictado, sticky del celu (Go 12/12). Mejora: el matcher del hook
+flag-subidos-context.sh solo dispara ante verbos de lectura.
+
+### Nota de tooling (no es de la app)
+El guard no-leer-secretos.py dio falsos positivos legitimos (escribir un archivo de plantilla en
+scratchpad; verificar por grep que un script NO toca authorized_keys; y escribir ESTE doc con un
+heredoc citado cuyo cuerpo nombra rutas sensibles). Sobre-matcheaba el TEXTO del comando.
+REFINADO 2026-08-27: se saca el cuerpo de los heredocs CITADOS (data inerte) antes de analizar;
+los heredocs sin comillas (con sustitucion) se conservan. Autotest ampliado con esos casos.
+
 ## K · 4ª pasada — onboarding desde cero (charter §2.E repuesto, 2026-08-27)
 
 Primera pasada que EJECUTA el onboarding (HOME-sandbox + fakes, sin VM): devops corrió
