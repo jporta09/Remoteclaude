@@ -237,16 +237,23 @@ S.append(P("Conectar el celular (vincular por QR)", h1))
 S.append(P("El nodo Tailscale de la app se enrola escaneando un QR — sin tocar la "
            "consola web ni tipear claves:"))
 S.append(B("En la PC: <font name='Mono' size='9'>./scripts/ts-link-qr.sh</font> "
-           "→ imprime un QR (clave de un solo uso, vence en 10 min)."))
+           "→ imprime un QR (clave de un solo uso, vence en 10 min). Si la cámara no "
+           "engancha el QR de la terminal (pasa con fuentes chicas), usá "
+           "<font name='Mono' size='9'>./scripts/ts-link-qr.sh --png</font>: lo abre como "
+           "imagen a pantalla completa, que escanea al toque."))
 S.append(B("En la app: tocá la <b>línea de estado de Tailscale</b> → <b>Escanear QR</b> → "
            "apuntá la cámara. El estado pasa a <b>conectada ✓</b>."))
 S.append(B("Queda guardado: reconecta solo en cada arranque, no re-escaneás más."))
 S.append(B("El acceso de Tailscale del celu <b>no vence solo</b> (los nodos con tag tienen el "
            "vencimiento deshabilitado por defecto). Si alguna vez vence o lo revocás desde la "
-           "consola, la terminal te lo avisa (“el acceso de Tailscale venció — reescaneá el "
-           "QR”) en vez de quedar reintentando en silencio: volvé a escanear un QR nuevo y "
-           "listo. Ojo: si estabas conectado, el aviso puede tardar unos minutos en aparecer "
-           "(la sesión viva sigue hasta el próximo re-handshake)."))
+           "consola, la app lo dice con todas las letras en vez de quedar reintentando en "
+           "silencio: la pantalla de hosts muestra <b>“acceso vencido — tocá y reescaneá el "
+           "QR”</b> en rojo, y en la terminal la barra de arriba muta a <b>⟲ Reescanear QR</b>. "
+           "Un toque en ⟲ abre el scanner directo: generás un QR nuevo en la PC "
+           "(<font name='Mono' size='9'>ts-link-qr.sh --png</font>), lo escaneás y la app "
+           "reconecta sola, con el tmux intacto. Ojo: si estabas conectado al momento de "
+           "vencer, el aviso puede tardar unos minutos en aparecer (la sesión viva sigue "
+           "hasta el próximo re-handshake)."))
 
 # --- 5. Terminal ------------------------------------------------------------
 S.append(P("La terminal", h1))

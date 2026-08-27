@@ -798,9 +798,12 @@ tuya es **tu archivo de memoria**, que vive fuera del repo.
   cierra**.
 - **Emulador serializado:** nunca dos agentes con el AVD a la vez; el resto verifica por
   código/unit/host o espera.
-- **Nota de registro:** editar los defs de los agentes (`~/.claude-personal/agents/*.md`) toma efecto
-  en una **sesión nueva**. Si la pasada corre en la misma sesión del edit, el prompt de spawn lleva
-  la libertad + el reencuadre como respaldo.
+- **Nota de registro:** la **fuente de verdad de las defs es el repo** (`docs/agentes/*.md`,
+  ver su README); la copia instalada en `~/.claude-personal/agents/` es un artefacto que se
+  re-copia tras cada edición (`cp docs/agentes/*.md ~/.claude-personal/agents/`). Un cambio
+  toma efecto en una **sesión nueva**. Si la pasada corre en la misma sesión del edit, el
+  prompt de spawn lleva la libertad + el reencuadre como respaldo. Las **memorias** de los
+  agentes (`agents/memoria/`) son estado local de runtime y NO se versionan.
 
 ---
 

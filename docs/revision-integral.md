@@ -922,6 +922,18 @@ server se despertaba recién DESPUÉS del dictado que lo encontró caído.
    próxima pasada repone el charter de onboarding. Residual de producto cerrado en v1.30.0: el
    quickstart in-app y la demo ahora mencionan `.env` + las claves del admin de Tailscale.
 
+## J · Revisión de lineamientos (2026-08-27)
+
+Auditoría pedida por el usuario: ¿cumplimos la regla de superficies y la de "nada sólo-local"?
+Resultado: 3 deudas de superficies con v1.30.0, cerradas en este commit — el manual no contaba
+el flujo de vencido/⟲ ni el fallback `--png`, y las skills no sabían nada del expiry (plugin →
+1.9.0 con la ruta "acceso vencido → ts-link-qr.sh --png + ⟲"). El barrido sólo-local dio limpio
+(helpers de `~/.local/bin` = `scripts/` del repo; `marvin-share` en el plugin; EDITOR shipeado
+en la app) con una excepción que se corrigió: las **defs de los agentes-perfil** vivían sólo en
+`~/.claude-personal/agents/` → ahora la fuente de verdad es `docs/agentes/` (ver su README; las
+memorias siguen locales a propósito). Demo al día (fila con Enter, dictado, tour de hosts con
+.env). Lineamientos vigentes, ninguno vencido ni sobreescrito.
+
 ## I · Reinicio-tras-vencer + re-enrolar de un toque (v1.30.0, 2026-08-25)
 
 Cierra los dos restos de F10 (fila 550):

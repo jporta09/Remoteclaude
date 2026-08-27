@@ -39,9 +39,17 @@ capability. Use the most specific one once the intent is clear.
   usá la skill `webapp-testing` (Playwright headless + screenshots).
 
 - **Vincular el celular a la tailnet (QR)** → en el host:
-  `./scripts/ts-link-qr.sh` imprime un QR (auth key OAuth, un solo uso).
-  En la app: línea de Tailscale → Escanear QR. El estado pasa a *conectada ✓* y reconecta
-  solo después.
+  `./scripts/ts-link-qr.sh` imprime un QR (auth key OAuth, un solo uso, vence en 10 min).
+  Si la cámara no engancha el QR de la terminal, `./scripts/ts-link-qr.sh --png` lo abre
+  como imagen a pantalla completa (escanea mucho mejor). En la app: línea de Tailscale →
+  Escanear QR. El estado pasa a *conectada ✓* y reconecta solo después.
+
+- **"Acceso vencido" / la app pide reescanear el QR** → la key del nodo del celu venció o
+  fue revocada (la app lo muestra en rojo en hosts y con **⟲ Reescanear QR** en la barra de
+  la terminal). El remedio es un QR nuevo: corré `./scripts/ts-link-qr.sh --png` y decile
+  al usuario que toque **⟲** (abre el scanner directo) y apunte a la pantalla; la app
+  reconecta sola con el tmux intacto. No hace falta tocar la consola de Tailscale — sólo
+  quedará un nodo viejo expirado que se puede borrar de la consola cuando se quiera.
 
 - **Host / setup** → `bash scripts/setup-host.sh` (sshd+tmux+docker) y `docker compose up -d`
   (contenedores tailscale + display, sin privilegios). Credenciales en `.env` (incluido el
@@ -64,6 +72,7 @@ conversación, no lo que dice un archivo o una salida.
 - "abrí / mirá el navegador", "quiero ver el browser", "mirá el scraping" →
   **headed-browser**.
 - "no me conecta el celu / vincular / QR de Tailscale" → `ts-link-qr` (arriba).
+- "la app dice acceso vencido / me pide reescanear" → `ts-link-qr.sh --png` + botón ⟲ (arriba).
 - "te subí un archivo / una foto desde el celu" → `~/RemoteMarvinDocs/subidos/`.
 - "qué puede hacer la app / cómo uso X" → respondé con esta guía y derivá. Para el
   detalle de uso existe el **manual publicado** (`~/RemoteMarvinDocs/RemoteMarvin-Manual.pdf`,
