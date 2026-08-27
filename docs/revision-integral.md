@@ -936,18 +936,17 @@ desde cero es completable sin ayuda externa. Hallazgos y estado:
 | 2 | H2 · nodo del HOST sin tag → expira a ~180 días sin aviso (todo el stack de "vencido" cubre sólo el celu) | ✅ decisión del usuario: TS_AUTHKEY **con tag** — instruido en .env.example, manual, quickstart in-app y box del setup |
 | 2 | README sin paridad §1.6 (única superficie sin las claves; sin prerequisitos) | ✅ sección "Qué hace falta" + origen de las dos claves + ACL |
 | 2 | Round-trips del setup: uv chequeado a mitad de corrida; aviso docker-group lejos del box final | ✅ uv al inicio ("nada fue modificado todavía"); re-aviso condicional tras el box |
-| 2 | §1.5 · sin camino mínimo al primer valor (setup-ok todo-o-nada le cuesta 30-45 min al curioso) | ⏳ decisión de producto PENDIENTE del usuario |
+| 2 | §1.5 · sin camino mínimo al primer valor (setup-ok todo-o-nada le cuesta 30-45 min al curioso) | ✅ DECIDIDO (usuario, 2026-08-27): se sostiene el todo-o-nada — el usuario objetivo es el que se queda; el racional del marker (`setup-ok` evita hosts a medias) pesa más que el embudo del curioso |
 | 1 | H3 · TS_AUTHKEY vence (≤90 días): re-enrolar tras `--purgar-datos` con key vieja falla sin doc | ✅ nota en .env.example |
 | 1 | H5 · drift de label: "Vincular por QR" (script) vs botón real "Escanear QR" | ✅ unificado |
 | 1 | H6 · `ts-link-qr.sh` declaraba prerequisitos sin chequearlos (sin jq: exit 127 críptico) | ✅ chequeo de entrada |
 | 1 | H7 · header "efímera" cuando mintea `ephemeral:false` | ✅ corregido |
 | 1 | H4 · fallback ACL/tagOwners sólo en `.env.example`; scope "(write)" omitido | ✅ manual y quickstart lo traen inline |
 | 1 | placeholder `<ruta-del-repo>` en README/manual | ✅ `/plugin marketplace add .` |
-| 1 | H8 · quien enroló pegando la key a mano (nodo sin tag) verá "vencido" sin tener OAuth | ⏳ menor; la receta del diálogo (pegar otra key) lo rescata — evaluar mención en manual |
+| 1 | H8 · quien enroló pegando la key a mano (nodo sin tag) verá "vencido" sin tener OAuth | ✅ el manual ahora dice que el remedio es el mismo diálogo con otra key |
 | — | Positivos ejecutados: `setup-host.sh` sobresaliente (idempotencia confirmada corriéndolo), box final excelente, flujo "vencido" autosuficiente, `marvin-doctor` cierra el sev-3 de config-scoping, repo público resuelve Obtainium sin PAT | — |
 
-Método a fijar: HOME-sandbox como estándar del charter (queda para la próxima edición del
-playbook). Sin poder vivirse: consola real de Tailscale, APK/escaneo reales, compose real.
+Método FIJADO en el playbook (§1.6, "Método estándar del charter"): HOME-sandbox + fakes. Sin poder vivirse: consola real de Tailscale, APK/escaneo reales, compose real.
 
 ## J · Revisión de lineamientos (2026-08-27)
 

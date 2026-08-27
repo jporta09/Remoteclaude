@@ -136,6 +136,24 @@ generan las dos claves. La próxima pasada debe reponer el charter de onboarding
 DevOps y Usuario final, ejecutado con HOME-sandbox o contenedor descartable (compatible con
 "revertí todo").
 
+**Método estándar del charter (fijado tras ejecutarlo, 2026-08-27 — 4ª pasada):** el charter
+§2.E se corre con **HOME-sandbox + fakes**, sin VM:
+
+- Un `$HOME` descartable en un directorio temporal (`HOME=$(mktemp -d)`), y un directorio de
+  **fakes primeros en el PATH** con stubs de `sudo`, `systemctl`, `loginctl`, `docker`,
+  `apt-get` (y `uv`/`curl` según el escenario) que registran la invocación y devuelven lo que
+  el escenario pida. El repo se COPIA al sandbox antes de correr nada — ojo: `ts-link-qr.sh`
+  sourcea el `.env` del repo desde el que corre.
+- Con eso los scripts (`setup-host.sh`, `ts-link-qr.sh`, `teardown-host.sh`, `marvin-doctor`)
+  se ejecutan DE VERDAD, tal como están escritos, incluidos los caminos de error (sin uv, sin
+  jq, credenciales inválidas, distro sin gestor, segunda corrida para idempotencia) — que es
+  donde vive lo que la lectura no encuentra (caso real: los errores amigables de ts-link-qr
+  eran código muerto por `set -e`, hallado EJECUTANDO, invisible leyendo).
+- Queda honestamente afuera (y se declara en el reporte): la consola real de Tailscale, el
+  `docker compose up` real, el APK y el escaneo reales. Eso se cubre por cadena documental
+  (¿las instrucciones que el usuario LEE alcanzan?) y por las validaciones on-device del
+  autor. "No tengo VM" ya no es motivo para declarar el charter inejecutable.
+
 ---
 
 ## 2. Los perfiles

@@ -259,7 +259,9 @@ S.append(B("El acceso de Tailscale del celu <b>no vence solo</b> (los nodos con 
            "(<font name='Mono' size='9'>ts-link-qr.sh --png</font>), lo escaneás y la app "
            "reconecta sola, con el tmux intacto. Ojo: si estabas conectado al momento de "
            "vencer, el aviso puede tardar unos minutos en aparecer (la sesión viva sigue "
-           "hasta el próximo re-handshake)."))
+           "hasta el próximo re-handshake). Si en su momento vinculaste el celular pegando "
+           "una auth key a mano (sin el OAuth client), el remedio es el mismo diálogo: "
+           "generá otra key en la consola y pegala ahí."))
 
 # --- 5. Terminal ------------------------------------------------------------
 S.append(P("La terminal", h1))
