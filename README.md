@@ -40,6 +40,16 @@ permisos especiales es lo que vos hagas con `sudo` dentro de tu propia sesión.
 
 ## Instalación
 
+**Qué hace falta** (antes de arrancar): una PC Linux con `systemd` y `sudo`, una cuenta
+de [Tailscale](https://login.tailscale.com) (gratis; el host y el celu se ven entre sí por
+tu tailnet, sin abrir puertos), y [uv](https://docs.astral.sh/uv/) (`curl -LsSf
+https://astral.sh/uv/install.sh | sh`) — el setup te frena con instrucciones si falta algo.
+Las dos claves de Tailscale salen de la admin console (`login.tailscale.com`):
+**TS_AUTHKEY** (Settings → Keys → Generate: Reusable, NO Ephemeral, con el tag
+`tag:remotemarvin` para que el nodo no venza) y un **OAuth client** (Settings → OAuth
+clients: scope "Auth Keys" write + el mismo tag) para generar los QR de los celulares.
+`.env.example` trae el paso a paso, incluido el `tagOwners` de la ACL.
+
 En el **host** (una vez):
 
 ```bash
@@ -55,7 +65,7 @@ En **Claude Code**, en el host (una vez) — instalá el plugin para que Claude 
 (compartir documentos al celu, abrir el visor, correr browsers headed visibles):
 
 ```
-/plugin marketplace add <ruta-del-repo>
+/plugin marketplace add .      # desde el directorio del clon (o la ruta absoluta al repo)
 /plugin install remotemarvin@remotemarvin
 ```
 

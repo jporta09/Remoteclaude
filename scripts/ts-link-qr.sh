@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
-# Mintea una auth key de Tailscale efímera (un solo uso, vence en 10 min, pre-autorizada)
-# vía el OAuth client del .env y la muestra como QR en la terminal. Escaneás ese QR desde
-# RemoteMarvin (🔒 → Vincular por QR) y el nodo embebido de la app entra a tu tailnet sin
-# tocar la consola web ni la app de Tailscale.
+# Mintea una auth key de Tailscale de un solo uso (vence en 10 min, pre-autorizada, NO
+# efímera: el nodo persiste) vía el OAuth client del .env y la muestra como QR en la
+# terminal. Escaneás ese QR desde RemoteMarvin (🔒 línea de estado de Tailscale →
+# Escanear QR) y el nodo embebido de la app entra a tu tailnet sin tocar la consola web
+# ni la app de Tailscale.
 #
 # Uso (en la PC, desde el repo):  ./scripts/ts-link-qr.sh
 #                                 ./scripts/ts-link-qr.sh --png          (QR como imagen)
@@ -13,6 +14,12 @@
 # puede NO engancharse con la cámara (contraste/tamaño de fuente/tema claro — pasó en la
 # validación de F10); el PNG escanea al primer intento.
 set -euo pipefail
+
+# Los prerequisitos declarados arriba, chequeados de entrada: sin esto, la falta de jq
+# recién explotaba en el medio del flujo con un "command not found" que no orienta.
+for dep in curl jq qrencode; do
+    command -v "$dep" >/dev/null || { echo "✗ Falta $dep — instalalo (setup-host.sh lo hace) y volvé a correr."; exit 1; }
+done
 
 MOSTRAR_KEY=0
 PNG=0
@@ -37,26 +44,31 @@ TAG="${TS_TAG:-tag:remotemarvin}"
 # Los secretos van por --config (stdin) y no como argumentos: todo lo que se pasa por argv
 # queda visible en /proc/<pid>/cmdline para CUALQUIER usuario de la maquina mientras dura
 # el curl, y `ps` alcanza para leerlo.
-token=$(curl -sf https://api.tailscale.com/api/v2/oauth/token --config - <<CFG | jq -r '.access_token // empty'
+# El curl va FUERA de la sustitución de comando: con `token=$(curl -sf …)`, un fallo del
+# curl (credenciales inválidas → HTTP 4xx → exit 22) moría por set -e ANTES de llegar al
+# mensaje de acá abajo — el error amigable era código muerto y el admin veía salida vacía.
+resp="$(curl -s https://api.tailscale.com/api/v2/oauth/token --config - <<CFG
 data = "client_id=${TS_OAUTH_CLIENT_ID}"
 data = "client_secret=${TS_OAUTH_CLIENT_SECRET}"
 CFG
-)
+)" || { echo "✗ No pude hablar con api.tailscale.com (¿hay red?)"; exit 1; }
+token="$(jq -r '.access_token // empty' <<<"$resp")"
 [ -n "$token" ] || { echo "✗ No pude obtener el token OAuth (revisá client id/secret en .env)"; exit 1; }
 
 # 2) Auth key fresca: un solo uso, no efímera (nodo estable), pre-autorizada, tag obligatorio.
 BODY="{\"capabilities\":{\"devices\":{\"create\":{\"reusable\":false,\"ephemeral\":false,\"preauthorized\":true,\"tags\":[\"${TAG}\"]}}},\"expirySeconds\":600,\"description\":\"RemoteMarvin enroll\"}"
 # El token tambien es un secreto: mismo tratamiento (el cuerpo JSON no lo es).
-key=$(curl -sf "https://api.tailscale.com/api/v2/tailnet/-/keys" \
-    -H "Content-Type: application/json" -d "$BODY" --config - <<CFG | jq -r '.key // empty'
+resp="$(curl -s "https://api.tailscale.com/api/v2/tailnet/-/keys" \
+    -H "Content-Type: application/json" -d "$BODY" --config - <<CFG
 header = "Authorization: Bearer ${token}"
 CFG
-)
-[ -n "$key" ] || { echo "✗ No pude crear la auth key (¿el tag '${TAG}' está en tagOwners de la ACL?)"; exit 1; }
+)" || { echo "✗ No pude hablar con api.tailscale.com (¿se cayó la red?)"; exit 1; }
+key="$(jq -r '.key // empty' <<<"$resp")"
+[ -n "$key" ] || { echo "✗ No pude crear la auth key (¿el tag '${TAG}' está en tagOwners de la ACL de tu tailnet?)"; exit 1; }
 
 echo
 echo "  ┌─ Vincular RemoteMarvin ────────────────────────────"
-echo "  │  Abrí la app → 🔒 (línea de Tailscale) → Vincular por QR"
+echo "  │  Abrí la app → 🔒 (línea de estado de Tailscale) → Escanear QR"
 echo "  │  y escaneá esto. Válido 10 min, un solo uso."
 echo "  └────────────────────────────────────────────────────"
 echo

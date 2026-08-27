@@ -210,18 +210,24 @@ S.append(C("bash scripts/setup-host.sh   # sshd solo-clave, tmux y daemons\n"
 S.append(P("Y dentro de <b>Claude Code</b>, instalá el plugin de RemoteMarvin — le enseña "
            "a Claude a usar la app (compartir documentos al teléfono, encontrar lo que "
            "subís, correr el navegador visible):"))
-S.append(C("/plugin marketplace add <ruta-del-repo>\n"
+S.append(C("/plugin marketplace add .      # desde el directorio del clon\n"
            "/plugin install remotemarvin@remotemarvin"))
 S.append(P("Las dos claves del <font name='Mono' size='9'>.env</font> salen de la "
            "<b>página de Tailscale</b> (login.tailscale.com — es el único momento en que "
            "hace falta entrar; en el celular nunca se hace login):"))
 S.append(B("<b>TS_AUTHKEY</b> (pone tu PC en el tailnet): <i>Admin console → Settings → "
-           "Keys → Generate</i>. Marcala <b>Reusable</b>; NO “Ephemeral”."))
+           "Keys → Generate</i>. Marcala <b>Reusable</b>; NO “Ephemeral”; y asignale el "
+           "tag <font name='Mono' size='9'>tag:remotemarvin</font> — sin tag, la clave del "
+           "nodo de la PC <b>vence a los ~180 días</b> y un día el celular “no conecta” sin "
+           "aviso; con tag, no vence nunca (igual que el nodo del celular)."))
 S.append(B("<b>OAuth client</b> (permite generar los QR para celulares; no vence): "
-           "<i>Admin console → Settings → OAuth clients → Generate</i>, con scope de "
-           "auth keys y el tag <font name='Mono' size='9'>tag:remotemarvin</font> → "
-           "<font name='Mono' size='9'>TS_OAUTH_CLIENT_ID/SECRET</font>. Detalle en "
-           "<font name='Mono' size='9'>.env.example</font>."))
+           "<i>Admin console → Settings → OAuth clients → Generate</i>, con scope "
+           "<b>Auth Keys (write)</b> y el mismo tag → "
+           "<font name='Mono' size='9'>TS_OAUTH_CLIENT_ID/SECRET</font>."))
+S.append(B("El tag tiene que existir en la ACL del tailnet (la consola ofrece agregarlo al "
+           "crear el OAuth client; si no, en <i>Access controls</i> sumá "
+           "<font name='Mono' size='9'>\"tagOwners\": { \"tag:remotemarvin\": "
+           "[\"autogroup:admin\"] }</font>)."))
 S.append(P("Desinstalar (en la PC)", h2))
 S.append(P("Para deshacer todo lo anterior, el par de setup:"))
 S.append(C("bash scripts/teardown-host.sh                 # quita daemons, sshd.d, bloques, baja docker\n"

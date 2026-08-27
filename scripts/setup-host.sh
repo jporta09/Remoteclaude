@@ -22,6 +22,16 @@ SCRIPTS="$(cd "$(dirname "$0")" && pwd)"
 # shellcheck source=scripts/setup-host-lib.sh
 . "$SCRIPTS/setup-host-lib.sh"
 
+# uv se exige ANTES de tocar nada: es requisito del host (sin uv no hay dictado y el
+# setup FALLA más abajo). Chequearlo recién a mitad de corrida obligaba a un segundo
+# intento con sshd/tmux ya modificados — el round-trip clásico del primer instalador.
+if ! command -v uv >/dev/null 2>&1 && [ ! -x "$HOME/.local/bin/uv" ]; then
+    echo "ERROR: falta uv (requisito del host — ejecuta los daemons de dictado)."
+    echo "   Instalalo con:  curl -LsSf https://astral.sh/uv/install.sh | sh"
+    echo "   y volvé a correr este script. (Nada fue modificado todavía.)"
+    exit 1
+fi
+
 # Endurecimiento común de las units. No se usa ProtectHome: el render-daemon sirve
 # ~/RemoteMarvinDocs y los de STT guardan el modelo en ~/.cache.
 HARDENING="NoNewPrivileges=yes
@@ -47,9 +57,11 @@ case $RC in
 esac
 else
 echo "==> Docker"
+DOCKER_RECIEN_INSTALADO=0
 if ! command -v docker >/dev/null 2>&1; then
     curl -fsSL https://get.docker.com | sh
     sudo usermod -aG docker "$USER" || true
+    DOCKER_RECIEN_INSTALADO=1
     echo "    (cerrá y volvé a entrar a la sesión para usar docker sin sudo)"
 else
     echo "    ya instalado"
@@ -272,7 +284,8 @@ cat <<'EOF'
  1) Autorizar la clave de la app: pegá el texto del botón 🔑 de
     RemoteMarvin en  ~/.ssh/authorized_keys
       install -d -m700 ~/.ssh && chmod 600 ~/.ssh/authorized_keys
- 2) cp .env.example .env  y completar TS_AUTHKEY (+ OAuth para el QR)
+ 2) cp .env.example .env  y completar TS_AUTHKEY (con tag:remotemarvin,
+    si no el nodo vence a los ~180 dias) + OAuth para el QR
  3) docker compose up -d --build
  Desde la app:  conectá a  <tu-usuario>@remoteclaude:22
 
@@ -284,3 +297,8 @@ cat <<'EOF'
    marvin-doctor --probe  # manda un aviso de prueba al celu
 ============================================================
 EOF
+if [ "${DOCKER_RECIEN_INSTALADO:-0}" = 1 ]; then
+    echo " !! docker se instaló EN ESTA corrida: cerrá la sesión y volvé a entrar ANTES"
+    echo "    del paso 3 (docker compose…), o va a fallar con 'permission denied'."
+    echo ""
+fi

@@ -563,8 +563,10 @@ class HostsActivity : AppCompatActivity() {
         comando("git clone https://github.com/jporta09/Remoteclaude\ncd Remoteclaude\nbash scripts/setup-host.sh\ncp .env.example .env   # completá TS_AUTHKEY (ver abajo)\ndocker compose up -d --build")
         parrafo("Las claves del .env salen de la página de Tailscale (login.tailscale.com — "
             + "es el único momento con login; en el teléfono nunca): TS_AUTHKEY en Settings → "
-            + "Keys → Generate (marcala Reusable), y el OAuth client para los QR en Settings → "
-            + "OAuth clients → Generate. El paso a paso está en .env.example.")
+            + "Keys → Generate (Reusable, NO Ephemeral, con el tag tag:remotemarvin — sin tag "
+            + "vence a los ~180 días), y el OAuth client para los QR en Settings → OAuth "
+            + "clients → Generate (scope Auth Keys write + el mismo tag). El paso a paso, "
+            + "ACL incluida, está en .env.example.")
 
         titulo("2 · Autorizar el teléfono")
         parrafo("Al agregar/conectar un host, la app muestra su clave SSH pública (ícono de "

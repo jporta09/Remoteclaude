@@ -922,6 +922,33 @@ server se despertaba recién DESPUÉS del dictado que lo encontró caído.
    próxima pasada repone el charter de onboarding. Residual de producto cerrado en v1.30.0: el
    quickstart in-app y la demo ahora mencionan `.env` + las claves del admin de Tailscale.
 
+## K · 4ª pasada — onboarding desde cero (charter §2.E repuesto, 2026-08-27)
+
+Primera pasada que EJECUTA el onboarding (HOME-sandbox + fakes, sin VM): devops corrió
+`setup-host.sh` 5 veces y `ts-link-qr.sh` en 4 modos de fallo; usuario-final vivió el
+recorrido de adopción completo. **Veredicto: el charter es ejecutable de punta a punta con
+esta técnica** (la declaración de "inejecutable" de la pasada 1 queda sin excusa) y el camino
+desde cero es completable sin ayuda externa. Hallazgos y estado:
+
+| Sev | Hallazgo | Estado |
+|---|---|---|
+| 2 | H1 · errores de `ts-link-qr.sh` muertos (`set -e` + `curl -sf` en `$( )`): credenciales inválidas o tag fuera de la ACL = salida vacía exit 22 | ✅ curl fuera de la sustitución; probado en vivo (mensaje claro + exit 1) |
+| 2 | H2 · nodo del HOST sin tag → expira a ~180 días sin aviso (todo el stack de "vencido" cubre sólo el celu) | ✅ decisión del usuario: TS_AUTHKEY **con tag** — instruido en .env.example, manual, quickstart in-app y box del setup |
+| 2 | README sin paridad §1.6 (única superficie sin las claves; sin prerequisitos) | ✅ sección "Qué hace falta" + origen de las dos claves + ACL |
+| 2 | Round-trips del setup: uv chequeado a mitad de corrida; aviso docker-group lejos del box final | ✅ uv al inicio ("nada fue modificado todavía"); re-aviso condicional tras el box |
+| 2 | §1.5 · sin camino mínimo al primer valor (setup-ok todo-o-nada le cuesta 30-45 min al curioso) | ⏳ decisión de producto PENDIENTE del usuario |
+| 1 | H3 · TS_AUTHKEY vence (≤90 días): re-enrolar tras `--purgar-datos` con key vieja falla sin doc | ✅ nota en .env.example |
+| 1 | H5 · drift de label: "Vincular por QR" (script) vs botón real "Escanear QR" | ✅ unificado |
+| 1 | H6 · `ts-link-qr.sh` declaraba prerequisitos sin chequearlos (sin jq: exit 127 críptico) | ✅ chequeo de entrada |
+| 1 | H7 · header "efímera" cuando mintea `ephemeral:false` | ✅ corregido |
+| 1 | H4 · fallback ACL/tagOwners sólo en `.env.example`; scope "(write)" omitido | ✅ manual y quickstart lo traen inline |
+| 1 | placeholder `<ruta-del-repo>` en README/manual | ✅ `/plugin marketplace add .` |
+| 1 | H8 · quien enroló pegando la key a mano (nodo sin tag) verá "vencido" sin tener OAuth | ⏳ menor; la receta del diálogo (pegar otra key) lo rescata — evaluar mención en manual |
+| — | Positivos ejecutados: `setup-host.sh` sobresaliente (idempotencia confirmada corriéndolo), box final excelente, flujo "vencido" autosuficiente, `marvin-doctor` cierra el sev-3 de config-scoping, repo público resuelve Obtainium sin PAT | — |
+
+Método a fijar: HOME-sandbox como estándar del charter (queda para la próxima edición del
+playbook). Sin poder vivirse: consola real de Tailscale, APK/escaneo reales, compose real.
+
 ## J · Revisión de lineamientos (2026-08-27)
 
 Auditoría pedida por el usuario: ¿cumplimos la regla de superficies y la de "nada sólo-local"?
