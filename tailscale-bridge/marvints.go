@@ -46,6 +46,12 @@ var (
 	// vencido (un timeout por mala red queda en "Starting" y NO se guarda: no mentimos).
 	// Se limpia en Stop() y al arrancar un Start nuevo.
 	ultimoEstado string
+	// cancel del ctx del Up en vuelo. Stop() lo llama para DESTRABAR un Up colgado (key
+	// vencida) en vez de cerrar el server de forma concurrente al goroutine que está dentro
+	// de s.Up() — eso era una data race (Close vs start, DEV-4A). Con esto el goroutine de
+	// Up es el ÚNICO que cierra su server; Stop() sólo cancela y, si el Up ya terminó (nodo
+	// vivo, sin goroutine), cierra él. Se setea en Start bajo mu y se limpia en finish/Stop.
+	upCancel context.CancelFunc
 )
 
 // Ventana de espera de Up. Variable (y no constante) sólo para que los tests no tengan
@@ -154,22 +160,30 @@ func Start(authKey, stateDir, hostname string) error {
 	srv = s
 	done := make(chan struct{})
 	upDone, upErr = done, nil
+	// Timeout: con una key válida pre-autorizada conecta en segundos; si es inválida no
+	// queremos colgar para siempre. El cancel se publica bajo mu para que Stop() lo pueda
+	// llamar y destrabar el Up sin cerrar el server concurrentemente (DEV-4A).
+	ctx, cancel := context.WithTimeout(context.Background(), upTimeout)
+	defer cancel()
+	upCancel = cancel
 	mu.Unlock()
 
-	// Al salir, publicar el resultado y despertar a quien esté esperando.
+	// Al salir, publicar el resultado y despertar a quien esté esperando. Sólo pisa el
+	// estado global si SEGUIMOS siendo el intento vigente (upDone == done): un Up viejo
+	// superseded por un Stop()+Start(nuevo) no debe pisar upErr/upDone del episodio vivo
+	// (DEV-4B). El close(done) siempre corre: despierta a los que esperan ESTE intento.
 	finish := func(err error) error {
 		mu.Lock()
-		upErr = err
-		upDone = nil
+		if upDone == done {
+			upErr = err
+			upDone = nil
+			upCancel = nil
+		}
 		mu.Unlock()
 		close(done)
 		return err
 	}
 
-	// Timeout: con una key válida pre-autorizada conecta en segundos; si es inválida no
-	// queremos colgar para siempre, devolvemos error y limpiamos.
-	ctx, cancel := context.WithTimeout(context.Background(), upTimeout)
-	defer cancel()
 	if _, err := s.Up(ctx); err != nil {
 		// ANTES de derribar el nodo: si el backend quedó en NeedsLogin/expired (key
 		// vencida o consumida), fotografiar ese estado para que Estado() lo siga
@@ -177,7 +191,14 @@ func Start(authKey, stateDir, hostname string) error {
 		// propio: el de Up ya está vencido. Si la foto no alcanza, el propio error de Up
 		// puede ser la evidencia (ver fotoDeFallo).
 		foto := fotoDeFallo(fotoSiVencido(s), err)
-		log.Printf("marvints: Up falló (%v); foto=%q", err, foto)
+		if foto == "" {
+			// Ni la foto ni el error se reconocen como "vencido": si Tailscale cambió el
+			// wording del rechazo de credenciales, esto es lo que hay que mirar en los logs
+			// para actualizar errorDeAuthRechazada (SRE-4p-2).
+			log.Printf("marvints: Up falló SIN clasificar como vencido (err=%v) — si es un rechazo de auth, ampliar errorDeAuthRechazada", err)
+		} else {
+			log.Printf("marvints: Up falló (%v); vencido detectado, foto=%q", err, foto)
+		}
 		mu.Lock()
 		mine := srv == s
 		if mine {
@@ -187,12 +208,21 @@ func Start(authKey, stateDir, hostname string) error {
 			}
 		}
 		mu.Unlock()
-		// Sólo cerramos si seguimos siendo el server vigente: si Stop() se adelantó, ya lo
-		// cerró él y volver a cerrarlo es una doble liberación.
-		if mine {
-			s.Close()
-		}
+		// El goroutine de Up es el ÚNICO que cierra su server: cierra SIEMPRE que el Up
+		// falló (era el dueño de s mientras Up corría). Stop() nunca cierra un server con Up
+		// en vuelo — sólo cancela y espera que lo cierre acá. Así no hay Close concurrente
+		// (DEV-4A) ni doble liberación.
+		s.Close()
 		return finish(err)
+	}
+	// Up tuvo éxito. Si mientras tanto un Stop()/Start-nuevo nos superseded (srv != s), este
+	// server quedó huérfano: Stop() no lo cerró (esperaba que lo cerremos acá), así que lo
+	// cerramos. Si seguimos vigentes, el nodo queda VIVO y lo cerrará el próximo Stop().
+	mu.Lock()
+	mine := srv == s
+	mu.Unlock()
+	if !mine {
+		s.Close()
 	}
 	return finish(nil)
 }
@@ -238,14 +268,34 @@ func fotoDeFallo(foto string, err error) string {
 }
 
 // errorDeAuthRechazada reconoce los errores de Up que son un rechazo de auth del control
-// plane (key inválida/vencida), y NO problemas de red (timeout, DNS, refused) — sobre esos
-// no hay que mentir "vencido".
+// plane (key inválida/vencida/consumida), y NO problemas de red (timeout, DNS, refused) —
+// sobre esos no hay que mentir "vencido". La lista de frases es defensiva ante el wording
+// del control plane, que es de un tercero y puede cambiar (SRE-4p-2): si un rechazo real deja
+// de matchear, Start loguea "Up falló SIN clasificar" para que se agregue la frase nueva acá.
 func errorDeAuthRechazada(err error) bool {
 	if err == nil {
 		return false
 	}
 	msg := strings.ToLower(err.Error())
-	return strings.Contains(msg, "invalid key") || strings.Contains(msg, "key expired")
+	frases := []string{
+		"invalid key",     // "invalid key: API key … not valid" (observado en vivo)
+		"key expired",     // node key vencida
+		"key is expired",  //
+		"key is invalid",  //
+		"authkey",         // "authkey is invalid / expired / already used"
+		"auth key",        //
+		"no longer valid", //
+		"needs login",     // el backend pide re-login
+		"needslogin",      //
+		"logged out",      //
+		"expired",         // fallback amplio: en un fallo de Up, "expired" es de la key
+	}
+	for _, f := range frases {
+		if strings.Contains(msg, f) {
+			return true
+		}
+	}
+	return false
 }
 
 // Running indica si el nodo está levantado.
@@ -292,6 +342,36 @@ func Estado() string {
 		return "Desconocido;0;0"
 	}
 	return formatearEstado(st)
+}
+
+// IdentidadRed devuelve una descripción legible de a qué tailnet está vinculado el nodo, para
+// que la app pueda mostrar "te vinculaste a la tailnet ⟨X⟩" tras re-enrolar (A4-1: hoy el
+// re-enrol reconfigura la identidad de red sin ningún feedback de a qué red entraste). Prefiere
+// el nombre del tailnet; si no, el DNSName del propio nodo. "" si no hay nodo o no se pudo consultar.
+func IdentidadRed() string {
+	mu.Lock()
+	s := srv
+	mu.Unlock()
+	if s == nil {
+		return ""
+	}
+	lc, err := s.LocalClient()
+	if err != nil {
+		return ""
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	st, err := lc.StatusWithoutPeers(ctx)
+	if err != nil || st == nil {
+		return ""
+	}
+	if st.CurrentTailnet != nil && st.CurrentTailnet.Name != "" {
+		return st.CurrentTailnet.Name
+	}
+	if st.Self != nil {
+		return st.Self.DNSName
+	}
+	return ""
 }
 
 // formatearEstado arma la línea "<backendState>;<expired 0|1>;<keyExpiryEpoch|0>".
@@ -371,6 +451,12 @@ func Stop() {
 	mu.Lock()
 	old := srv
 	srv = nil
+	// Un Up en vuelo (upDone != nil) implica que el goroutine de Up todavía es dueño de `old`
+	// y lo va a cerrar él tras retornar. Stop() NO debe cerrarlo en ese caso (sería Close
+	// concurrente con s.Up() = data race, DEV-4A): sólo cancela para destrabarlo. Si el Up ya
+	// terminó (nodo vivo, sin goroutine), lo cierra Stop().
+	upEnVuelo := upDone != nil
+	cancel := upCancel
 	listeners := lns
 	lns = nil
 	// Stop es deliberado (re-enrolado/teardown): el sticky de "vencido" deja de valer.
@@ -381,7 +467,12 @@ func Stop() {
 	for _, ln := range listeners {
 		ln.Close()
 	}
-	if old != nil {
+	// Destrabar un Up colgado; su goroutine cerrará el server (closer único).
+	if cancel != nil {
+		cancel()
+	}
+	// Sólo cerramos si NO hay Up en vuelo dueño de este server.
+	if old != nil && !upEnVuelo {
 		old.Close()
 	}
 }

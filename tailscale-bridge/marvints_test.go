@@ -209,6 +209,12 @@ func TestErrorDeAuthRechazada(t *testing.T) {
 		// El error real observado en vivo (S23, 2026-08-25) al reabrir con la key vencida.
 		{fmt.Errorf("tsnet.Up: backend: invalid key: API key kxxYWHgmQ921CNTRL not valid"), true},
 		{fmt.Errorf("register request: node key expired"), true},
+		// Wordings plausibles del control plane que ampliamos en SRE-4p-2.
+		{fmt.Errorf("authkey is no longer valid"), true},
+		{fmt.Errorf("auth key is invalid"), true},
+		{fmt.Errorf("the node key is expired"), true},
+		{fmt.Errorf("backend state: NeedsLogin"), true},
+		{fmt.Errorf("this node was logged out"), true},
 		// Problemas de red: NO son vencido.
 		{fmt.Errorf("tsnet.Up: context deadline exceeded"), false},
 		{fmt.Errorf("dial tcp: connection refused"), false},
@@ -234,5 +240,65 @@ func TestFotoDeFallo(t *testing.T) {
 	// Sin foto y con error de red: nada — no se miente vencido.
 	if got := fotoDeFallo("", fmt.Errorf("context deadline exceeded")); got != "" {
 		t.Fatalf("con error de red esperaba \"\", dio %q", got)
+	}
+}
+
+// --- Concurrencia del re-enrol (configure = Stop + Start-nuevo) ----------------------
+
+// DEV-4A: Stop() durante un Up en vuelo NO debe cerrar el server concurrentemente al
+// goroutine que está dentro de s.Up() (era una data race Close-vs-start). Con el fix,
+// Stop() sólo cancela el ctx y el goroutine de Up cierra su propio server. Bajo -race,
+// una regresión de esto dispara el detector.
+func TestStopDuranteUpNoEsDataRace(t *testing.T) {
+	mu.Lock()
+	srv = nil
+	ultimoEstado = ""
+	mu.Unlock()
+	viejo := upTimeout
+	upTimeout = 15 * time.Second // largo: el Up queda colgado en NeedsLogin hasta que Stop cancele
+	defer func() { upTimeout = viejo }()
+
+	ret := make(chan error, 1)
+	go func() { ret <- Start("", t.TempDir(), "test-race-stop") }()
+	time.Sleep(700 * time.Millisecond) // dejar que el Up esté realmente en vuelo
+	Stop()                             // cancela; el goroutine de Up debe cerrar su server
+
+	select {
+	case <-ret:
+	case <-time.After(10 * time.Second):
+		t.Fatal("Start no retornó tras Stop(): el cancel no destrabó el Up en vuelo")
+	}
+	// Tras el Stop, un re-enrolado (Start nuevo) arranca desde cero sin quedar pegado.
+	if got := Estado(); got != "Detenido;0;0" && !strings.Contains(got, "NeedsLogin") {
+		t.Fatalf("tras Stop esperaba Detenido o NeedsLogin, dio %q", got)
+	}
+}
+
+// DEV-4B: un Up VIEJO que retorna tarde (superseded por Stop()+Start-nuevo) no debe pisar
+// upErr/upDone del episodio vivo. Se simula el patrón del re-enrol repetido y se verifica que
+// el estado global quede consistente (sin panic por doble close, sin quedar pegado).
+func TestReenrolRepetidoNoRompe(t *testing.T) {
+	mu.Lock()
+	srv = nil
+	ultimoEstado = ""
+	mu.Unlock()
+	viejo := upTimeout
+	upTimeout = 3 * time.Second
+	defer func() { upTimeout = viejo }()
+
+	for i := 0; i < 3; i++ {
+		ret := make(chan error, 1)
+		go func() { ret <- Start("", t.TempDir(), "test-reenrol") }()
+		time.Sleep(300 * time.Millisecond)
+		Stop() // supersede el Up en vuelo
+		select {
+		case <-ret:
+		case <-time.After(6 * time.Second):
+			t.Fatalf("ronda %d: Start no retornó tras Stop()", i)
+		}
+	}
+	// El estado global quedó limpio y consultable, sin deadlock.
+	if got := Estado(); got == "" {
+		t.Fatal("Estado() vacío tras re-enroles repetidos")
 	}
 }
