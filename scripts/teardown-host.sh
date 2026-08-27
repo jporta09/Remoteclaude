@@ -38,7 +38,7 @@ for u in marvin-render.service marvin-stt.service marvin-stt-live.service; do
 done
 
 echo "==> Helpers en ~/.local/bin"
-for h in marvin-stt marvin-display-allowed marvin-allow-display; do
+for h in marvin-stt marvin-display-allowed marvin-allow-display marvin-doctor; do
     if [ -e "$HOME/.local/bin/$h" ] || [ -L "$HOME/.local/bin/$h" ]; then
         rm -f "$HOME/.local/bin/$h"
         echo "    quitado: ~/.local/bin/$h"

@@ -74,15 +74,18 @@ echo "  └───────────────────────
 echo
 # -l L = menor corrección de error -> menos módulos -> QR más grande/legible para la cámara.
 # -m 3 = quiet zone (margen): muchos lectores fallan sin ese borde blanco.
+# La key va a qrencode por STDIN, no como argumento: un argv queda visible en
+# /proc/<pid>/cmdline para cualquier usuario local mientras vive el proceso (mismo motivo
+# por el que las creds OAuth van por --config). qrencode sin string posicional lee de stdin.
 if [ "$PNG" = "1" ]; then
     # mktemp y no ruta fija (multiusuario); se borra solo a los 10 min, cuando la key vence.
     QR_PNG="$(mktemp -t marvin-qr.XXXXXX.png)"
-    qrencode -t PNG -s 14 -l L -m 4 -o "$QR_PNG" "$key"
+    printf '%s' "$key" | qrencode -t PNG -s 14 -l L -m 4 -o "$QR_PNG"
     ( sleep 600; rm -f "$QR_PNG" ) >/dev/null 2>&1 &
     echo "  QR en imagen: $QR_PNG (se borra solo en 10 min)"
     xdg-open "$QR_PNG" >/dev/null 2>&1 || echo "  (abrilo a mano si no saltó el visor)"
 else
-    qrencode -t ANSIUTF8 -l L -m 3 "$key"
+    printf '%s' "$key" | qrencode -t ANSIUTF8 -l L -m 3
     echo
     echo "  Tip: si al lector le cuesta, agrandá la fuente (Ctrl+'+') o usá:  $0 --png"
 fi

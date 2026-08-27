@@ -111,7 +111,7 @@ def test_teardown_desinstala_lo_local_sin_tocar_lo_ajeno(tmp_path):
         _bin_falso(binn, cmd, log)
 
     # Lo que dejó el setup:
-    for h in ("marvin-stt", "marvin-display-allowed", "marvin-allow-display"):
+    for h in ("marvin-stt", "marvin-display-allowed", "marvin-allow-display", "marvin-doctor"):
         (home / ".local" / "bin" / h).write_text("#!/bin/sh\n")
     for u in ("marvin-render.service", "marvin-stt.service", "marvin-stt-live.service"):
         (home / ".config" / "systemd" / "user" / u).write_text("[Service]\n")
@@ -132,7 +132,7 @@ def test_teardown_desinstala_lo_local_sin_tocar_lo_ajeno(tmp_path):
     assert r.returncode == 0, r.stderr
 
     # Units y helpers: fuera.
-    for h in ("marvin-stt", "marvin-display-allowed", "marvin-allow-display"):
+    for h in ("marvin-stt", "marvin-display-allowed", "marvin-allow-display", "marvin-doctor"):
         assert not (home / ".local" / "bin" / h).exists(), h
     for u in ("marvin-render.service", "marvin-stt.service", "marvin-stt-live.service"):
         assert not (home / ".config" / "systemd" / "user" / u).exists(), u

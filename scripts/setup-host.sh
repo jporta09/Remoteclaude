@@ -112,6 +112,7 @@ set -g mouse on
 set -g set-clipboard on
 set -as terminal-features ',*:clipboard'
 set -ga update-environment MARVIN_DISPLAY
+set -ga update-environment EDITOR
 set-hook -g client-attached 'run-shell -b "tmux show-environment MARVIN_DISPLAY >/dev/null 2>&1 && XDG_RUNTIME_DIR=/run/user/\$(id -u) systemctl --user start marvin-render.service 2>/dev/null || true"'
 TMUX
     echo "    ~/.tmux.conf actualizado (bloque RemoteMarvin; tu config previa intacta)"
