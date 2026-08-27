@@ -8,7 +8,7 @@ import com.journeyapps.barcodescanner.ScanOptions
  * Enrolar (o re-enrolar) el nodo Tailscale embebido escaneando el QR de `ts-link-qr`.
  *
  * Vive acá y no en una Activity porque ahora se escanea desde DOS lugares: la pantalla de
- * hosts (diálogo de la VPN) y la barra de la terminal cuando el acceso venció (⟲). Ambos
+ * hosts (diálogo de la VPN) y la barra de la terminal cuando el acceso venció (↺). Ambos
  * launchers usan las mismas opciones y la misma validación/aplicación de la key.
  */
 object EnrolarTailscale {
@@ -31,14 +31,23 @@ object EnrolarTailscale {
         val key = contents?.trim().orEmpty()
         return when {
             key.isEmpty() -> false
-            key.startsWith("tskey-") -> {
+            esAuthKeyPlausible(key) -> {
                 TailscaleBridge.configure(ctx, key)
                 true
             }
             else -> {
-                Toast.makeText(ctx, "El QR no es una auth key de Tailscale", Toast.LENGTH_LONG).show()
+                Toast.makeText(ctx, "El QR no es una auth key de Tailscale válida", Toast.LENGTH_LONG).show()
                 false
             }
         }
     }
+
+    /**
+     * Forma mínima esperada de una auth key de Tailscale: prefijo `tskey-`, sin espacios, y un
+     * largo razonable (una key real ronda 50+ caracteres). No valida contra la tailnet —eso lo
+     * hace el Up—, sólo descarta un QR truncado/ajeno antes de reiniciar el nodo con basura
+     * (QA4-2: antes se aceptaba cualquier string con el prefijo).
+     */
+    private fun esAuthKeyPlausible(key: String): Boolean =
+        key.startsWith("tskey-") && key.length >= 24 && key.none { it.isWhitespace() }
 }

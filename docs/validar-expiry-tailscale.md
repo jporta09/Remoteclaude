@@ -134,8 +134,8 @@ cubierto. Para validarlo en vivo:
    reescaneá el QR"** en rojo en ~10s (validado: 9s — el control rechaza la re-registración
    con `invalid key` al toque, no espera el timeout de 60s; antes de v1.30.0 quedaba
    "conectando…"/"error" sin causa). En la terminal: el banner de vencido + la barra con
-   **⟲ Reescanear QR** (título "‹ Host" en rojo, sin sufijo — el texto largo se aplastaba).
-4. Re-enrolar de un toque: tocá ⟲ → scanner → `./scripts/ts-link-qr.sh --png` en la PC →
+   **↺ Reescanear QR** (título "‹ Host" en rojo, sin sufijo — el texto largo se aplastaba).
+4. Re-enrolar de un toque: tocá ↺ → scanner → `./scripts/ts-link-qr.sh --png` en la PC →
    escanear → reconecta sola (nodo nuevo en la tailnet; los vencidos viejos se borran de la
    consola cuando quieras).
 

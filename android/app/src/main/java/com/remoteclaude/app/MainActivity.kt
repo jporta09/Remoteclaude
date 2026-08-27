@@ -486,21 +486,52 @@ class MainActivity : AppCompatActivity() {
         onAccesoVencido = { runOnUiThread { accesoVencido = true; pintarBarra() } },
     )
 
-    // El acceso de Tailscale venció: la barra muestra ⟲ Reescanear QR. Lo prende el
+    // El acceso de Tailscale venció: la barra muestra ↺ Reescanear QR. Lo prende el
     // callback de la sesión (donde ya se detecta, sin sondas JNI en el main thread) y lo
     // apaga una reconexión exitosa.
     @Volatile private var accesoVencido = false
+
+    // Estado transitorio tras escanear un QR: el nodo se está re-vinculando. NO se apaga el
+    // "vencido" de forma optimista (QA4-2) — se muestra "re-vinculando…" hasta que una
+    // reconexión REAL por la tailnet confirme (o hasta que la ventana venza y vuelva el ↺).
+    @Volatile private var reVinculando = false
+    private var reVinculandoDesde = 0L
 
     // Re-enrolar de un toque: scanner de QR desde la terminal (mismo flujo que en hosts).
     private val qrScanner = registerForActivityResult(
         com.journeyapps.barcodescanner.ScanContract(),
     ) { result ->
         if (EnrolarTailscale.aplicar(this, result.contents)) {
-            accesoVencido = false
+            // QA4-2: no apagar accesoVencido acá (sería optimista, antes de que el nodo
+            // levante). Se muestra "re-vinculando…" y lo apaga una reconexión real por tailnet.
+            reVinculando = true
+            reVinculandoDesde = android.os.SystemClock.elapsedRealtime()
             pintarBarra()
             Toast.makeText(this, "Re-vinculando Tailscale…", Toast.LENGTH_SHORT).show()
             // onResume (al volver del scanner) ya reintenta; esto fuerza también las caídas.
             tabs.forzarReconexiones()
+            anunciarIdentidadTailnet()
+        }
+    }
+
+    /** A4-1: cuando el nodo embebido levante tras un re-enrol, avisar a qué tailnet te
+     *  vinculaste (hoy el re-enrol reconfigura la identidad de red sin ningún feedback).
+     *  Corre en un hilo: isReady()/identidadRed() tocan el estado del nodo. */
+    private fun anunciarIdentidadTailnet() {
+        thread(name = "ts-identidad") {
+            val t0 = android.os.SystemClock.elapsedRealtime()
+            while (android.os.SystemClock.elapsedRealtime() - t0 < 20_000) {
+                if (TailscaleBridge.isReady()) {
+                    val red = TailscaleBridge.identidadRed()
+                    if (red.isNotBlank()) runOnUiThread {
+                        if (!isFinishing && !isDestroyed) {
+                            Toast.makeText(this, "Vinculado a la tailnet: $red", Toast.LENGTH_LONG).show()
+                        }
+                    }
+                    return@thread
+                }
+                try { Thread.sleep(1000) } catch (_: InterruptedException) { return@thread }
+            }
         }
     }
 
@@ -535,13 +566,28 @@ class MainActivity : AppCompatActivity() {
     /** Pinta la barra según el estado REAL de la pestaña activa (no del extra del Intent). */
     private fun pintarBarra() {
         val estado = tabs.sesionActiva?.estado
-        // Una reconexión exitosa apaga el episodio de "vencido" (se re-enroló, o el nodo
-        // volvió): el flag lo prende el callback de la sesión, nunca una sonda acá (JNI).
-        if (estado == SshTerminalSession.Estado.CONECTADO) accesoVencido = false
+        // Una reconexión REAL por la tailnet apaga el "vencido"; una conexión DIRECTA (fallback
+        // a LAN cuando el nodo embebido no levantó) NO lo apaga — si no, la barra diría
+        // "conectado" sobre un nodo vencido (QA4-1). Sin Tailscale (modo directo puro) no hay
+        // concepto de vencido: cualquier CONECTADO lo apaga. isReady()/isEnabled() son flags
+        // @Volatile, sin JNI: seguros en el main thread.
+        val conexionRealPorTailnet = estado == SshTerminalSession.Estado.CONECTADO &&
+            (!TailscaleBridge.isEnabled() || TailscaleBridge.isReady())
+        if (conexionRealPorTailnet) {
+            accesoVencido = false
+            reVinculando = false
+        }
+        // La ventana de "re-vinculando" (tras escanear) es transitoria: si vence sin reconectar,
+        // vuelve a mostrarse el ↺ para reintentar.
+        val reVinc = reVinculando &&
+            (android.os.SystemClock.elapsedRealtime() - reVinculandoDesde) < 25_000
+        if (!reVinc) reVinculando = false
         val (sufijo, color) = when {
-            // Sin sufijo: el botón ⟲ Reescanear QR ya ocupa la barra y el texto largo
+            // Re-vinculando: ámbar (progreso), no el rojo de alarma.
+            reVinc -> " · re-vinculando…" to getColor(R.color.marvin_amber)
+            // Sin sufijo: el botón ↺ Reescanear QR ya ocupa la barra y el texto largo
             // quedaba aplastado en 5 renglones (visto en vivo, S23). El rojo del título
-            // + el ⟲ + el banner de la terminal comunican el estado igual.
+            // + el ↺ + el banner de la terminal comunican el estado igual.
             accesoVencido -> "" to Paleta.REC_FG
             estado == SshTerminalSession.Estado.CONECTADO -> "" to Paleta.ACCENT
             estado == SshTerminalSession.Estado.RECONECTANDO -> " · reconectando…" to getColor(R.color.marvin_amber)
@@ -550,12 +596,12 @@ class MainActivity : AppCompatActivity() {
         }
         barraLabel.text = "‹  $hostLabel$sufijo"
         barraLabel.setTextColor(color)
-        // Con el acceso vencido, el botón de la barra muta a ⟲ Reescanear QR (reconectar
-        // no serviría de nada); si no, es el ↻ Reconectar de siempre para el estado CAIDO.
-        if (accesoVencido) {
-            barraReconectar.text = "⟲ Reescanear QR"
+        // Con el acceso vencido (o re-vinculando), el botón de la barra muta a ↺ Reescanear QR
+        // (reconectar no serviría de nada); si no, es el ↻ Reconectar de siempre para CAIDO.
+        if (accesoVencido || reVinc) {
+            barraReconectar.text = "↺ Reescanear QR"
             barraReconectar.contentDescription = "Reescanear el QR de Tailscale"
-            barraReconectar.setTextColor(Paleta.REC_FG)
+            barraReconectar.setTextColor(if (reVinc) getColor(R.color.marvin_amber) else Paleta.REC_FG)
             barraReconectar.setOnClickListener { qrScanner.launch(EnrolarTailscale.opciones()) }
             barraReconectar.visibility = View.VISIBLE
         } else {
@@ -566,7 +612,7 @@ class MainActivity : AppCompatActivity() {
             barraReconectar.visibility =
                 if (estado == SshTerminalSession.Estado.CAIDO) View.VISIBLE else View.GONE
         }
-        // Con un botón de acción en la barra (⟲ o ↻) el espacio es escaso: el logo
+        // Con un botón de acción en la barra (↺ o ↻) el espacio es escaso: el logo
         // decorativo se lo cede al título, que si no quedaba partido en renglones.
         barraLogo.visibility =
             if (barraReconectar.visibility == View.VISIBLE) View.GONE else View.VISIBLE
@@ -576,13 +622,25 @@ class MainActivity : AppCompatActivity() {
     private fun cambioLaClave(vieja: String, nueva: String) {
         if (isFinishing || isDestroyed || dialogoClaveVisible) return
         dialogoClaveVisible = true
+        // A4-1: si el mismatch aparece JUSTO tras un re-enrol (acabás de escanear un QR), NO
+        // lo presentes como "esperable" — ese es exactamente el escenario en que un QR malicioso
+        // te metió en la tailnet de un atacante y su nodo-espejo presenta otra host-key. En vez
+        // de la coartada, advertí.
+        val enReEnrol = reVinculando &&
+            (android.os.SystemClock.elapsedRealtime() - reVinculandoDesde) < 60_000
+        val explicacion = if (enReEnrol) {
+            "Cambió justo después de que reescaneaste el QR. Si vos NO reinstalaste el server, " +
+                "desconfiá: un QR ajeno pudo haberte vinculado a otra red y este server puede ser " +
+                "un impostor. No confíes salvo que estés seguro."
+        } else {
+            "Si reinstalaste el server o lo recreaste, es esperable. Si no, alguien " +
+                "puede estar interceptando la conexión."
+        }
         AlertDialog.Builder(this)
             .setTitle("La clave del host cambió")
             .setMessage(
                 "El servidor $host:$port presentó una clave distinta a la que teníamos.\n\n" +
-                    "Antes: $vieja\nAhora: $nueva\n\n" +
-                    "Si reinstalaste el server o lo recreaste, es esperable. Si no, alguien " +
-                    "puede estar interceptando la conexión."
+                    "Antes: $vieja\nAhora: $nueva\n\n" + explicacion
             )
             .setNegativeButton("Cancelar") { _, _ -> dialogoClaveVisible = false }
             .setPositiveButton("Confiar en la nueva") { _, _ ->

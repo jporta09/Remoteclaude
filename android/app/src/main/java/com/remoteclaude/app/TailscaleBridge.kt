@@ -53,6 +53,16 @@ object TailscaleBridge {
      */
     fun accesoVencido(): Boolean = enabled && accesoVencidoDeEstado(estado())
 
+    /**
+     * A qué tailnet está vinculado el nodo embebido (nombre del tailnet, o el DNSName del nodo).
+     * Para mostrar "te vinculaste a la tailnet X" tras re-enrolar (A4-1). "" si no hay nodo o no
+     * se pudo consultar. Toca el nodo por JNI: llamar FUERA del hilo principal.
+     */
+    fun identidadRed(): String {
+        if (!enabled) return ""
+        return runCatching { marvints.Marvints.identidadRed() }.getOrDefault("")
+    }
+
     /** Arranca el nodo embebido si hay auth key. Idempotente. Llamar al iniciar la app. */
     @Synchronized
     fun init(ctx: Context) {
@@ -68,6 +78,10 @@ object TailscaleBridge {
             ?: ("remotemarvin-" + Integer.toHexString((System.nanoTime() and 0xffffff).toInt()))
                 .also { prefs.edit().putString("ts_hostname", it).apply() }
         val dir = File(ctx.filesDir, "ts-state").apply { mkdirs() }
+        // Capturar el latch de ESTE intento como local: tras un configure() (re-enrol) el
+        // campo readyLatch se reemplaza por uno nuevo, y si el hilo viejo contara el CAMPO en
+        // su finally liberaría el latch NUEVO antes de tiempo (DEV-4C). Cada hilo cuenta el suyo.
+        val latch = readyLatch
         thread(name = "tailscale-up") {
             try {
                 // Android bloquea net.Interfaces() de Go (netlink) -> tsnet no levanta. Le
@@ -78,7 +92,7 @@ object TailscaleBridge {
             } catch (e: Exception) {
                 lastError = e.message
             } finally {
-                readyLatch.countDown()
+                latch.countDown()
             }
         }
     }

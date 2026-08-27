@@ -37,7 +37,7 @@ class HostsActivity : AppCompatActivity() {
     private val bodyFont by lazy { resources.getFont(R.font.ubuntu) }        // cuerpo de texto (marca)
 
     // Scanner de QR (ZXing): el resultado es la auth key de Tailscale (ts-link-qr en la PC).
-    // La validación/aplicación vive en EnrolarTailscale (compartida con el ⟲ de la terminal).
+    // La validación/aplicación vive en EnrolarTailscale (compartida con el ↺ de la terminal).
     private val qrScanner = registerForActivityResult(ScanContract()) { result ->
         if (EnrolarTailscale.aplicar(this, result.contents)) refrescarVpnEscalonado()
     }
@@ -209,21 +209,27 @@ class HostsActivity : AppCompatActivity() {
                 "🔒 VPN: directa · tocá para usar Tailscale embebido" to R.color.marvin_muted
             TailscaleBridge.isReady() ->
                 "🔒 Tailscale: conectada ✓" to R.color.marvin_green
-            // Antes de la rama de error: el reinicio-tras-vencer termina en un error de
-            // timeout de Up, pero la causa REAL (key vencida) la reporta el estado sticky.
+            // Enrolamiento vencido: ÁMBAR, no rojo, y reencuadrado (QA4-1/UX-1). Lo que venció
+            // es el enrolamiento del nodo embebido, no "tu acceso": los hosts alcanzables por
+            // LAN siguen andando (la terminal lo muestra conectado). Un rojo global y permanente
+            // sobre eso era fatiga de alarma. Se sigue ofreciendo reescanear.
             vencidoCache ->
-                "🔒 Tailscale: acceso vencido — tocá y reescaneá el QR" to R.color.marvin_red
+                "🔒 Tailscale: enrolamiento vencido — reescaneá el QR (los hosts de LAN siguen)" to R.color.marvin_amber
+            // No filtrar el error CRUDO del control-plane (traía el id de la key) a la UI (QA4-3):
+            // mensaje genérico y accionable.
             TailscaleBridge.error() != null ->
-                "🔒 Tailscale: error — ${TailscaleBridge.error()} · tocá" to R.color.marvin_amber
+                "🔒 Tailscale: no se pudo conectar — tocá para reintentar o reescanear" to R.color.marvin_amber
             else -> "🔒 Tailscale: conectando…" to R.color.marvin_amber
         }
         vpnStatus.text = txt
         vpnStatus.setTextColor(getColor(color))
         refrescarVencido()
-        // Mientras conecta, refrescar solo hasta que muestre conectada ✓ (o error).
+        // Repoll mientras el nodo esté habilitado pero no conectado — incluido el estado de
+        // error: antes se cortaba al latchear error() (QA4-3), y si la causa era un vencido que
+        // el único sondeo no alcanzó a detectar, quedaba pegado sin volver a chequear.
         vpnStatus.removeCallbacks(vpnPoll)
-        if (TailscaleBridge.isEnabled() && !TailscaleBridge.isReady() && TailscaleBridge.error() == null) {
-            vpnStatus.postDelayed(vpnPoll, 1500)
+        if (TailscaleBridge.isEnabled() && !TailscaleBridge.isReady()) {
+            vpnStatus.postDelayed(vpnPoll, if (TailscaleBridge.error() != null) 3000 else 1500)
         }
     }
 

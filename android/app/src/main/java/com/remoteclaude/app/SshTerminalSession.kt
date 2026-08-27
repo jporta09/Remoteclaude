@@ -38,7 +38,7 @@ class SshTerminalSession(
     // nombre de la sesión para que la UI sólo avise por la pestaña activa.
     private val onSesionPerdida: ((String) -> Unit)? = null,
     // El acceso de Tailscale venció (una vez por episodio, junto con el banner): la UI
-    // muestra el ⟲ Reescanear QR en la barra. Corre en el hilo ssh-loop.
+    // muestra el ↺ Reescanear QR en la barra. Corre en el hilo ssh-loop.
     private val onAccesoVencido: (() -> Unit)? = null,
 ) : TerminalSession(5000, client) {
 
@@ -221,6 +221,7 @@ class SshTerminalSession(
                 attempt = 0
                 reconexionAnunciada = false   // el próximo corte volverá a anunciar una vez
                 avisoVencidoDado = false      // idem para el aviso de acceso vencido
+                episodioVencidoLogueado.set(false)   // reconectó: un vencido futuro es episodio nuevo
                 cambiarEstado(Estado.CONECTADO)
                 // Baseline limpio de los timers de half-open al (re)conectar.
                 val ahoraConn = System.currentTimeMillis()
@@ -296,13 +297,16 @@ class SshTerminalSession(
             // reconectar no va a lograr nada: se avisa una vez con una causa accionable.
             if (!avisoVencidoDado && attempt >= 2 && TailscaleBridge.accesoVencido()) {
                 status(
-                    "\r\n[el acceso de Tailscale venció — tocá ⟲ Reescanear QR en la barra " +
+                    "\r\n[el acceso de Tailscale venció — tocá ↺ Reescanear QR en la barra " +
                         "de arriba para volver a habilitar la conexión]\r\n"
                 )
-                Diagnostico.registrar(
-                    Diagnostico.Nivel.ERROR, "tailscale",
-                    "el acceso de Tailscale venció (node key expirada) — hay que reescanear el QR",
-                )
+                // Diagnóstico: una sola vez por episodio (no una por pestaña) — ver companion.
+                if (episodioVencidoLogueado.compareAndSet(false, true)) {
+                    Diagnostico.registrar(
+                        Diagnostico.Nivel.ERROR, "tailscale",
+                        "el acceso de Tailscale venció (node key expirada) — hay que reescanear el QR",
+                    )
+                }
                 avisoVencidoDado = true
                 onAccesoVencido?.invoke()
             }
@@ -468,6 +472,13 @@ class SshTerminalSession(
         const val KEEPALIVE_MS = 10_000L        // cada cuánto pinguea el NAT y corre el detector
         const val UMBRAL_SIN_ECO_MS = 7_000L    // input sin respuesta > esto -> sospechar half-open
         const val PROBE_TIMEOUT_MS = 5_000L     // connect+read del probe fuera de banda
+
+        // El ERROR de "acceso vencido" a Diagnóstico se registra UNA vez por EPISODIO (no por
+        // pestaña): N pestañas pierden la tailnet a la vez y llenaban el post-mortem con N
+        // entradas idénticas, justo bajo el storm de reconexión (QA4-4). El banner en la
+        // terminal sí es per-pestaña (feedback local de cada pane). Se rearma cuando una sesión
+        // vuelve a CONECTADO (arranca un episodio nuevo).
+        val episodioVencidoLogueado = java.util.concurrent.atomic.AtomicBoolean(false)
     }
 }
 
