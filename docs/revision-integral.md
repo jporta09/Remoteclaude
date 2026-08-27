@@ -992,6 +992,25 @@ heredoc citado cuyo cuerpo nombra rutas sensibles). Sobre-matcheaba el TEXTO del
 REFINADO 2026-08-27: se saca el cuerpo de los heredocs CITADOS (data inerte) antes de analizar;
 los heredocs sin comillas (con sustitucion) se conservan. Autotest ampliado con esos casos.
 
+### Estado de aplicación (v1.31.0, 2026-08-27)
+
+TODOS los hallazgos de §L IMPLEMENTADOS y verificados (make go -race / unit / lint / host / release
+R8 verdes, CI verde), por fases del plan `sleepy-yawning-snowglobe.md`:
+- Fase 1 (scripts host, sin release): S8 (key por stdin, PoC), DEVOPS-1 (teardown), UF-1 (EDITOR
+  en update-environment).
+- Fase 2 (bridge Go + AAR): DEV-4A (closer único vía cancel), DEV-4B (finish guard upDone==done),
+  SRE-4p-2 (patrones ampliados + log de no-clasificado), A4-1 (IdentidadRed). Tests -race nuevos.
+- Fase 3 (app): DEV-4C (latch local), QA4-1/UX-1 (limpia sólo con tailnet real; hosts ámbar +
+  reencuadre), QA4-2 (re-vinculando no optimista + valida key), A4-1 (muestra tailnet; no ablanda
+  el mismatch en re-enrol), QA4-3 (no filtra error crudo; no corta el repoll), QA4-4 (dedup por
+  episodio), UX-2 (⟲→↺).
+- Fase 4 (SRE-4p-1): aviso proactivo del expiry del nodo del HOST (SshTerminalSession + marvin-doctor).
+- Fase 5 (DEVOPS-2): verificación source↔AAR en CI (srchash).
+- Fase 6: superficies (manual/skill 1.10.0) + versión (vc47/1.31.0).
+
+**PENDIENTE: validación on-device del ciclo de vencido** (el emulador no lo reproduce) ANTES de
+taggear v1.31.0 — mismo procedimiento que v1.30.0. QA4-5 se deja como está (defendible).
+
 ## K · 4ª pasada — onboarding desde cero (charter §2.E repuesto, 2026-08-27)
 
 Primera pasada que EJECUTA el onboarding (HOME-sandbox + fakes, sin VM): devops corrió
