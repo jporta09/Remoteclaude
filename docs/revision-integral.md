@@ -951,6 +951,18 @@ estresada en concurrencia ni en el caso LAN-directa; ahi se concentra el grueso.
 | 1 | UX-2 | El glifo de reescanear (U+27F2) puede verse como tofu en equipos != S23 | Fallback textual/glifo mas portable |
 | 1(nota) | QA4-5 | El epoch de KeyExpiry se transmite (campo 3) pero no se compara con now | Defendible (evita clock-skew); nota de completitud |
 
+### Uso diario (usuario-final) — CONFIRMADO por codigo
+| Sev | ID | Hallazgo | Fix propuesto |
+|---|---|---|---|
+| 1-2 | UF-1 | EDITOR="${EDITOR:-nano}" se fija como prefijo de `tmux new -A` (SshTerminalSession.kt:216), pero NO esta en `update-environment` (a diferencia de MARVIN_DISPLAY, que si se agrego a proposito en setup-host.sh:114 y marvin.tmux.conf:11). Consecuencia: EDITOR solo llega a sesiones CREADAS frescas; al REENGANCHARSE a una sesion tmux preexistente (o en un panel nuevo de ella), tmux no lo propaga -> el Ctrl+G "abrir el plan en el editor" de Claude Code puede no encontrar nano en sesiones viejas de antes de v1.30.0. Choca con la persistencia, que es la feature estrella. | Sumar EDITOR a `update-environment` (marvin.tmux.conf + setup-host.sh), como ya se hace con MARVIN_DISPLAY, para que sobreviva el reenganche |
+
+Veredicto de adopcion de usuario-final: SI, mas firme que la 3a pasada — las nuevas (Enter propio,
+avisos por pestana = senal no ruido, dictado con warmup solapado, vencido auto-rescatable, canal de
+avisos por fin visible en Diagnostico) mejoran el uso diario sin interponerse. Otras fricciones
+menores del uso diario (todas sev-1): dictado util solo para prosa (no tokens tecnicos/paths); la
+fila Shift/Sel/Dictar/Enter se esconde con el QWERTY arriba (paso extra en tipeo->Enter); status-bar
+de tmux con texto recortado (probable config del FIXTURE, verificar en host real).
+
 ### Punto ciego del expiry del HOST (SRE + DevOps, CONFIRMADO en vivo)
 | Sev | ID | Hallazgo | Fix propuesto |
 |---|---|---|---|
