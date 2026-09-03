@@ -171,6 +171,57 @@ def test_no_confunde_publickey_con_password_por_substring(tmp_path):
     assert "rc=1" in r.stdout, r.stdout + r.stderr
 
 
+# --- unit_sshd (DEVOPS-5p-1) ----------------------------------------------------------
+# setup-host hardcodeaba `systemctl enable --now ssh`: en Fedora/Arch/openSUSE la unit se llama
+# `sshd` y el setup dejaba el host sin sshd levantado. La detección tiene que mirar las units
+# instaladas, no la distro.
+
+def systemctl_con_units(tmp_path, listado: str):
+    """systemctl de mentira cuyo `list-unit-files` devuelve ese listado."""
+    binn = tmp_path / "bin"
+    binn.mkdir(exist_ok=True)
+    (binn / "systemctl").write_text(textwrap.dedent(f"""\
+        #!/usr/bin/env bash
+        echo "$@" >> "{tmp_path}/llamadas.log"
+        [[ "$*" == *list-unit-files* ]] && {{ printf '%s\\n' "{listado}"; exit 0; }}
+        exit 0
+    """))
+    (binn / "systemctl").chmod(0o755)
+    return {"PATH": f"{binn}:{os.environ['PATH']}"}
+
+
+def test_unit_sshd_detecta_sshd_en_distros_redhat_arch(tmp_path):
+    env = systemctl_con_units(tmp_path, "sshd.service enabled enabled")
+    r = correr('unit_sshd', tmp_path, env)
+    assert r.stdout.strip() == "sshd", r.stdout + r.stderr
+
+
+def test_unit_sshd_devuelve_ssh_en_debian(tmp_path):
+    env = systemctl_con_units(tmp_path, "ssh.service enabled enabled")
+    r = correr('unit_sshd', tmp_path, env)
+    assert r.stdout.strip() == "ssh", r.stdout + r.stderr
+
+
+def test_unit_sshd_sin_systemd_cae_al_nombre_historico(tmp_path):
+    """Sin listado (systemctl ausente o falla) no hay que explotar: `ssh` como siempre."""
+    binn = tmp_path / "bin"
+    binn.mkdir(exist_ok=True)
+    (binn / "systemctl").write_text("#!/usr/bin/env bash\nexit 1\n")
+    (binn / "systemctl").chmod(0o755)
+    r = correr('unit_sshd', tmp_path, {"PATH": f"{binn}:{os.environ['PATH']}"})
+    assert r.returncode == 0, r.stderr
+    assert r.stdout.strip() == "ssh"
+
+
+def test_setup_host_usa_unit_sshd_y_no_hardcodea_ssh():
+    """El bug era el hardcode: el script tiene que pasar por la detección."""
+    script = os.path.join(os.path.dirname(LIB), "setup-host.sh")
+    with open(script) as f:
+        contenido = f.read()
+    assert "unit_sshd" in contenido
+    assert "enable --now ssh\n" not in contenido and "restart ssh\n" not in contenido
+
+
 # --- escribir_marker_setup ------------------------------------------------------------
 
 def test_el_marker_de_setup_se_escribe_con_fecha(tmp_path):

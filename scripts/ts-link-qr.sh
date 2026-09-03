@@ -13,20 +13,27 @@
 # --png: genera el QR como imagen grande y la abre en el visor. El QR ANSI de la terminal
 # puede NO engancharse con la cámara (contraste/tamaño de fuente/tema claro — pasó en la
 # validación de F10); el PNG escanea al primer intento.
+#
+# Corré esto en TU terminal, NO dentro de la sesión de tmux donde corre Claude: el QR ES la
+# auth key (10 min, un solo uso) y queda en el scrollback, donde un agente con `tmux
+# capture-pane` la leería antes de que la escanees (SEC5-2, 5ª pasada). Es un acto tuyo.
 set -euo pipefail
+
+MOSTRAR_KEY=0
+PNG=0
+case "${1:-}" in
+  "") ;;
+  --mostrar-key) MOSTRAR_KEY=1 ;;
+  --png) PNG=1 ;;
+  -h|--help) sed -n '2,/^set -euo/p' "$0" | grep '^#' | sed 's/^# \{0,1\}//'; exit 0 ;;
+  *) echo "✗ opción desconocida: $1 (usá --png, --mostrar-key o --help)" >&2; exit 2 ;;
+esac
 
 # Los prerequisitos declarados arriba, chequeados de entrada: sin esto, la falta de jq
 # recién explotaba en el medio del flujo con un "command not found" que no orienta.
 for dep in curl jq qrencode; do
     command -v "$dep" >/dev/null || { echo "✗ Falta $dep — instalalo (setup-host.sh lo hace) y volvé a correr."; exit 1; }
 done
-
-MOSTRAR_KEY=0
-PNG=0
-case "${1:-}" in
-  --mostrar-key) MOSTRAR_KEY=1 ;;
-  --png) PNG=1 ;;
-esac
 
 # Tomar las credenciales OAuth del .env del repo si no vienen ya del entorno.
 if [ -z "${TS_OAUTH_CLIENT_ID:-}" ] || [ -z "${TS_OAUTH_CLIENT_SECRET:-}" ]; then

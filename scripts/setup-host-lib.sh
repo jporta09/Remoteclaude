@@ -108,6 +108,20 @@ sshd_acepta_password() {
     return 1
 }
 
+# Nombre de la unit de sshd en esta distro: `ssh` (Debian/Ubuntu) o `sshd` (Fedora/Arch/openSUSE,
+# y alias en Debian). setup-host hardcodeaba `ssh` mientras teardown ya contemplaba las dos: en las
+# familias dnf/pacman/zypper el `enable --now ssh` fallaba y sshd no quedaba levantado (DEVOPS-5p-1).
+# Sin systemd o sin unit listada cae al nombre histórico.
+unit_sshd() {
+    local units
+    units="$(systemctl list-unit-files --type=service --no-legend 2>/dev/null || true)"
+    if printf '%s\n' "$units" | grep -qE '^sshd\.service'; then
+        echo sshd
+    else
+        echo ssh
+    fi
+}
+
 # Marker de "host configurado": la app lo verifica al CONECTAR y bloquea hosts sin setup.
 # Va en función (y no inline en setup-host.sh) para poder testearlo: escribirlo al final
 # del setup es el contrato — si el setup falló antes (set -e), el marker no queda.

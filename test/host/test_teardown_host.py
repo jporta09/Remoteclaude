@@ -121,6 +121,10 @@ def test_teardown_desinstala_lo_local_sin_tocar_lo_ajeno(tmp_path):
         "Host trabajo\n  User yo\n# >>> RemoteMarvin >>>\nMatch exec foo\n# <<< RemoteMarvin <<<\n")
     # authorized_keys NO debe tocarse.
     (home / ".ssh" / "authorized_keys").write_text("ssh-ed25519 AAAA...app\nssh-ed25519 BBBB...otra\n")
+    # El marker de "host configurado" que dejó el setup: la app lo consulta al conectar.
+    (home / ".config" / "marvin").mkdir(parents=True)
+    (home / ".config" / "marvin" / "setup-ok").write_text("setup-host 2026-09-03T00:00:00Z abc123\n")
+    (home / ".config" / "marvin" / "notify.jsonl").write_text("")   # algo del usuario: se respeta
 
     env = dict(
         os.environ, HOME=str(home),
@@ -146,6 +150,12 @@ def test_teardown_desinstala_lo_local_sin_tocar_lo_ajeno(tmp_path):
     # authorized_keys: intacto, con las dos claves.
     ak = (home / ".ssh" / "authorized_keys").read_text()
     assert "AAAA...app" in ak and "BBBB...otra" in ak
+
+    # El marker de "host configurado" se va SIEMPRE (no sólo con --purgar-datos): si quedaba,
+    # la app seguía tratando al host desmontado como configurado (DEVOPS-5p-2). Lo demás de
+    # ~/.config/marvin (el canal de avisos) es del usuario y se respeta sin --purgar-datos.
+    assert not (home / ".config" / "marvin" / "setup-ok").exists()
+    assert (home / ".config" / "marvin" / "notify.jsonl").exists()
 
     # docker bajado y linger deshabilitado.
     cmds = log.read_text()

@@ -91,8 +91,10 @@ sudo tee /etc/ssh/sshd_config.d/remotemarvin.conf >/dev/null <<'EOF'
 PasswordAuthentication no
 PubkeyAuthentication yes
 EOF
-sudo systemctl enable --now ssh
-sudo systemctl restart ssh
+# `ssh` o `sshd` según la distro (unit_sshd en la lib): antes hardcodeaba `ssh` y fallaba fuera de Debian.
+unit_ssh="$(unit_sshd)"
+sudo systemctl enable --now "$unit_ssh"
+sudo systemctl restart "$unit_ssh"
 fi
 
 echo "==> tmux.conf (persistencia + portapapeles del celu vía OSC 52)"

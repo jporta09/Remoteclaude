@@ -63,8 +63,8 @@ else
     echo "==> sshd: quitar el drop-in solo-clave"
     if [ -f /etc/ssh/sshd_config.d/remotemarvin.conf ]; then
         sudo rm -f /etc/ssh/sshd_config.d/remotemarvin.conf
-        # ssh o sshd según la distro; reiniciar el que exista.
-        sudo systemctl restart ssh 2>/dev/null || sudo systemctl restart sshd 2>/dev/null || true
+        # ssh o sshd según la distro (unit_sshd, la misma detección que usa el setup).
+        sudo systemctl restart "$(unit_sshd)" 2>/dev/null || true
         echo "    quitado /etc/ssh/sshd_config.d/remotemarvin.conf"
         echo "    !! OJO: sin ese drop-in vuelve el default de tu sshd. Si permitía contraseñas,"
         echo "       ahora tu server las vuelve a aceptar — revisá sshd_config si te importa."
@@ -92,6 +92,12 @@ echo "==> linger del usuario"
 loginctl disable-linger "$USER" >/dev/null 2>&1 || true
 echo "    deshabilitado (si tenías otros servicios --user que lo necesitaban, reactivalo:"
 echo "    loginctl enable-linger $USER)"
+
+# Marker de "host configurado": la app lo consulta al CONECTAR y bloquea hosts sin setup. Tiene que
+# irse SIEMPRE con el teardown (no sólo con --purgar-datos): si quedaba, un host desmontado seguía
+# pareciendo configurado para la app (DEVOPS-5p-2).
+rm -f "$HOME/.config/marvin/setup-ok" 2>/dev/null || true
+echo "==> marker de host configurado (~/.config/marvin/setup-ok): quitado"
 
 if [ "$PURGAR" = 1 ]; then
     echo "==> ~/.config/marvin (token del render-daemon + password del VNC)"

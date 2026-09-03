@@ -471,14 +471,13 @@ class SshTerminalSession(
             val chk = c.openSession()
             chk.execCommand(
                 "docker exec remoteclaude-ts tailscale status --json 2>/dev/null | " +
-                    "jq -r 'if (.Self.Tags // [] | length) > 0 then \"TAGGED\" " +
-                    "elif .Self.KeyExpiry == null then \"NOEXP\" " +
-                    "else (((.Self.KeyExpiry | fromdateiso8601) - now) / 86400 | floor | tostring) end' " +
-                    "2>/dev/null",
+                    "jq -r '$EXPIRY_HOST_JQ' 2>/dev/null",
             )
             val out = String(chk.stdout.readBytes(), Charsets.UTF_8).trim()
             chk.close()
-            val dias = out.toIntOrNull() ?: return   // TAGGED / NOEXP / vacío -> no avisar
+            // TAGGED / NOEXP / SINSELF / NORUN / vacío -> no avisar (v1.31.2: un ENTERO negativo = ya
+            // venció; el manejo de NORUN/negativo llega con el exec acotado de la Fase A3).
+            val dias = out.toIntOrNull() ?: return
             if (dias in 0..UMBRAL_EXPIRY_HOST_DIAS) {
                 status(
                     "\r\n[el acceso Tailscale de la PC vence en $dias día(s) — renovalo en la PC " +
@@ -552,3 +551,12 @@ fun sondearAlcanzableEn(host: String, port: Int, timeoutMs: Int): Boolean = try 
 } catch (_: Exception) {
     false
 }
+
+/**
+ * Filtro jq del expiry del nodo del HOST. Copia LITERAL de scripts/lib/expiry-host.jq (el canónico,
+ * que también embebe marvin-doctor): test/host/test_expiry_filter_parity.py exige que las tres sean
+ * idénticas, así el doctor y la app nunca vuelven a divergir (DEVOPS-5p-3 / SRE-5-1). Salida: TAGGED,
+ * NOEXP, SINSELF, NORUN o un entero de días (negativo = ya venció). Recorta los nanosegundos porque
+ * jq 1.7 rechaza RFC3339Nano en fromdateiso8601.
+ */
+internal const val EXPIRY_HOST_JQ = "if .Self == null then \"SINSELF\" elif .BackendState != \"Running\" then \"NORUN\" elif (.Self.Tags // [] | length) > 0 then \"TAGGED\" elif .Self.KeyExpiry == null then \"NOEXP\" else (((.Self.KeyExpiry | sub(\"\\\\.[0-9]+\"; \"\") | fromdateiso8601) - now) / 86400 | floor | tostring) end"
