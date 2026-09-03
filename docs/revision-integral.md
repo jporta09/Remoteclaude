@@ -1037,8 +1037,8 @@ R8 verdes, CI verde), por fases del plan `sleepy-yawning-snowglobe.md`:
   con test JVM) además del flag local; texto del diálogo neutro ("re-vinculaste Tailscale (QR o
   key pegada)"). Manual y skill (1.10.1) explican el aviso y cómo verificar la huella en la PC.
 
-**PENDIENTE: validación on-device del ciclo de vencido** (el emulador no lo reproduce) ANTES de
-taggear v1.31.0 — mismo procedimiento que v1.30.0. QA4-5 se deja como está (defendible).
+Validación on-device HECHA (2026-09-02 S23 real por USB + 2026-09-03 emulador con cuenta demo; ver
+arriba, «Validación en vivo»). QA4-5 se deja como está (defendible).
 
 ## K · 4ª pasada — onboarding desde cero (charter §2.E repuesto, 2026-08-27)
 

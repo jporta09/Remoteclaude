@@ -922,6 +922,139 @@ no las editan). Después, plan de implementación aparte.
 
 ---
 
+## 7. Cuarta pasada — 8 perfiles sobre v1.28→v1.30 + fixes de onboarding (2026-08-27)
+
+> **Registrada retroactivamente el 2026-09-03.** La 4ª pasada corrió **sin su sección en el playbook**: el
+> foco por perfil viajó sólo en los prompts de spawn, y las defs (que dicen "la pasada VIGENTE es la última
+> sección del playbook") resolvían a §6 (la 3ª). Su acta completa está en `docs/revision-integral.md` §L
+> (hallazgos) y §K (charter §2.E), y las citas verbatim de los prompts en el registro local de invocaciones.
+> Esta sección reconstruye lo que se pidió, para que la próxima pasada tenga precedente en el lugar correcto.
+
+### 7.1 Qué cambió desde la 3ª pasada (digest, tal como se pasó a los agentes)
+
+- **v1.28.x:** Enter en la fila de teclas; notificación de **plan-mode** (R1); filtrado de avisos.
+- **v1.29.0:** dictado "sin frío"; keepalive.
+- **v1.30.0:** **sticky de "acceso vencido"** (`marvints.Estado`), barra de la terminal con **⟲ Reescanear QR**,
+  `EnrolarTailscale` (scanner compartido hosts/terminal), reinicio-tras-vencer + re-enrol de un toque
+  validados en vivo.
+- **Fixes de onboarding del mismo día (§K):** `ts-link-qr.sh` (curl fuera de `$(…)`, prereqs, header
+  "efímera", label unificado), `setup-host.sh` (uv al inicio), README "Qué hace falta", quickstart in-app,
+  manual/skill 1.9.0; y la auditoría de lineamientos (§J) que llevó las **defs de agentes al repo**.
+
+### 7.2 Foco por perfil (lo que se pidió en los prompts)
+
+| Perfil | Re-verificar (sus ✅ previos) | Atacar (superficies nuevas) |
+|--------|-------------------------------|------------------------------|
+| **dev** | sus ✅ de §F/§G | ciclo de vida del nodo en `marvints.go` (`Start`/`Stop`/`finish`, `configure()`), con un **lead del coordinador** (ventana de carrera en `finish`) a confirmar o refutar con `go test -race`; `TailscaleBridge`/`EnrolarTailscale` |
+| **qa** | `raro'nombre`, rotación, sustitución de sesión | el **cluster de vencido** (sticky, ⟲, re-enrol, hosts vs terminal, dedup del Diagnóstico), sin duplicar la carrera que confirmaba dev |
+| **seguridad-ofensiva** | FLAG_SECURE, OSC52 política A, teardown | **S8** (¿la auth key queda legible en `/proc/<pid>/cmdline` al pasar a `qrencode`?) con **PoC limpio** (el intento cortado se auto-capturó); §1.5 sobre el re-enrol |
+| **sre** | H1-H7 | el **punto ciego del expiry del nodo del HOST** (§K: `remoteclaude` sin tag vence 2026-12-12; el stack de vencido sólo cubre el celu); recomendación concreta |
+| **arquitecto-ia** | ASI01-10, hoja removida (opción B) | **re-enrol por QR como vector** (§1.5: ¿un QR rogue que mete el nodo en la tailnet de un atacante debería aplicarse sin confirmación? ¿qué gana y qué NO puede hacer?), consent-sin-info del re-enrol |
+| **ux-devex** | diálogos oscuros, ⓘ, SUS | la **contradicción verde/rojo** (terminal honesto vs hosts con estado crudo del nodo) como problema de UX de confianza; paridad de superficies §1.6 |
+| **usuario-final (dev dogfooder)** | H1/H6/H8 | **uso diario vivido** de lo nuevo (Enter, plan-mode, dictado, vencido/⟲); vara: "tu setup actual es ssh+tmux crudo: ¿esto te hace preferir la app o es fricción?"; ya había corrido el onboarding desde cero ese día |
+| **devops** | teardown, release.yml, distribución | **confirmar que los fixes de onboarding de hoy quedaron bien** ("no confíes: verificá el estado actual del repo"); operabilidad continua (no el primer arranque); expiry del host |
+
+### 7.3 Orquestación (lo que pasó) y lecciones
+
+- **8 spawns en paralelo → rate limit 429**, cayeron los 8. Se relanzó en **dos olas de 4**: dev, qa,
+  seguridad-ofensiva, sre (perfiles de código) → arquitecto-ia, ux-devex, usuario-final, devops (con digest
+  de la ola 1). Eso invirtió el orden de frescura de §5.5/§6.3 (Arq-IA no cerró).
+- **Emulador serializado por prompt; nadie lo usó**: el ciclo de vencido no era reproducible en el fixture
+  (`enabled=false`) → los hallazgos de vencido quedaron "confirmados por código, no vividos". La validación
+  on-device posterior (2026-09-02/03) encontró un gap que la pasada por código no vio (A4-1 mismatch).
+- El coordinador **verificó cada claim contra el código** antes de asentarlo en §L; su propio lead de la
+  carrera fue **refutado ejecutando** por dev (2,3 M de muestras) y reencuadrado al camino real (supersede).
+- Se declaró "completa" con **un agente aún corriendo** (usuario-final, el más lento) → regla: llevar conteo
+  lanzados-vs-completados; su caveat entró después como UF-1.
+- El guard de secretos bloqueó la escritura del propio §L (heredoc citado que nombraba `.env`) → se refinó el
+  guard con su autotest; nunca se esquiva.
+- Resultado: 14 hallazgos verificados, todos aplicados en **v1.31.0** (plan por dependencias en 6 fases, un
+  commit por fase) y el gap del mismatch en **v1.31.1**.
+
+---
+
+## 8. Quinta pasada del programa — 9 perfiles sobre v1.30.0→v1.31.1 (pasada VIGENTE)
+
+Primera pasada con **nueve** perfiles (§2.I `disenador-grafico` hace su barrido inicial) y la primera en la
+que el **ciclo de vencido se puede VIVIR en el emulador**: hay una cuenta Tailscale demo (expirar / re-enrolar
+por API) y un sshd de prueba sin sudo con un shim de `docker` que simula el expiry del nodo del host. Lo que la
+4ª confirmó por código, esta lo ejercita. La lógica, el throwaway, la handoff y la consolidación son las de
+§5.2/§5.4; el pre-vuelo y los fixtures, los de §8.3.
+
+### 8.1 Qué cambió desde la 4ª pasada (digest, 16 commits)
+
+- **Bridge Go reescrito** (`tailscale-bridge/marvints.go`): closer único vía `cancel` (DEV-4A), `finish` sólo
+  pisa si `upDone==done` (DEV-4B), patrones de rechazo ampliados + log de "no clasificado" (SRE-4p-2),
+  `IdentidadRed` (A4-1). Tests `-race` nuevos. AAR reconstruido + **guard source↔AAR (`srchash`) en CI**.
+- **Modelo UX del vencido** (`HostsActivity`, `MainActivity`, `SshTerminalSession`, `TailscaleBridge`):
+  hosts en **ámbar** con reencuadre ("enrolamiento vencido — los hosts de LAN siguen"), clear del vencido
+  **no optimista** (sólo con reconexión real por tailnet), latch local (DEV-4C), dedup del ERROR por episodio
+  (QA4-4), sin filtrar el error crudo ni cortar el repoll (QA4-3), glifo ⟲→↺.
+- **Funnel único de re-enrol** `EnrolarTailscale.aplicar` (QR terminal / QR hosts / key pegada): validación
+  de forma de la key, toasts "Re-vinculando…" y "Vinculado a la tailnet: X" (sondeo 30 s, espera identidad).
+- **Marcador global** `TailscaleBridge.ultimoReEnrolMs` (60 s): el diálogo "la clave del host cambió" no se
+  ablanda tras un re-enrol por cualquiera de los tres caminos (`ReEnrolRecienteTest`).
+- **Aviso proactivo del expiry del nodo del HOST** (`avisarSiExpiraHostPronto` + `marvin-doctor`); la línea
+  en la terminal la borra el redibujo de tmux — queda en Diagnóstico.
+- **Scripts de host:** auth key por **stdin** a `qrencode` (S8), `teardown-host.sh` quita `marvin-doctor`
+  (DEVOPS-1), `EDITOR` en `update-environment` (UF-1), `ts-link-qr.sh`/`setup-host.sh`/README/quickstart
+  del onboarding desde cero (§K).
+- **Superficies:** manual y skill tocados seis veces (plugin 1.9.0 → 1.10.0 → 1.10.1); NOTICE.md.
+- **Programa:** defs de agentes en `docs/agentes/`; 9º perfil `disenador-grafico` (§2.I). **Sin cambios:**
+  `NotificacionesRemotas`, `AvisosService`, `Diagnostico`, `VigiaUi`, `DictationController`,
+  `TerminalClients`, `RemoteControl`, `Tour`, `release.yml`, `e2e.yml`.
+
+Leads del coordinador para **repartir, no asentar** (LEÍDOS, no ejecutados): **L1** tres ventanas para un mismo
+episodio (25 s `reVinculando` en `MainActivity` / 30 s sondeo del toast en `EnrolarTailscale` / 60 s
+`VENTANA_RE_ENROL_MS` en `TailscaleBridge`; en el AVD la reconexión ronda 20 s). **L2** `anunciarVinculacion`
+lanza un hilo de 30 s por toque reteniendo la Activity. **L3** `avisarSiExpiraHostPronto` hardcodea
+`docker exec remoteclaude-ts` (sin contenedor/jq = silencio) y el flag es por sesión. **L4** `HostsActivity`
+repollea 1,5 s/3 s indefinidamente mientras `isEnabled && !isReady`. **L5** el guard `srchash` es de
+consistencia, no de supply-chain.
+
+### 8.2 Foco por perfil (re-verificar + atacar)
+
+| Perfil | Re-verificar (sus ✅ shipeados en 1.31.x) | Atacar (superficies nuevas) — cómo / recurso |
+|--------|--------------------------------------------|-----------------------------------------------|
+| **usuario-final (dev dogfooder)** | UF-1 (`EDITOR` tras detach/reattach); sus sev-1 del 27/08 | Ciclo **vivido** desde APK virgen: quickstart → pegar key (`ts-demo.sh mint`) → host → `ts-demo.sh expire` → re-handshake (`adb shell svc wifi disable/enable`) → ámbar + banner + ↺ → key nueva → "Re-vinculando…" → "Vinculado a la tailnet: X" → verde sólo tras reconexión real; diálogo de host-key tras re-enrol (`test-sshd.sh rotate-hostkey`); aviso "vence en N días" (¿lo encuentra en Diagnóstico?); README + quickstart; vara "¿lo adoptaría hoy?". EMU (dueño en ola 1); cámara/QR = no vivible |
+| **ux-devex** | UX-1 ámbar + reencuadre; UX-2 glifo ↺ (¿tofu en el AVD?); **re-scorear SUS** | Copy de los 4 estados/toasts; diálogo de host-key neutro; **L1** (¿qué ve el usuario a los 25-30 s?); paridad quickstart ↔ README ↔ manual (§1.6). Walkthrough con el handoff de usuario-final; EMU primero en ola 2; PDF |
+| **devops** | S8 (fake `qrencode` volcando `/proc/self/cmdline`); DEVOPS-1; DEVOPS-2 (test negativo del `srchash` en copia); §K H1/H6/H7 | `setup-host.sh` uv al inicio vs segundo chequeo; Guidebook tour del README nuevo (charter §2.E **delta**); `marvin-doctor` con fake docker (TAGGED / null / N días / sin jq); teardown + doctor; **L5**; APK e2e-release ≠ publicado. HOME-sandbox + fakes (§1.6); sin EMU |
+| **dev** | DEV-4A/4B/4C (`go test -race -count=50`); SRE-4p-2; `IdentidadRed` | `EnrolarTailscale.aplicar` (**L2**); `ultimoReEnrolMs`/`reEnrolRecienteDesde`; `avisarSiExpiraHostPronto` (**L3**, costo por conexión); repoll **L4**; matiz `esperaExpiro` H5/F5 (la primera llamada bloquea 15 s); cobertura de `display-entrypoint`. `make go/unit/lint`; entrega el **mapa del código nuevo** (½ carilla) para la ola 2; sin EMU |
+| **qa** | QA4-1..4; QA4-5 (nota) | Matriz del vencido con `ts-demo.sh`: 2 pestañas (dedup), key inválida/usada/vencida, ↺ dos veces rápido (**L2**, supersede DEV-4B vivido), **L1** cronometrado, reinicio-tras-vencer, expire con app en background, host por LAN vs por tailnet, rotación durante "Re-vinculando…", diálogo de host-key dentro/fuera de 60 s. EMU segundo en ola 2 + Diagnóstico |
+| **sre** | SRE-4p-1 (shim → "vence en 9 días"; §1.5: ¿la línea en terminal debería existir si tmux la borra?); SRE-4p-2 (¿el "no clasificado" llega a Diagnóstico?); 5e half-open | **L3**; umbral 21 d fijo y aviso por sesión (¿spam? ¿dedup?); expiry host + celu simultáneos; **L4** (30+ min en vencido: CPU, Diagnóstico 64 KB); Fase 0 del usuario. Shim + `make host` + código; EMU si libre |
+| **seguridad-ofensiva** | S8 (PoC limpio, ojo auto-captura); A4-1 (**§1.5: ¿debe existir la rama ablandada?** 60 s tras cualquier `configure()` = coartada reabierta); QA4-3 (¿id de key en Diagnóstico/compartir?); `IdentidadRed` (¿expone dominio/email?) | `aplicar` ante clipboard hostil; el comando de `avisarSiExpiraHostPronto` construido en cliente y ejecutado en host (quoting; shim malicioso con JSON raro); `marvin-doctor` parseando JSON; `ts-link-qr.sh --config -` + `set -x`; **L5** modelo de amenaza. PoCs en test-sshd/sandbox + JVM; falsos positivos del guard se reportan, no se rodean |
+| **arquitecto-ia** | A4-1 (consent-con-info, 60 s); ASI09; hook `flag-subidos-context.sh` | Re-enrol de un toque + marcador global + diálogo neutro como superficie agéntica (¿un Claude inyectado puede inducir a pegar una key ajena?); canal app→terminal del aviso (¿confundible con salida de Claude?); **§1.5 capstone**: tres pasadas endureciendo el vencido cuando §K H2 (tag → no expira) reduce el stack del celu — ¿reducir en vez de endurecer? Re-scorear ASI01-10. Cierra con el digest de ambas olas |
+| **disenador-grafico** (barrido inicial) | — | Ch.1 isologo (`mipmap-*`, `marvin_isologo*.png`, splash, header) vs pp. 01-04 + SVG; Ch.2 color (`colors.xml`, `Paleta.kt` vs p. 05; píxel; WCAG AA del ámbar sobre petróleo); Ch.3 tipografía (4 roles; **quién dibuja ↺ ⟳ ✓ ⓘ 🔒 ⧉ ⇧**, cmap); Ch.4 iconografía (8 `ic_*.xml` vs gramática; íconos de AlertDialog/Toast); Ch.5 fuera de la app (PDF regenerado, README, release, QR ANSI, DocViewer, notificaciones); Ch.6 estados/toasts/diálogos de marca vs sistema (§1.5 primero). Medición + capturas; offline primero, EMU tras usuario-final |
+
+### 8.3 Orquestación, fixtures y pre-vuelo
+
+- **Pre-vuelo (bloqueante) antes del primer spawn:** repo limpio en el tag y `make all` verde; defs
+  sincronizadas (`diff -q docs/agentes/*.md ~/.claude-personal/agents/`) y memorias presentes (no se editan);
+  doc vivo sin párrafos stale; esta sección escrita; manual PDF regenerado en `~/RemoteMarvinDocs/`; APK
+  **publicado** instalado **virgen** en el AVD (`adb uninstall` antes; nunca `e2e.sh`, que hace `-wipe-data`);
+  helpers locales probados; guard de secretos activo; acta de conteo reanudable.
+- **Fixtures y helpers** (locales, fuera del repo, en `~/claude-refs/`): `emu.sh` (start/stop/**lock
+  <perfil>**/unlock/who/screencap — un dueño del AVD por vez), `ts-demo.sh` (list/mint/expire/revoke/status
+  sobre la cuenta Tailscale DEMO; **nunca imprime credenciales**; los agentes NO leen el `.env`),
+  `test-sshd.sh` (sshd de prueba en 2222 con shim de `docker`; authorize / rotate-hostkey / restore-hostkey).
+  **Exclusión:** el fixture docker de e2e y el sshd de prueba comparten el puerto 2222 → nadie corre
+  `make e2e` durante la pasada. Nunca contra el tailnet/nodo/contenedor real del usuario.
+- **Olas (máx. 4 concurrentes, spawns escalonados 20-30 s):** **ola 1** usuario-final (dueño del AVD), devops
+  (sandbox), dev (código; produce el mapa para la ola 2), disenador-grafico (offline primero, AVD cuando se
+  libera) → **ola 2** ux-devex (AVD primero, con el handoff de usuario-final), qa (AVD segundo), sre,
+  seguridad-ofensiva → **ola 3** arquitecto-ia cierra. Sin `-wipe-data` entre olas. **Gate entre olas:** conteo
+  lanzados = completados, claims sev≥2 verificados por el coordinador, digest de ½ carilla en el acta.
+- **Prompt de spawn:** los 7 bloques de §4.3 (incluidos time-box, mandato de investigación y handoff note,
+  que la 4ª omitió) + método rotulado **EJECUTADO / LEÍDO** por hallazgo + filas **propuestas** para la sección
+  nueva del doc vivo (no se edita) + memoria apendada como "5ª pasada del programa" (la memoria de
+  usuario-final llama "5ª" a su corrida del 27/08, que es la 4ª del programa).
+- **Consolidación:** sección **§M** de `docs/revision-integral.md` (antes de §L: el doc va en orden
+  cronológico inverso), por clusters con `| Sev | ID | Hallazgo | Fix propuesto |`, "checks previos
+  sostienen", "sin poder ejercer" (cámara/QR, S23). Luego repaso por qué/método, plan por dependencias
+  aparte, y esta sección se actualiza con las lecciones.
+
+---
+
 *Los hallazgos de cualquier ejecución de este programa se consolidan en
 `docs/revision-integral.md` (sección "Lo que queda abierto"), que es el backlog vivo del
 proyecto.*
