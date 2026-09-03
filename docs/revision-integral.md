@@ -1023,6 +1023,17 @@ R8 verdes, CI verde), por fases del plan `sleepy-yawning-snowglobe.md`:
   vencido): salen "Re-vinculando…" y "Vinculado a la tailnet: ⟨nombre⟩". El S23 quedó con el
   build final instalado en el lugar, con su enrolamiento real restaurado byte-idéntico y verificado
   (`tailscale ping` desde el host).
+- Validación en vivo (2026-09-03, emulador) de los tres ítems que habían quedado sólo por código:
+  **SRE-4p-1 ✅** (sshd de prueba sin sudo con un shim de `docker` que responde un nodo sin tag a 10
+  días → Diagnóstico: "el nodo del host vence en 9 días (sin tag)"; la línea en terminal la borra el
+  redibujo de tmux), **QA4-4 ✅** (vencido real + 2 pestañas a un puerto cerrado: ambas con el banner,
+  UNA sola entrada en Diagnóstico), **A4-1 mismatch ⚠️ gap nuevo**: el diálogo "La clave del host
+  cambió" muestra la rama ablandada ("si reinstalaste… es esperable") también justo después de un
+  re-enrol por **pegado**, porque `enReEnrol` depende de `reVinculando`, que sólo pone el callback
+  del QR de la terminal (pegar en hosts / "Escanear QR" desde hosts no lo marcan). Misma clase de
+  gap que el del toast, en la parte de seguridad (ASI09). **Sin aplicar** — fix propuesto: marcar el
+  re-enrol reciente en un punto común (`TailscaleBridge.configure()` → `ultimoReEnrolMs`) y que
+  `cambioLaClave` lo consulte.
 
 **PENDIENTE: validación on-device del ciclo de vencido** (el emulador no lo reproduce) ANTES de
 taggear v1.31.0 — mismo procedimiento que v1.30.0. QA4-5 se deja como está (defendible).
