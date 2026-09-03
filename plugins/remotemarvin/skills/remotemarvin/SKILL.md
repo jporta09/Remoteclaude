@@ -52,6 +52,12 @@ capability. Use the most specific one once the intent is clear.
   qué tailnet se revinculó (lo mismo si pega la key a mano en el diálogo de hosts). No hace falta tocar la consola — queda un nodo viejo expirado que
   se puede borrar cuando se quiera.
 
+- **"La clave del host cambió" justo después de re-vincular Tailscale** (QR o key pegada) → la app
+  lo advierte a propósito y NO lo presenta como esperable: una key ajena pudo haber llevado al celu
+  a otra tailnet y el "host" puede ser un impostor. Que NO confíe salvo que él mismo haya
+  reinstalado o recreado el server. Para verificar, comparar la huella que muestra el diálogo con
+  la del host real: `ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub` en la PC.
+
 - **La app avisa "el acceso Tailscale de la PC vence en N días"** → es el nodo del HOST (no el
   del celu): se enroló sin tag y su key vence a ~180 días; a diferencia del celu, si vence el
   celu NO puede conectar más. Remedio (mientras la PC todavía es alcanzable): en la consola de

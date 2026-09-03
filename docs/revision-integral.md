@@ -1031,9 +1031,11 @@ R8 verdes, CI verde), por fases del plan `sleepy-yawning-snowglobe.md`:
   cambió" muestra la rama ablandada ("si reinstalaste… es esperable") también justo después de un
   re-enrol por **pegado**, porque `enReEnrol` depende de `reVinculando`, que sólo pone el callback
   del QR de la terminal (pegar en hosts / "Escanear QR" desde hosts no lo marcan). Misma clase de
-  gap que el del toast, en la parte de seguridad (ASI09). **Sin aplicar** — fix propuesto: marcar el
-  re-enrol reciente en un punto común (`TailscaleBridge.configure()` → `ultimoReEnrolMs`) y que
-  `cambioLaClave` lo consulte.
+  gap que el del toast, en la parte de seguridad (ASI09). **Resuelto en v1.31.1**: marcador global
+  `TailscaleBridge.ultimoReEnrolMs` (lo pone `configure()` con key, o sea los tres caminos) y
+  `cambioLaClave` consulta `reEnrolReciente()` (ventana 60s, lógica pura `reEnrolRecienteDesde`
+  con test JVM) además del flag local; texto del diálogo neutro ("re-vinculaste Tailscale (QR o
+  key pegada)"). Manual y skill (1.10.1) explican el aviso y cómo verificar la huella en la PC.
 
 **PENDIENTE: validación on-device del ciclo de vencido** (el emulador no lo reproduce) ANTES de
 taggear v1.31.0 — mismo procedimiento que v1.30.0. QA4-5 se deja como está (defendible).

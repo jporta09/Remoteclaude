@@ -412,7 +412,10 @@ S.append(P("La identidad del host", h2))
 S.append(P("La primera vez que conectás, la app <b>memoriza la clave del host</b>. Si más "
            "adelante cambia, la conexión se <b>rechaza</b> y te muestra las dos huellas "
            "para que decidas: si reinstalaste el server es esperable, y si no, alguien "
-           "puede estar interceptando. Solo la terminal pregunta — el visor, los documentos "
+           "puede estar interceptando. Y si el cambio aparece <b>justo después de re-vincular "
+           "Tailscale</b> (QR o key pegada), la app no lo da por esperable: te advierte que una "
+           "key ajena pudo haberte llevado a otra red y que ese server puede ser un impostor. "
+           "Solo la terminal pregunta — el visor, los documentos "
            "y el dictado fallan sin ofrecer confiar. Al confiar en la clave nueva se "
            "reconectan <b>todas</b> las pestañas del host, no solo la que preguntó."))
 

@@ -26,12 +26,21 @@ object TailscaleBridge {
     // Si ya esperamos el timeout completo sin que el nodo levante (mala red / nodo trabado),
     // las llamadas siguientes NO vuelven a colgar 15s cada una: esperan poco y caen al directo.
     @Volatile private var esperaExpiro = false
+    // A4-1: momento del último re-enrol (configure() con key). Es GLOBAL y no un flag de
+    // Activity porque el re-enrol se hace en HostsActivity (pegar la key / Escanear QR) o en
+    // la terminal (↺), y el mismatch de host-key salta en MainActivity: el flag local
+    // `reVinculando` de MainActivity sólo lo pone su propio scanner, así que tras re-enrolar
+    // por pegado el diálogo salía "ablandado" (hallazgo en vivo, 2026-09-03). 0 = nunca.
+    @Volatile private var ultimoReEnrolMs = 0L
     private var readyLatch = CountDownLatch(1)
     private val forwards = HashMap<String, Int>()
     private var nextPort = 21000
 
     fun isEnabled(): Boolean = enabled
     fun isReady(): Boolean = started
+    /** A4-1: true si hubo un re-enrol (configure con key) hace menos de `ventanaMs`. */
+    fun reEnrolReciente(ventanaMs: Long = VENTANA_RE_ENROL_MS): Boolean =
+        reEnrolRecienteDesde(ultimoReEnrolMs, android.os.SystemClock.elapsedRealtime(), ventanaMs)
     fun error(): String? = lastError
 
     /**
@@ -143,6 +152,8 @@ object TailscaleBridge {
     /** Reconfigura la auth key (la guarda) y reinicia el nodo. */
     fun configure(ctx: Context, authKey: String) {
         SecretStore.put(ctx, "ts_authkey", authKey.trim())
+        // Vacío = conexión directa, no es un re-enrol; con key sí (cualquiera de los 3 caminos).
+        if (authKey.isNotBlank()) ultimoReEnrolMs = android.os.SystemClock.elapsedRealtime()
         // por las dudas: si quedaba una copia en claro de una versión anterior, fuera
         ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
             .remove("ts_authkey").apply()
@@ -197,3 +208,14 @@ fun accesoVencidoDeEstado(crudo: String): Boolean {
     val campos = crudo.split(";")
     return campos.getOrNull(0) == "NeedsLogin" || campos.getOrNull(1) == "1"
 }
+
+/** Ventana en la que un mismatch de host-key se considera "justo después de re-enrolar". */
+const val VENTANA_RE_ENROL_MS = 60_000L
+
+/**
+ * Lógica pura de [TailscaleBridge.reEnrolReciente], separada para testearla en JVM: hubo
+ * re-enrol (`ultimoMs != 0`) y pasó menos de `ventanaMs` desde entonces. Un reloj que retrocede
+ * (ahora < ultimo) no cuenta como reciente.
+ */
+fun reEnrolRecienteDesde(ultimoMs: Long, ahoraMs: Long, ventanaMs: Long): Boolean =
+    ultimoMs != 0L && ahoraMs >= ultimoMs && (ahoraMs - ultimoMs) < ventanaMs

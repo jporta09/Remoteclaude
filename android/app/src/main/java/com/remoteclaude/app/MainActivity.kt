@@ -601,16 +601,18 @@ class MainActivity : AppCompatActivity() {
     private fun cambioLaClave(vieja: String, nueva: String) {
         if (isFinishing || isDestroyed || dialogoClaveVisible) return
         dialogoClaveVisible = true
-        // A4-1: si el mismatch aparece JUSTO tras un re-enrol (acabás de escanear un QR), NO
-        // lo presentes como "esperable" — ese es exactamente el escenario en que un QR malicioso
-        // te metió en la tailnet de un atacante y su nodo-espejo presenta otra host-key. En vez
-        // de la coartada, advertí.
-        val enReEnrol = reVinculando &&
-            (android.os.SystemClock.elapsedRealtime() - reVinculandoDesde) < 60_000
+        // A4-1: si el mismatch aparece JUSTO tras un re-enrol (QR desde la terminal o desde
+        // hosts, o key pegada), NO lo presentes como "esperable" — ese es exactamente el
+        // escenario en que una key ajena te metió en la tailnet de un atacante y su nodo-espejo
+        // presenta otra host-key. En vez de la coartada, advertí. El marcador global de
+        // TailscaleBridge cubre los tres caminos; `reVinculando` sólo el ↺ de esta pantalla
+        // (v1.31.1: antes, tras pegar la key desde hosts, salía la versión ablandada).
+        val enReEnrol = TailscaleBridge.reEnrolReciente() || (reVinculando &&
+            (android.os.SystemClock.elapsedRealtime() - reVinculandoDesde) < VENTANA_RE_ENROL_MS)
         val explicacion = if (enReEnrol) {
-            "Cambió justo después de que reescaneaste el QR. Si vos NO reinstalaste el server, " +
-                "desconfiá: un QR ajeno pudo haberte vinculado a otra red y este server puede ser " +
-                "un impostor. No confíes salvo que estés seguro."
+            "Cambió justo después de que re-vinculaste Tailscale (QR o key pegada). Si vos NO " +
+                "reinstalaste el server, desconfiá: una key ajena pudo haberte vinculado a otra red " +
+                "y este server puede ser un impostor. No confíes salvo que estés seguro."
         } else {
             "Si reinstalaste el server o lo recreaste, es esperable. Si no, alguien " +
                 "puede estar interceptando la conexión."
