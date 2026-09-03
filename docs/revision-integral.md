@@ -922,6 +922,180 @@ server se despertaba recién DESPUÉS del dictado que lo encontró caído.
    próxima pasada repone el charter de onboarding. Residual de producto cerrado en v1.30.0: el
    quickstart in-app y la demo ahora mencionan `.env` + las claves del admin de Tailscale.
 
+## M · 5ª pasada COMPLETA — 9 perfiles sobre v1.30.0->v1.31.1 (2026-09-03)
+
+Primera pasada que VIVE el ciclo de vencido en vez de confirmarlo por codigo: fixtures nuevos —
+tailnet DEMO manejada por API (`~/claude-refs/ts-demo.sh`: mint/expire/revoke/delete), sshd de
+prueba sin sudo con shim de `docker` que simula el expiry del host (`test-sshd.sh`), y el AVD con
+el build `assembleRelease -PmarvinEmuAbi` (el APK publicado es arm64-only y muere con SIGILL bajo
+ndk_translation; no es bug de la app). Corrida en olas de 4+2+2+1 por el limite de uso compartido
+(el primer intento de 4 en paralelo cayo por 429 a mitad de la ola 1; desde ahi maximo 2
+concurrentes, medidor de uso en la barra de estado y checkpoints por charter). TODOS los sev>=2
+fueron verificados por el coordinador contra el codigo (archivo:linea) antes de asentarse; dos
+leads/handoffs fueron REFUTADOS o degradados ejecutando (UF5-3 = artefacto del fixture, 3 intentos;
+L2 "N hilos por toque" = cosmetico). Un reboot de la maquina a mitad de pasada borro la evidencia
+cruda (capturas, trace del ANR): la evidencia asentada es archivo:linea + metodo de reproduccion.
+Repos limpios, sin commits de agentes.
+
+Tema dominante: **el estado de conexion no se entera del expiry**. `started` solo vuelve a false
+en `configure()`, nunca cuando el nodo cae a NeedsLogin; de ahi salen el verde stale, el host LAN
+bloqueado y el ANR. El modelo UX del vencido de v1.30/v1.31 (ambar, sticky, re-enrol de un toque)
+solo aterrizo en ARRANQUE FRIO. Segundo tema: la identidad visual medida por primera vez (modo
+claro ilegible, dos verdes, glifos sin fuente).
+
+### Cluster "estado desacoplado del expiry" (CONFIRMADOS, vividos en el AVD)
+| Sev | ID | Hallazgo | Fix propuesto |
+|---|---|---|---|
+| 3 | UX5-1 (absorbe UF5-1, UF5-2) | Mid-sesion con el nodo vencido: hosts dice "Tailscale: conectada ✓" VERDE 3,5-5,5 min (updateVpnStatus evalua `isReady()` en HostsActivity.kt:210 ANTES que `vencidoCache` :216, e `isReady()=started` — TailscaleBridge.kt:23/164 — no se apaga; sin repoll cuando ready) y la terminal culpa a Tailscale y DEJA DE REINTENTAR un host LAN alcanzable (SshTerminalSession.kt:300 `attempt >= 2 && accesoVencido()` sin discriminar hosts que no van por tailnet). qa lo sondeo: el forward 127.0.0.1:21003 no devuelve banner y agota 15 s con el nodo vencido (tsnet Dial->awaitRunning trata NeedsLogin como Starting); 10.0.2.2:2222 directo responde al instante. En arranque frio SI funciona (Up falla -> started=false -> endpoint() cae a directo). Reabre UX-1/QA4-1 | Bajar `started` (o un flag `vencido`) al detectar NeedsLogin/expired; `endpoint()` cae a directo cuando `accesoVencido()`; `updateVpnStatus` mira vencido ANTES que ready y repollea; el retry de la terminal no se corta para hosts LAN (o sigue con backoff y dice "host LAN: reintentando") |
+| 3 | QA5-1 | ANR determinista (2/2, trace dropbox con el main `Blocked`) al pausar MainActivity con la tailnet vencida: onPause -> `dictado.enPrimerPlano(false)` -> DictationController.kt:117-119 `cerrar()` -> SttPresencia.cerrar `@Synchronized` (:47-53) -> PortTunnel.close -> trilead `Connection.close()` en el HILO MAIN esperando el lock que retiene `stt-presencia` colgado en `connect()` (PortTunnel.open 8000/8000 ms; pipe Go ctx 15 s). Control negativo: presencia dormida -> sin ANR. La app ya evita este deadlock en `forzarReconexion` (hilo aparte) | Cerrar Connection/PortTunnel de la presencia FUERA del main (mismo patron que forzarReconexion) y/o bajar los timeouts de PortTunnel.open; auditar otros onPause/onStop que cierren daemons de red sincronos |
+| 2 | DEV-N2 | `TailscaleBridge.configure()` corre en el hilo principal y hace `Marvints.stop()` del nodo (LEIDO) | Mover stop()+init() a un hilo; latch para el resultado |
+| 2 | DEV-N3 | `anunciarVinculacion` sigue sondeando mientras `identidadRed()` venga vacia: "Re-vinculando…" puede quedar pegado si la identidad nunca llega (LEIDO); ux-devex vio el toast de identidad perderse con red lenta (>30 s) | Tope duro + estado final ("no se pudo confirmar la tailnet") registrado en Diagnostico |
+| 2 | DEV-N4 | `avisarSiExpiraHostPronto`: `readBytes()` del exec remoto SIN timeout (LEIDO); devops: el comando calla con nodo ya vencido (dias negativos) y con RFC3339Nano; nadie mira BackendState | Timeout + limite de bytes; parsear negativos y RFC3339Nano; mirar BackendState |
+| 1 | DEV-N5 / L2 | Un hilo de sondeo por toque de re-enrol; vivido por qa: toasts encolados en orden invertido, un solo nodo, sin corrupcion (cosmetico). Clausula muerta `reVinculando && <25 s` en cambioLaClave | Un solo sondeo activo; borrar la clausula muerta |
+| 1 | QA5-2 | `esAuthKeyPlausible` (EnrolarTailscale.kt:96-97) = `startsWith("tskey-") && length>=24 && sin whitespace`: acepta `tskey-api-`/`tskey-client-` (secretos que no son auth keys), control chars (NUL/ZWSP/ESC) y 5000 chars; `configure()` no resetea `lastError` -> "no se pudo conectar" rancio a t+1 s tras pegar | Prefijo `tskey-auth-`, rechazar control chars, tope de largo; resetear lastError en configure() |
+
+### Identidad visual y modo claro (disenador-grafico, MEDIDO; ux-devex lo vivio)
+| Sev | ID | Hallazgo | Fix propuesto |
+|---|---|---|---|
+| 3 | DG-1 / UX5-2 | `themes.xml` hereda `Theme.Material3.DayNight`: con el SISTEMA en modo claro (default de Android) lo que hereda del tema — EditText, Switch, hints — queda a 1,11-1,27:1 sobre el surface oscuro forzado (campo de auth key y "Nuevo host" ilegibles). Tokens `marvin_*` OK en ambos modos (5,17:1) | `Theme.Material3.Dark` o `setDefaultNightMode(MODE_NIGHT_YES)` en Application; e2e con `cmd uimode night no` |
+| 3 | DG-2 | Dos verdes: los SVG oficiales del manual (ISO/001) usan `#42A648`; `colors.xml marvin_green` y toda la UI `#71BF44` (p06 del manual). En el header de hosts conviven (iso vs titulo) | DECISION DEL DUENO de la marca (cual es el canonico); despues unificar |
+| 3 | DG-3 | La barra de tmux sale verde ANSI (`0xff00cd00`, TerminalColorScheme) porque `scripts/marvin.tmux.conf` no fija `status-style` | status-style con la paleta de marca en marvin.tmux.conf |
+| 3 | DG-4 | Tres copias de la paleta con valores distintos para el mismo rol: `Paleta.CHEV_FG #5E8B7E`, `colors.xml marvin_muted #7FA99B`, `DisplayActivity MUTED` | Una sola fuente (colors.xml) y Paleta.kt la lee |
+| 3 | DG-5 | Ninguna fuente bundleada (jost/mononoki/osifont/ubuntu) dibuja ↺ ⟳ ⓘ 🔒 ⧉ ⇧ (solo ubuntu tiene ✓): todos los "iconos" de texto salen del fallback del sistema (78 % de la altura de mayuscula en el AVD; 🔒 con el color del emoji del sistema). `NOTICE.md` y `build-icon-font.py` atribuyen `marvin_icons.ttf`, que ya no existe | Iconos como VectorDrawable (la gramatica propia ya existe para 9 `ic_*`) o subset de una fuente de simbolos con licencia; limpiar NOTICE.md |
+| 3 | DG-6 | Manual PDF: h2 osifont 14 verde sobre blanco 2,27:1; small Jost-Light 9 `#5E8B7E` sobre blanco 3,84:1 (WCAG AA falla) | Petroleo para h2; muted mas oscuro o tamano >=12 |
+| 2 | DG-7..15 | Portada del PDF: isologo a 69,8 mm CON "SOFTWARE SOLUTIONS" (p03: <75 mm sin texto); manual p06 con HTML duplicados por error; 9 vectores con trazos no uniformes (2/1.9/1.7/1.5/1.3/1.1/0.8); `ic_notif` triangulo macizo y notificaciones sin `setColor()`; README/release sin isologo | Ver informe de diseno (memoria del perfil) |
+
+### Copy, caminos de re-enrol y paridad de superficies (ux-devex, EJECUTADO)
+| Sev | ID | Hallazgo | Fix propuesto |
+|---|---|---|---|
+| 2 | UX5-3 | El ↺ solo abre la camara (MainActivity.kt:584) y el dialogo de Tailscale en vencido es identico al sano: no hay "pegar key" desde la terminal ni un camino visible para "vencido lejos de la PC" (§1.5: el remedio QR asume presencia fisica, que es lo que Tailscale existe para evitar) | Long-press/menu del ↺ con "Pegar auth key"; dialogo con estado ("enrolamiento vencido — pega una key de Settings -> Keys, o escanea"); manual/skill: "si no estas en la PC" |
+| 2 | UX5-4 | El dialogo de host-key (ambas variantes; A4-1 SOSTIENE en el camino pegado) no dice COMO verificar: `ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub` vive SOLO en la skill; huella SHA256 en fuente proporcional partida, sin Copiar | Linea "Para verificar, en la PC: ssh-keygen -lf …" en dialogo y manual; huella en mononoki; boton Copiar |
+| 2 | UX5-5 | Diagnostico sin rastro del re-enrol (0 "vincul"/"tailnet" tras 4 re-enrols): la identidad de red (A4-1) vive en un toast de 3,5 s que se pierde si el nodo tarda >30 s; el bloque "(previo)" muestra epoch crudos y eventos del MISMO proceso (`cargarPersistidos` en MainActivity.kt:121/126, onCreate) | Registrar "tailscale: re-vinculado a <tailnet> (key/QR)" al confirmar (aunque llegue tarde); hora formateada; "previo" solo si cambio el pid |
+| 2 | UX5-6 | Copy del vencido inconsistente: hosts "enrolamiento vencido"; terminal "el acceso de Tailscale vencio … para volver a habilitar la conexion" (falso para LAN); expiry del host "el acceso Tailscale de la PC vence en N dia(s)" (SshTerminalSession.kt:484) vs "el nodo del host vence en N dias (sin tag) — renovar" (:490) vs "El nodo de la PC" (manual) | Glosario: "enrolamiento del celu" / "nodo de la PC"; banner honesto ("los hosts por tailnet no conectan hasta reescanear; los de LAN siguen") |
+| 2 | UX5-7 | Paridad §1.6 rota: el ↺ es TOFU en el PDF (gen-manual.py:258 lo tiene, las fuentes embebidas no: pdftotext 0 ocurrencias); quickstart (HostsActivity.kt:593) y DisplayActivity.kt:99 dicen 'linea "VPN"' y la linea dice "🔒 Tailscale: …"; README sin mencion del vencido ni fila ↻/↺/ⓘ; EDITOR solo en el manual; "vence en N dias" no en README/quickstart; demo "ejecute ts-link-qr" a secas; skill "queda un nodo viejo expirado" vs reuso real del deviceId; ACL delegada a .env.example | gen-manual con glifo/fuente o texto; unificar "linea de estado de Tailscale"; README con vencido + fila de botones; ACL en el quickstart |
+| 1 | UX5-8/9 | Sujeto inconsistente en toasts/linea ("Tailscale: conectada" / "Vinculado a la tailnet" / "Re-vinculando Tailscale…"); "Preparando…" desalineado sobre Dictar; el hint muestra 6 chars de la auth key; "Vacio = conexion directa" es falso (HostsActivity.kt:262: vacio = no tocar) | Unificar sujeto; ancho fijo; hint "vinculada a <tailnet>"; cumplir o sacar la frase |
+
+SUS re-scoreado por ux-devex: 77 -> ~72 (I2 "es facil de usar" 6 -> 5 por UX5-1 y UX5-2, ambos
+fixes chicos que devolverian los 5 puntos).
+
+### Uso diario (usuario-final, vivido con el APK publicado virgen)
+| Sev | ID | Hallazgo | Fix propuesto |
+|---|---|---|---|
+| 1-2 | UF-1 (REABRE parcial) | Con un server tmux preexistente, `EDITOR` no llega ni al reattach ni a una sesion nueva (REATTACH-EDITOR=[] y NEW-EDITOR=[]). El fixture no tiene marvin.tmux.conf, asi que NO verifica el fix host-side de la 4a; si confirma el gap en hosts sin el conf | Documentar que sin marvin.tmux.conf no hay EDITOR; o pasarlo por `tmux set-environment` al conectar |
+
+Veredicto de adopcion de usuario-final: el ciclo completo funciona end-to-end (re-enrol por key
+pegada en ~5 s con los dos toasts); la friccion nueva es que la app "le cree al nodo y no al host"
+(UX5-1). Sin ejercer: camara/QR, OEM/Doze, dictado real, noVNC, subir archivo.
+
+### Operabilidad (devops, HOME-sandbox + fakes, CONFIRMADOS)
+| Sev | ID | Hallazgo | Fix propuesto |
+|---|---|---|---|
+| 3 | DEVOPS-5p-1 | `setup-host.sh:94-95` hace `systemctl enable --now ssh` / `restart ssh` (nombre Debian/Ubuntu) mientras `teardown-host.sh:67` ya contempla `ssh || sshd`: en Fedora/Arch/openSUSE el setup falla o no levanta sshd | Detectar la unit (`ssh` vs `sshd`) como hace el teardown |
+| 2 | DEVOPS-5p-2 | El marcador `setup-ok` sobrevive al teardown (0 menciones; purgar solo borra render-token/vnc-pass L98 + rmdir mudo L99) -> un host desmontado sigue "configurado" para la app y marvin-doctor | Borrar setup-ok en teardown/purgar |
+| 2 | DEVOPS-5p-3 | `marvin-doctor` L94-99 miente: `dias` vacio cae al else "con margen" (`${dias:-?}`); negativo pasa `-le 21`; sin `Self` -> "no vence" | Tratar vacio como desconocido, negativo como VENCIDO, sin Self como error |
+| 2 | L5 (DEVOPS-2 reabre parcial) | El guard `srchash` de CI (ci.yml L116-124) es de CONSISTENCIA source<->hash, no de supply-chain: el mismo PR puede editar el `.srchash`; el `.sha256` del AAR no se verifica | Reconstruir el AAR en CI (o verificar el .sha256 contra un build reproducible) |
+| 1 | DEVOPS-5p-4/5 | Quickstart (HostsActivity ~L584) y README:51 delegan la ACL de Tailscale a `.env.example` (§1.6 regla 1); `--png` de ts-link-qr abre la key con xdg-open (historial del visor) | ACL en quickstart/README; --png sin visor automatico |
+
+### Confiabilidad y observabilidad (sre, vencido VIVIDO 24 min + sandbox del comando real)
+| Sev | ID | Hallazgo | Fix propuesto |
+|---|---|---|---|
+| 3 | SRE-5-4 (amplia QA5-1) | Ademas del ANR de onPause, cierran una `Connection` synchronized de trilead EN EL HILO MAIN: onDestroy -> `dictado.soltar()` -> presencia.cerrar -> PortTunnel.close; onDestroy -> `tabs.cerrarTodas()` -> closeCurrent; TabsController.cerrar/reconectarActiva/reconectarTodas (clicks); NetworkCallback registrado con `Handler(mainLooper)` (MainActivity.kt:229) -> onLost -> closeCurrent. `PortTunnel` setea `conn` (L36-37) ANTES del connect de 8 s (L60). El patron seguro (hilo aparte) solo esta en `forzarReconexion` | Cerrar Connection/PortTunnel fuera del main en TODOS los caminos; bajar los timeouts de PortTunnel.open |
+| 2 | SRE-5-1 | `avisarSiExpiraHostPronto` (SshTerminalSession.kt:467-496) calla en todo salvo el rango feliz: nodo ya vencido (dias < 0 -> `toIntOrNull() ?: return`), RFC3339Nano (jq 1.7 `fromdateiso8601` rechaza nanosegundos: reproducido), sin jq / sin docker. `readBytes()` sin timeout: un dockerd lento bloquea el ssh-loop >= 20 s ANTES de abrir tmux en CADA primera conexion | Timeout + tope de bytes; parsear RFC3339Nano y negativos ("ya vencio"); BackendState como fallback |
+| 2 | SRE-5-2 (op) | `marvin-doctor` con jq roto o RFC3339Nano dice "✅ vence en ? dia(s) (con margen)" = falso OK (`${dias:-?}` cae al else). Y el doctor DESPLEGADO en el host real (`~/.local/bin/marvin-doctor`, 2026-08-23) difiere del repo y no tiene el bloque de expiry: el fix SRE-4p-1 host-side de la 4a NUNCA se desplego | El else no dice "con margen" si el parseo fallo (desconocido); ACCION del usuario: re-correr `setup-host.sh` |
+| 2 | SRE-5-3 | Bajo vencido prolongado el canal de avisos registra "avisos: canal caido (host), reintento" cada 30-40 s indefinidamente (NotificacionesRemotas.kt ~119: backoff 2 -> 30 s tope, `coerceAtMost(30_000L)`, 0 jitter): 21 de 27 filas en 12 min, empuja el historico util fuera de MAX=200 / 64 KB (QA3-6) | Backoff con jitter y tope creciente; registrar transiciones de estado, no cada reintento |
+| 1 | SRE-5-5 | El aviso "vence en N dias" en la terminal es efimero (tmux lo redibuja); vive solo en Diagnostico. §1.5: aceptable, Diagnostico es la superficie real | Documentar; opcional banner persistente |
+| 3 | Fase 0 (op) | El nodo real `remoteclaude` sin tag vence 2026-12-12; ningun fix lo cubre y el doctor desplegado esta viejo | ACCION del usuario: consola -> Disable key expiry ANTES del corte |
+
+Medicion bajo vencido (24 min): CPU ~0,3 % en frio-vencido y ~0 % en caliente, RSS 138 -> 147 MB,
+sin wakelock, sin ANR, sin fuga: el vencido NO drena bateria. El host LAN sigue conectado en
+arranque frio (`started=false` -> `endpoint()` cae a directo): UX5-1 es solo mid-sesion. Expiry
+doble host+celu: ningun aviso borra al otro (el del host no se emite si el celu no conecta; correcto).
+Falso positivo descartado por el propio sre: "invalid key: API key does not exist" era una key demo stale.
+### Seguridad ofensiva (todo offline: PoCs en HOME-sandbox + JVM; el AVD lo tuvo sre)
+| Sev | ID | Hallazgo | Fix propuesto |
+|---|---|---|---|
+| 2 | SEC5-1 (reabre L5/DEVOPS-2 con modelo de amenaza) | `android/app/libs/marvints.aar` (29 MB) esta TRACKEADO en git y el APK lo embebe verbatim (build.gradle.kts:220); ningun workflow corre gomobile/NDK (las 3 menciones son comentarios) y el `.aar.sha256` no se verifica. El guard `srchash` prueba source Go <-> hash, no procedencia del binario: un PR mergeado puede shipear un .aar trojanizado con CI verde. El bridge termina la tailnet y maneja la auth key | Construir el .aar en CI desde el source (o declararlo prebuilt trusted fuera del alcance del guard) y verificar el .sha256 |
+| 2 | SEC5-2 (SOSPECHADO) | `ts-link-qr.sh` imprime el QR ANSI (= auth key single-use de 10 min) al stdout (L88); el aviso de "no la dejes en el scrollback" solo cubre `--mostrar-key`. Si el usuario corre el script DENTRO del tmux que comparte con Claude, un agente prompt-injectado hace `tmux capture-pane -p`, decodifica el QR y consume la key antes del escaneo legitimo (gana la carrera; su nodo entra con tag:remotemarvin). Depende del flujo real: ¿donde corre el usuario el script? | Mintear/mostrar la key por un canal que el agente no lea; avisar en el script y el manual de no correrlo en la sesion de Claude (-> arquitecto-ia) |
+| 1 | SEC5-3 | `marvints.go:198,200` loguea el `err` crudo de `Up()` a logcat; si el control-plane ecoara la key/token rechazado, filtraria (Tailscale suele ecoar solo ids) | Loguear la razon clasificada, no `err` crudo |
+| 1 | SEC5-4 (= N4) | `readBytes()` sin tope ni read-timeout en 6 sitios (SshTerminalSession 451/479/501, RemoteControl 67/232/268): un host YA autenticado cuelga el hilo u OOM-ea la app | Cap de bytes + read-timeout |
+| 1 | SEC5-5 | A4-1: el warning duro del mismatch tras re-enrol cubre solo 60 s (`VENTANA_RE_ENROL_MS`) y ninguna rama es fail-closed (ambas ofrecen "Confiar en la nueva"); la reconexion lenta lo pierde | Ligar la ventana al ciclo de reconexion; considerar fail-closed en la rama de re-enrol |
+| 0-1 | — | El hint del dialogo Tailscale muestra los ultimos 6 chars de la auth key (HostsActivity.kt:242) sin FLAG_SECURE: cosmetico, patron "secreto parcial en pantalla" | Hint "vinculada a <tailnet>" |
+
+SOSTIENEN con PoC EJECUTADO: S8 (fake qrencode: la key ya no aparece en argv, va por stdin),
+marvin-doctor sin inyeccion (`KeyExpiry:"…; touch PWNED"` -> parseo falla -> guardado), el comando
+de `avisarSiExpiraHostPronto` es estatico (sin interpolacion del cliente), QA4-3 (los 19
+`Diagnostico.registrar` no pasan secretos ni identidad). Discrepancia resuelta: seguridad leyo que
+onPause no hace I/O en el main; queda supersedido por el repro 2/2 de qa y la cadena verificada.
+### Arquitecto de IA (capstone, ola 3; spoof EJECUTADO en el AVD, hook EJECUTADO 10 lecturas)
+| Sev | ID | Hallazgo | Fix propuesto |
+|---|---|---|---|
+| 2 | A5-1 | Los avisos de la app ("[el acceso de Tailscale vencio…]", "[LA CLAVE DEL HOST CAMBIO…]", "[el acceso Tailscale de la PC vence en N dia(s)…]") se escriben al MISMO stream del pty que dibuja el host (`SshTerminalSession.status()`): desde el host se reprodujeron byte a byte y con una variante social ("…pega tskey-auth-<falsa>") indistinguibles del real, que persistieron >2 min mientras el aviso REAL lo borra el redibujo de tmux; sin rastro en Diagnostico. ASI09: la app entreno al usuario a leer corchetes como voz de la app, y esa voz la sostiene mejor un Claude inyectado. Cruza con SEC5-2/UX5-3: manual y skill legitiman "pegar la key a mano" | §1.5: la app NO escribe en el pty; banner nativo bajo la barra + Diagnostico; manual/skill: "un corchete que te pide pegar una key es del host" |
+| 2 | A5-2 | La ventana de 60 s de la rama dura mide desde `configure()`, pero el atacante decide cuando aparece el mismatch (su nodo-espejo levanta sshd cuando quiere; o Cancelar + ↻ pasados los 60 s cae a "es esperable"); ninguna rama es fail-closed (SEC5-5). El pin de `HostKeys` es `hostkey_<host>_<port>_<algo>` (HostKeys.kt:28) SIN identidad de red aunque `identidadRed()` ya existe (no se usa en HostKeys ni MainActivity) | El pin guarda `identidadRed()`; mismatch con red distinta = rama dura SIEMPRE, sin timer, y "Confiar" exige tipear el final de la huella; retirar `ultimoReEnrolMs` |
+| 2-3 | A5-3 | El OAuth client (scope "Auth Keys write + tag", README:49-50) vive en el `.env` del repo del host, que `ts-link-qr.sh:33-36` sourcea = dominio de confianza del agente; y la skill (`remotemarvin/SKILL.md:50-51`) le ordena a Claude correr `ts-link-qr.sh --png`. Un Claude inyectado no necesita ganar la carrera del QR (SEC5-2): mintea con `reusable:true` + tag -> nodo del atacante DURABLE (tag = sin expiry) con ACL default all-to-all -> lateral a toda la tailnet (ASI03). Existia desde F10; cuatro pasadas miraron solo el celular | Decision de producto: el mint es un acto humano (quitar el paso de la skill; que pida correr el script en una terminal propia fuera del tmux de Claude); secret por TTY/keyring, no `.env`; ACL minima para `tag:remotemarvin` |
+| 1 | A5-4 | El hook `flag-subidos-context.sh` no recuerda la frontera en 6 de 10 lecturas (cd+cat, pdftotext, tesseract = el vector original de imagen con texto, python open(), unzip -p, find -exec): exige la ruta con barra final + verbo de la lista | Ruta en cualquier posicion + verbos ampliados, o lista negativa |
+| 1 | A5-5 | Re-enrol sin rastro persistente: ni `EnrolarTailscale` ni `TailscaleBridge` llaman `Diagnostico.registrar`; la identidad vive en un toast de 3,5 s (= UX5-5 desde ASI09: consentimiento con informacion que se evapora) | `Diagnostico.registrar` en `aplicar`; hosts "conectada ✓ · <tailnet>" permanente |
+| B | A5-6 | El host puede disparar el aviso AUTENTICO "vence en N dias" con cualquier N (`toIntOrNull()` del stdout) | by-design: la accion inducida (ir a la consola) es inocua; documentar |
+
+Ataque "inducir a pegar un API token propio" (QA5-2): el token va a `SecretStore` y de ahi solo a
+login.tailscale.com como auth key invalida -> DoS del nodo (NeedsLogin), no fuga. No endurecer el
+parser por esto (§1.5).
+
+**Capstone §1.5 — reducir vs endurecer.** Premisa confirmada con tres evidencias: la doc de
+Tailscale (kb/1028) dice que un nodo autenticado con tag nace con key expiry deshabilitado;
+`ts-demo.sh expire` tiene que hacer `POST /device/{id}/key {"keyExpiryDisabled":false}` ANTES de
+poder vencer el nodo demo; y el manual ya lo dice. En el camino disenado (QR con tag) el nodo del
+celu NO vence solo: el ciclo endurecido en tres pasadas (ambar, sticky en Go, ↺, reVinculando 25 s,
+sondeo 30 s, marcador 60 s, vencidoCache + repoll, esperaExpiro) solo cubre revocacion
+administrativa o key pegada sin tag, y la familia de bugs de esta pasada (started que no vuelve a
+false, ANR por cerrar trilead en el main) es el costo de mantener un ESTADO PARALELO del nodo que
+compite con el estado real de la terminal. A quien creerle: al TERMINAL para el estado
+(alcanzabilidad real + host-key), al NODO solo para explicar una caida, al HOST para senales
+informativas inocuas, nunca para texto que induzca a pegar credenciales.
+
+Arquitectura unica propuesta ("el terminal es la verdad; el nodo explica; el tag elimina el ciclo;
+el pin conoce la red"): (1) `isReady()` deja de ser el latch `started` y pasa a
+`backendState == Running` mantenido por un watcher en Go (`WatchIPNBus` -> atomic); `endpoint()`
+cae a directo cuando no esta Running; hosts pinta el estado de la ULTIMA CONEXION de terminal;
+"vencido" pasa de estado a CAUSA mostrada solo bajo terminal caida; se retiran accesoVencido /
+reVinculando / vencidoCache / repoll / ultimoReEnrolMs; enrolar sin tag avisa una vez. (2) Avisos
+fuera del pty (banner nativo + Diagnostico). (3) Pin <-> red: `HostKeys` guarda `identidadRed()`;
+mismatch con red distinta = rama dura sin timer. (4) Mint = acto humano; secret fuera del `.env`;
+ACL minima. Con nodos tagueados el re-enrol es excepcional, asi que (4) casi no cuesta usabilidad
+y (1) elimina mas codigo del que agrega. Re-score ASI: ASI03 Medio -> Medio-Alto (A5-3), ASI04
+Bajo -> Bajo-Medio (SEC5-1), ASI09 re-caracterizado (consent efimero + ventana temporizable +
+canal spoofeable); el resto sin cambio.
+
+### Checks previos re-verificados
+SOSTIENEN (muestreo): QA4-1..4 (vividos: ambar en arranque frio, validacion de forma, dedup por
+episodio con 3 pestanas, no-filtro + repoll), A4-1 en los tres caminos (variante "dura" dentro de
+60 s tras key pegada; neutra fuera; marcador expira), SRE-4p-1 (el aviso "vence en 9 dias" llega a
+Diagnostico con el shim; en la terminal lo redibuja tmux), S8/DEVOPS-1/DEVOPS-2 (5 checks de
+devops), DEV-4A/4B/4C (`go test -race -count=50`), IdentidadRed, ⓘ Diagnostico v1.17, dedup
+(§K H1/H6/H7). REABREN: UX-1 (el ambar solo aterriza en arranque frio -> UX5-1); UX-2 (sostiene en
+el AVD, TOFU en el PDF); diálogos oscuros v1.16 (parcial: el fix por tokens no cubre EditText/
+Switch -> DG-1); H5 label QR unificado (sev1: 'linea "VPN"' en dos superficies). REFUTADOS: UF5-3
+(huella cacheada tras cancelar el mismatch) no reproduce en 3 intentos con pid controlado del sshd
+= artefacto del fixture; DEV-4B "N hilos por toque" vivido = cosmetico.
+
+### Sin poder ejercer
+La cadena completa "key ajena -> tailnet del atacante -> nodo-espejo -> mismatch fuera de 60 s" (necesita una tailnet ajena; A5-2 queda LEIDO). Camara/QR (el AVD no tiene camara: el camino ↺ de terminal y su ventana `reVinculando` de 25 s
+quedan LEIDOS; chequeo manual de 10 min del usuario en el S23); mismatch de host-key DENTRO de
+los 60 s por QR de terminal; S23 real; OEM/Doze; dictado real; noVNC; subir archivo.
+
+### Nota de tooling (no es de la app)
+Helpers locales fuera del repo: `ts-demo.sh` (jamas imprime credenciales; sourcea el .env demo en
+subshell), `test-sshd.sh` (sshd en 2222 sin sudo, ForceCommand con shim de docker, rotate/restore
+de host-key con pid verificable), `emu.sh` (lock de un dueno por vez), barra de estado con el
+medidor de uso (`statusline.sh`). Guard `no-leer-secretos.py`: un falso positivo nuevo (grep en
+codigo fuente con palabras de credenciales en la linea de comando) -> a refinar con su autotest.
+Lecciones de orquestacion: el limite de 5 h es compartido entre coordinador y subagentes (un agente
+sin limite ≈ 25-45 puntos): maximo 2 concurrentes, lanzar solo con el medidor <= ~55 %,
+`autoContinueAtUsageLimit` activado, checkpoints por charter; el acta y los prompts van a
+`~/claude-refs/pasada<N>/` (un reboot borro el scratchpad de /tmp y devolvio el AVD a un snapshot
+viejo); para el AVD, siempre el build emuabi.
+
+---
+
 ## L · 4ª pasada COMPLETA — 8 perfiles sobre v1.28->v1.30 + fixes de hoy (2026-08-27)
 
 Primera pasada integral desde la 3a (pre-v1.28). Corrida en dos olas de 4 (el limite de sesion

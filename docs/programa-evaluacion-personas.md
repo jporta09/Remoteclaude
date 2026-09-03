@@ -1058,3 +1058,38 @@ consistencia, no de supply-chain.
 *Los hallazgos de cualquier ejecución de este programa se consolidan en
 `docs/revision-integral.md` (sección "Lo que queda abierto"), que es el backlog vivo del
 proyecto.*
+
+### 8.4 Lecciones de la corrida (2026-09-03, asentadas al cierre)
+
+- **El limite de uso es compartido** entre coordinador y subagentes (ventana de 5 h): un agente sin
+  limite consume ~25-45 puntos. Cuatro en paralelo tiraron un 429 a mitad de la ola 1. Regla:
+  **maximo 2 concurrentes**, lanzar una tanda solo con el medidor de la barra de estado <= ~55 %
+  (`statusline.sh` -> `rate_limits` en `statusline-last.json`), `autoContinueAtUsageLimit` activo, y
+  esperar el reset (despertador con Monitor) en vez de recortar. **Nunca topes por agente** (ni
+  tokens, ni llamadas, ni minutos, ni acortar sus mediciones): el usuario lo rechazo dos veces; una
+  espera en primer plano no gasta tokens.
+- **Un monitor de fondo NO despierta a un subagente**: sre quedo "finalizado" esperando 45 min. Las
+  esperas largas van con `sleep 600` encadenados en primer plano; decirlo en el prompt.
+- **El acta, los prompts y los checkpoints viven fuera de /tmp** (`~/claude-refs/pasada<N>/`): un
+  reboot a mitad de pasada borro el scratchpad entero (acta, prompts, capturas, trace del ANR) y
+  devolvio el AVD a un snapshot de un dia antes. Lo reconstruible se reconstruyo desde el contexto;
+  la evidencia cruda no. Por eso §M cita archivo:linea + metodo de reproduccion, no capturas.
+- **Fixture del emulador**: el APK publicado es arm64-only y muere con SIGILL bajo ndk_translation
+  en el AVD x86_64; instalar SIEMPRE `assembleRelease -PmarvinEmuAbi` (= e2e.sh), copia durable en
+  `~/claude-refs/apk/`. Tras un reboot verificar `ts_hostname` de la app vs `ts-demo.sh list`.
+  Metodo adb paso a paso: con el teclado en pantalla abierto un tap en un boton cae en el teclado.
+- **Fixtures nuevos que funcionaron**: tailnet DEMO por API (`ts-demo.sh`, nunca imprime creds),
+  sshd de prueba sin sudo con shim de docker (`test-sshd.sh`, pid verificable para distinguir bug
+  de artefacto: asi se refuto UF5-3), lock del emulador (`emu.sh`). Primera pasada que VIVE el
+  vencido: tres perfiles lo ejercieron y el tema dominante (estado desacoplado del expiry) salio de
+  ahi, no de leer codigo.
+- **Prompts por archivo**: el brief completo en un .md durable y el prompt del spawn solo dice
+  "leelo entero" + las reglas que no admiten excepcion. Los handoffs se apendan al archivo a medida
+  que cierran las olas (ux-devex recibio lo vivido por usuario-final; qa el mapa de dev; arq-IA el
+  digest verificado de los 8).
+- **Verificar antes de asentar sigue rindiendo**: 3 refutaciones/degradaciones (UF5-3 artefacto,
+  L2 cosmetico, la lectura de seguridad sobre onPause supersedida por el repro de qa) y un falso
+  positivo que el propio sre descarto (key demo stale).
+- **Guard de secretos**: falsos positivos nuevos (grep en codigo fuente con palabras de
+  credenciales en la linea de comando; lectura solo-lectura del nodo real; `make host`; `tmux
+  send-keys`). Reportados, no rodeados; a refinar con su autotest.
