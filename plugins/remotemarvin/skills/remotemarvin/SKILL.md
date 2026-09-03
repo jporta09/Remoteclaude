@@ -49,7 +49,7 @@ capability. Use the most specific one once the intent is clear.
   siguen"— y con **↺ Reescanear QR** en la barra de la terminal). El remedio es un QR nuevo:
   corré `./scripts/ts-link-qr.sh --png` y decile al usuario que toque **↺** (abre el scanner
   directo) y apunte a la pantalla; la app reconecta sola con el tmux intacto y le muestra a
-  qué tailnet se revinculó. No hace falta tocar la consola — queda un nodo viejo expirado que
+  qué tailnet se revinculó (lo mismo si pega la key a mano en el diálogo de hosts). No hace falta tocar la consola — queda un nodo viejo expirado que
   se puede borrar cuando se quiera.
 
 - **La app avisa "el acceso Tailscale de la PC vence en N días"** → es el nodo del HOST (no el

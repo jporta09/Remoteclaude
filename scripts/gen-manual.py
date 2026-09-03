@@ -258,7 +258,7 @@ S.append(B("El acceso de Tailscale del celu <b>no vence solo</b> (los nodos con 
            "muta a <b>↺ Reescanear QR</b>. Un toque en ↺ abre el scanner directo: generás un QR "
            "nuevo en la PC (<font name='Mono' size='9'>ts-link-qr.sh --png</font>), lo escaneás "
            "y la app reconecta sola, con el tmux intacto; te muestra a qué tailnet te "
-           "revinculaste. Ojo: si estabas conectado al momento de vencer, el aviso puede tardar "
+           "revinculaste (lo mismo si pegás la key a mano en el diálogo de hosts). Ojo: si estabas conectado al momento de vencer, el aviso puede tardar "
            "unos minutos (la sesión viva sigue hasta el próximo re-handshake). Si vinculaste el "
            "celular pegando una auth key a mano (sin OAuth client), el remedio es el mismo "
            "diálogo: generá otra key en la consola y pegala ahí."))

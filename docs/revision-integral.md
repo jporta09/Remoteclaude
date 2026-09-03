@@ -1007,6 +1007,22 @@ R8 verdes, CI verde), por fases del plan `sleepy-yawning-snowglobe.md`:
 - Fase 4 (SRE-4p-1): aviso proactivo del expiry del nodo del HOST (SshTerminalSession + marvin-doctor).
 - Fase 5 (DEVOPS-2): verificación source↔AAR en CI (srchash).
 - Fase 6: superficies (manual/skill 1.10.0) + versión (vc47/1.31.0).
+- Validación on-device de v1.31.0 (2026-09-02; emulador con cuenta Tailscale demo + S23 real por
+  USB, instalado como update firmado con release, datos conservados): ciclo vencido→re-enrol de un
+  toque verificado end-to-end en ambos (ámbar, transitorio sin clear optimista, flip a verde sólo
+  sobre reconexión real, re-auth por API, `go test -race`). **Hallazgo**: el anuncio A4-1
+  ("Re-vinculando…" + "Vinculado a la tailnet: X") estaba cableado SÓLO al callback del scanner
+  QR de la terminal; pegar la key o "Escanear QR" desde el diálogo de hosts llamaban a
+  `configure()` directo y no anunciaban nada (1 de 3 caminos). **Fix (pre-tag)**: el anuncio se
+  movió a `EnrolarTailscale.aplicar` (funnel común a los tres) y pegar pasa por ahí (gana también
+  la validación de forma QA4-2); ventana del sondeo 20→30s (en el emulador la reconexión desde
+  vencido ronda 20s y expiraba justo cuando el nodo quedaba listo). Segundo bug del mismo toast,
+  también preexistente: `isReady()` es `started` (true apenas retorna Up) y si `identidadRed()`
+  venía vacío (backend aún en Starting) el hilo se rendía sin mostrar nada; ahora sigue sondeando
+  hasta tener identidad. Ambos verificados con ráfaga en el emulador (camino rápido y desde
+  vencido): salen "Re-vinculando…" y "Vinculado a la tailnet: ⟨nombre⟩". El S23 quedó con el
+  build final instalado en el lugar, con su enrolamiento real restaurado byte-idéntico y verificado
+  (`tailscale ping` desde el host).
 
 **PENDIENTE: validación on-device del ciclo de vencido** (el emulador no lo reproduce) ANTES de
 taggear v1.31.0 — mismo procedimiento que v1.30.0. QA4-5 se deja como está (defendible).

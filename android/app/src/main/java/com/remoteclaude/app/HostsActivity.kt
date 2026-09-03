@@ -264,9 +264,18 @@ class HostsActivity : AppCompatActivity() {
             .show()
     }
 
-    /** Guarda la auth key, reinicia el nodo embebido y refresca el estado. */
+    /**
+     * Guarda la auth key, reinicia el nodo embebido y refresca el estado. Vacío = conexión
+     * directa (se limpia la key). Con key, pasa por EnrolarTailscale.aplicar: la misma
+     * validación de forma (QA4-2) y el mismo feedback de re-vinculación (A4-1) que escanear
+     * el QR — antes pegar la key llamaba a configure() directo y no anunciaba nada.
+     */
     private fun applyTailscaleKey(key: String) {
-        TailscaleBridge.configure(this, key)
+        if (key.isBlank()) {
+            TailscaleBridge.configure(this, key)
+        } else if (!EnrolarTailscale.aplicar(this, key)) {
+            return   // forma inválida: aplicar ya avisó; no reiniciar el nodo con basura
+        }
         vencidoCache = false   // episodio nuevo: el sticky viejo ya no aplica
         refrescarVpnEscalonado()
     }

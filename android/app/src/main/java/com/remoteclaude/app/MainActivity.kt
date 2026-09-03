@@ -504,34 +504,13 @@ class MainActivity : AppCompatActivity() {
         if (EnrolarTailscale.aplicar(this, result.contents)) {
             // QA4-2: no apagar accesoVencido acá (sería optimista, antes de que el nodo
             // levante). Se muestra "re-vinculando…" y lo apaga una reconexión real por tailnet.
+            // Los toasts ("Re-vinculando…" + a qué tailnet te vinculaste, A4-1) los da
+            // EnrolarTailscale.aplicar, común a los tres caminos de re-enrol.
             reVinculando = true
             reVinculandoDesde = android.os.SystemClock.elapsedRealtime()
             pintarBarra()
-            Toast.makeText(this, "Re-vinculando Tailscale…", Toast.LENGTH_SHORT).show()
             // onResume (al volver del scanner) ya reintenta; esto fuerza también las caídas.
             tabs.forzarReconexiones()
-            anunciarIdentidadTailnet()
-        }
-    }
-
-    /** A4-1: cuando el nodo embebido levante tras un re-enrol, avisar a qué tailnet te
-     *  vinculaste (hoy el re-enrol reconfigura la identidad de red sin ningún feedback).
-     *  Corre en un hilo: isReady()/identidadRed() tocan el estado del nodo. */
-    private fun anunciarIdentidadTailnet() {
-        thread(name = "ts-identidad") {
-            val t0 = android.os.SystemClock.elapsedRealtime()
-            while (android.os.SystemClock.elapsedRealtime() - t0 < 20_000) {
-                if (TailscaleBridge.isReady()) {
-                    val red = TailscaleBridge.identidadRed()
-                    if (red.isNotBlank()) runOnUiThread {
-                        if (!isFinishing && !isDestroyed) {
-                            Toast.makeText(this, "Vinculado a la tailnet: $red", Toast.LENGTH_LONG).show()
-                        }
-                    }
-                    return@thread
-                }
-                try { Thread.sleep(1000) } catch (_: InterruptedException) { return@thread }
-            }
         }
     }
 
