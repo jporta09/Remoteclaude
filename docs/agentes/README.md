@@ -1,6 +1,7 @@
 # Agentes-perfil del programa de evaluación
 
-Las **definiciones** de los 8 agentes-perfil (más el remediador) que evalúan RemoteMarvin
+Las **definiciones** de los 9 agentes-perfil (los 8 originales + `disenador-grafico`, opcional,
+sumado el 2026-09-03; más el remediador) que evalúan RemoteMarvin
 según `docs/programa-evaluacion-personas.md`. La **fuente de verdad es este directorio**;
 para usarlos hay que instalarlos en el perfil de Claude Code desde el que se trabaja:
 
