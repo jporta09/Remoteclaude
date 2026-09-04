@@ -31,6 +31,15 @@ if ! need gomobile; then
     go install golang.org/x/mobile/cmd/gomobile@latest
     need gomobile || { echo "no pude instalar gomobile" >&2; exit 1; }
 fi
+# gomobile bind delega en gobind: en una máquina fresca (el runner de CI) no está y el bind
+# muere con "gobind was not found. Please run gomobile init". Instalarlo de la misma versión
+# e inicializar, ambos idempotentes.
+if ! need gobind; then
+    echo "==> instalando gobind + gomobile init"
+    go install golang.org/x/mobile/cmd/gobind@latest
+    need gobind || { echo "no pude instalar gobind" >&2; exit 1; }
+    gomobile init
+fi
 
 # --- NDK ------------------------------------------------------------------------------
 if [ -z "${ANDROID_NDK_HOME:-}" ]; then

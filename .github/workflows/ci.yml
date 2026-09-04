@@ -128,7 +128,11 @@ jobs:
           echo "AAR al día con el source Go ✓ ($actual)"
       - name: Integridad del AAR committeado (SEC5-1)
         working-directory: android/app/libs
-        run: sha256sum -c marvints.aar.sha256
+        run: |
+          # El .sha256 guarda sólo el hash (sin nombre de archivo): comparar a mano.
+          real=$(sha256sum marvints.aar | cut -d' ' -f1); esperado=$(cut -d' ' -f1 marvints.aar.sha256)
+          [ "$real" = "$esperado" ] || { echo "::error::marvints.aar no coincide con su .sha256 (real=$real esperado=$esperado)"; exit 1; }
+          echo "AAR íntegro ✓ ($real)"
 
   aar-build:
     # SEC5-1 (5ª pasada): el AAR que termina la tailnet y maneja la auth key era un blob de 29 MB
