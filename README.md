@@ -1,5 +1,7 @@
 # RemoteMarvin
 
+<img src="android/app/src/main/res/drawable-nodpi/marvin_isologo.png" alt="RemoteMarvin" width="420">
+
 Trabajar de verdad en tu PC desde el celular: terminal nativa que **ejecuta en el host**,
 sobrevive al bloqueo del teléfono y a los cambios de red.
 
@@ -48,7 +50,9 @@ Las dos claves de Tailscale salen de la admin console (`login.tailscale.com`):
 **TS_AUTHKEY** (Settings → Keys → Generate: Reusable, NO Ephemeral, con el tag
 `tag:remotemarvin` para que el nodo no venza) y un **OAuth client** (Settings → OAuth
 clients: scope "Auth Keys" write + el mismo tag) para generar los QR de los celulares.
-`.env.example` trae el paso a paso, incluido el `tagOwners` de la ACL.
+En la ACL de la tailnet (Access controls) el tag tiene que tener dueño:
+`"tagOwners": { "tag:remotemarvin": ["autogroup:admin"] }` (la consola lo ofrece al crear el
+OAuth client; `.env.example` repite el paso a paso).
 
 En el **host** (una vez):
 
@@ -77,10 +81,17 @@ En el **celular**:
    - **Auto-updates:** instalá [Obtainium](https://github.com/ImranR98/Obtainium), agregá este
      repo como app (pegás la URL del repo) y te avisa de cada nuevo release. Actualiza sobre la
      instalación previa sin desinstalar (misma clave de firma).
-2. **Vinculá su nodo Tailscale** escaneando el QR que imprime `./scripts/ts-link-qr.sh` en el host.
+2. **Vinculá su nodo Tailscale** escaneando el QR que imprime `./scripts/ts-link-qr.sh` en el host
+   (lo corrés vos, en tu terminal; con el tag, el enrolamiento del celu no vence). Si alguna vez
+   vence o lo revocás, la app lo muestra en ámbar en hosts y con **↺ Reescanear QR** en la barra
+   de la terminal; los hosts por red local siguen andando. Un toque largo en ↺ deja pegar una
+   auth key si no estás en la PC. Si el **nodo de la PC** se enroló sin tag, la app avisa con
+   semanas de anticipación ("vence en N días") en el banner y en ⓘ Diagnóstico.
 
 > Compilarlo vos mismo es opcional (`cd android && ./gradlew :app:assembleRelease`); requiere el
-> keystore de firma. La forma recomendada es el APK publicado en Releases.
+> keystore de firma. La forma recomendada es el APK publicado en Releases: el bridge nativo de
+> Tailscale (`marvints.aar`) que lleva se construye en CI desde el source Go en cada release
+> (el `.aar` committeado es sólo para desarrollo local).
 
 ## Uso
 
@@ -93,6 +104,9 @@ Abrís la app, elegís el host y ya estás en tu shell. Los botones de la barra:
 | **🖥** | ver el escritorio virtual del host |
 | **📄** | documentos compartidos |
 | **🔑** | la clave pública de la app |
+| **↻ Reconectar** | aparece en la barra cuando la conexión cayó |
+| **↺ Reescanear QR** | aparece cuando el enrolamiento de Tailscale venció (toque largo: pegar una key) |
+| **ⓘ** | diagnóstico de conexión (timeline: conectó, reconectó, cayó, cambió la clave del host…) |
 
 Para que el navegador del host dibuje en la pantalla que ves desde el celu:
 

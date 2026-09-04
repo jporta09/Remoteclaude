@@ -1,6 +1,6 @@
 {
   "name": "remotemarvin",
-  "version": "1.10.2",
+  "version": "1.11.0",
   "description": "Capacidades de la app RemoteMarvin desde Claude Code: guía de uso, compartir documentos al visor del celular (share-doc) y correr el navegador headed visible (headed-browser).",
   "author": {
     "name": "Juan Porta"

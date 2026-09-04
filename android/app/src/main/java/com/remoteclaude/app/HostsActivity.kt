@@ -539,8 +539,9 @@ class HostsActivity : AppCompatActivity() {
             + "es el único momento con login; en el teléfono nunca): TS_AUTHKEY en Settings → "
             + "Keys → Generate (Reusable, NO Ephemeral, con el tag tag:remotemarvin — sin tag "
             + "vence a los ~180 días), y el OAuth client para los QR en Settings → OAuth "
-            + "clients → Generate (scope Auth Keys write + el mismo tag). El paso a paso, "
-            + "ACL incluida, está en .env.example.")
+            + "clients → Generate (scope Auth Keys write + el mismo tag). En la ACL de la "
+            + "tailnet el tag necesita dueño: \"tagOwners\": { \"tag:remotemarvin\": "
+            + "[\"autogroup:admin\"] } (la consola lo ofrece al crear el OAuth client).")
 
         titulo("2 · Autorizar el teléfono")
         parrafo("Al agregar/conectar un host, la app muestra su clave SSH pública (ícono de "
@@ -549,7 +550,7 @@ class HostsActivity : AppCompatActivity() {
 
         titulo("3 · (Opcional) Conectar desde cualquier red — Tailscale")
         parrafo("En la PC generá un QR de un solo uso (requiere el OAuth client cargado en el "
-            + ".env) y escanealo desde la línea “VPN” de esta pantalla. No hace falta IP fija "
+            + ".env) y escanealo desde la línea de estado de Tailscale de esta pantalla. No hace falta IP fija "
             + "ni abrir puertos. Si a la cámara le cuesta el QR de la terminal: --png.")
         comando("./scripts/ts-link-qr.sh --png")
 

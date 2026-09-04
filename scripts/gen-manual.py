@@ -254,23 +254,29 @@ S.append(B("En la PC: <font name='Mono' size='9'>./scripts/ts-link-qr.sh</font> 
 S.append(B("En la app: tocá la <b>línea de estado de Tailscale</b> → <b>Escanear QR</b> → "
            "apuntá la cámara. El estado pasa a <b>conectada ✓</b>."))
 S.append(B("Queda guardado: reconecta solo en cada arranque, no re-escaneás más."))
-S.append(B("El acceso de Tailscale del celu <b>no vence solo</b> (los nodos con tag tienen el "
-           "vencimiento deshabilitado por defecto). Si alguna vez vence o lo revocás desde la "
-           "consola, la app lo dice en vez de quedar reintentando en silencio: la pantalla de "
-           "hosts muestra <b>“enrolamiento vencido — reescaneá el QR”</b> en ámbar (los hosts "
-           "que alcanzás por la red local siguen andando), y en la terminal la barra de arriba "
-           "muta a <b>↺ Reescanear QR</b>. Un toque en ↺ abre el scanner directo: generás un QR "
-           "nuevo en la PC (<font name='Mono' size='9'>ts-link-qr.sh --png</font>), lo escaneás "
-           "y la app reconecta sola, con el tmux intacto; te muestra a qué tailnet te "
-           "revinculaste (lo mismo si pegás la key a mano en el diálogo de hosts). Ojo: si estabas conectado al momento de vencer, el aviso puede tardar "
-           "unos minutos (la sesión viva sigue hasta el próximo re-handshake). Si vinculaste el "
-           "celular pegando una auth key a mano (sin OAuth client), el remedio es el mismo "
-           "diálogo: generá otra key en la consola y pegala ahí."))
-S.append(B("El nodo de la <b>PC</b> (el host) es aparte: si lo enrolaste sin tag, su clave "
-           "vence a los ~180 días y ahí el celu deja de conectar. La app te <b>avisa con "
-           "semanas de anticipación</b> (mientras la PC todavía es alcanzable) para que lo "
-           "renueves: en la consola de Tailscale, agregá el tag al nodo o deshabilitá su “key "
-           "expiry”. También lo reporta <font name='Mono' size='9'>marvin-doctor</font>."))
+S.append(B("El <b>enrolamiento del celu no vence solo</b> (los nodos con tag tienen el vencimiento "
+           "deshabilitado por defecto). Si alguna vez vence o lo revocás desde la consola, la app "
+           "lo dice en vez de quedar reintentando en silencio: la pantalla de hosts muestra "
+           "<b>“enrolamiento vencido — reescaneá el QR”</b> en ámbar, y en la terminal la barra "
+           "de arriba ofrece <b>↺ Reescanear QR</b> y un <b>aviso bajo la barra</b>. Los hosts que "
+           "alcanzás por la red local <b>siguen andando</b> (la terminal decide por la conexión "
+           "real, no por el nodo). Un toque en ↺ abre el scanner: generás un QR nuevo en la PC "
+           "(<font name='Mono' size='9'>ts-link-qr.sh --png</font>) y la app reconecta sola con "
+           "el tmux intacto. <b>Si no estás en la PC</b>: dejá apretado ↺ y pegá una auth key "
+           "generada en la consola de Tailscale (Settings → Keys, con el tag). La app te muestra a "
+           "qué tailnet quedó vinculado el celu y lo deja anotado en ⓘ Diagnóstico."))
+S.append(B("<b>La app nunca escribe en la terminal.</b> Sus avisos (clave del host cambiada, "
+           "enrolamiento vencido, vencimiento del nodo de la PC) salen en el banner bajo la barra "
+           "y quedan en ⓘ Diagnóstico. Si en la terminal aparece un texto entre corchetes que te "
+           "pide pegar una key o escanear un QR, lo escribió el host (o algo que corre en él): "
+           "no lo sigas."))
+S.append(B("El <b>nodo de la PC</b> (el host) es aparte: si lo enrolaste sin tag, su clave "
+           "vence a los ~180 días y ahí el celu deja de conectar por tailnet. La app te "
+           "<b>avisa con semanas de anticipación</b> (mientras la PC todavía es alcanzable) en "
+           "el banner bajo la barra y en ⓘ Diagnóstico — también si ya venció o el nodo no está "
+           "activo — para que lo renueves: en la consola de Tailscale, agregá el tag al nodo o "
+           "deshabilitá su “key expiry”. También lo reporta "
+           "<font name='Mono' size='9'>marvin-doctor</font>."))
 
 # --- 5. Terminal ------------------------------------------------------------
 S.append(P("La terminal", h1))
@@ -294,7 +300,9 @@ S.append(B("<b>Leer un plan largo de Claude</b>: en el diálogo de aprobación, 
            "<font name='Mono' size='9'>{ }</font> salta entre tus mensajes, "
            "<font name='Mono' size='9'>v</font> abre TODO en el editor, "
            "<font name='Mono' size='9'>q</font> sale). La app deja "
-           "<font name='Mono' size='9'>EDITOR=nano</font> listo en sus sesiones nuevas."))
+           "<font name='Mono' size='9'>EDITOR=nano</font> listo en sus sesiones nuevas (y al "
+           "reengancharse, si el host tiene el tmux.conf que instala el setup; con un tmux "
+           "previo sin esa config, EDITOR no llega al reattach)."))
 S.append(B("<b>Zoom</b>: pellizcá para agrandar o achicar la letra de la terminal."))
 S.append(B("<b>Renombrar una pestaña</b>: dejá apretado el nombre. Renombra también la "
            "sesión tmux en el host."))
@@ -413,15 +421,19 @@ S.append(P("La app genera su propia clave SSH en el <b>Android Keystore</b> (la 
            "solo paso— o <b>“Copiar solo la clave”</b> si preferís hacerlo a mano en:"))
 S.append(C("~/.ssh/authorized_keys"))
 S.append(P("La identidad del host", h2))
-S.append(P("La primera vez que conectás, la app <b>memoriza la clave del host</b>. Si más "
-           "adelante cambia, la conexión se <b>rechaza</b> y te muestra las dos huellas "
-           "para que decidas: si reinstalaste el server es esperable, y si no, alguien "
-           "puede estar interceptando. Y si el cambio aparece <b>justo después de re-vincular "
-           "Tailscale</b> (QR o key pegada), la app no lo da por esperable: te advierte que una "
-           "key ajena pudo haberte llevado a otra red y que ese server puede ser un impostor. "
-           "Solo la terminal pregunta — el visor, los documentos "
-           "y el dictado fallan sin ofrecer confiar. Al confiar en la clave nueva se "
-           "reconectan <b>todas</b> las pestañas del host, no solo la que preguntó."))
+S.append(P("La primera vez que conectás, la app <b>memoriza la clave del host</b> y con qué "
+           "tailnet estaba vinculado el celu en ese momento. Si más adelante la clave cambia, la "
+           "conexión se <b>rechaza</b> y el diálogo te muestra las dos huellas (podés copiarlas) y "
+           "<b>cómo verificar</b>: en la PC, "
+           "<font name='Mono' size='9'>ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub</font>. "
+           "Si reinstalaste el server es esperable; si no, alguien puede estar interceptando. Y si "
+           "además el celu está hoy en <b>otra tailnet</b> que cuando fijó la clave, la app no lo "
+           "da por esperable: una key ajena pudo haberte llevado a otra red y ese server puede ser "
+           "un impostor. Para <b>confiar en la clave nueva</b> hay que tipear los últimos 4 "
+           "caracteres de su huella (no es un toque reflejo). Solo la terminal pregunta — el "
+           "visor, los documentos y el dictado fallan sin ofrecer confiar. Al confiar se reconectan "
+           "<b>todas</b> las pestañas del host, no solo la que preguntó, y la decisión queda en "
+           "ⓘ Diagnóstico."))
 
 # --- 8. Navegador -----------------------------------------------------------
 S.append(P("Visor de navegador (noVNC)", h1))

@@ -96,7 +96,7 @@ class DisplayActivity : AppCompatActivity() {
                         desc.contains("CLEARTEXT") -> mostrarErrorVisor(
                             "No pude abrir el visor por HTTP directo a la IP del host: Android " +
                                 "bloquea el tráfico en claro fuera de la tailnet.\n\n" +
-                                "Activá Tailscale (línea “VPN” en la pantalla de hosts) para verlo " +
+                                "Activá Tailscale (línea de estado de Tailscale en la pantalla de hosts) para verlo " +
                                 "por la tailnet, o actualizá el host para publicar noVNC en loopback " +
                                 "(así viaja tunelizado por SSH). Después volvé a abrir el visor."
                         )
