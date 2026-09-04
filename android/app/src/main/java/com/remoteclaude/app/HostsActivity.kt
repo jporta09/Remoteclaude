@@ -538,8 +538,8 @@ class HostsActivity : AppCompatActivity() {
         parrafo("Las claves del .env salen de la página de Tailscale (login.tailscale.com — "
             + "es el único momento con login; en el teléfono nunca): TS_AUTHKEY en Settings → "
             + "Keys → Generate (Reusable, NO Ephemeral, con el tag tag:remotemarvin — sin tag "
-            + "vence a los ~180 días), y el OAuth client para los QR en Settings → OAuth "
-            + "clients → Generate (scope Auth Keys write + el mismo tag). En la ACL de la "
+            + "vence a los ~180 días), y el OAuth client para los QR en Settings → Trust "
+            + "credentials → Generate OAuth client (scope Auth Keys write + el mismo tag). En la ACL de la "
             + "tailnet el tag necesita dueño: \"tagOwners\": { \"tag:remotemarvin\": "
             + "[\"autogroup:admin\"] } (la consola lo ofrece al crear el OAuth client).")
 

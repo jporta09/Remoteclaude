@@ -48,8 +48,8 @@ tu tailnet, sin abrir puertos), y [uv](https://docs.astral.sh/uv/) (`curl -LsSf
 https://astral.sh/uv/install.sh | sh`) — el setup te frena con instrucciones si falta algo.
 Las dos claves de Tailscale salen de la admin console (`login.tailscale.com`):
 **TS_AUTHKEY** (Settings → Keys → Generate: Reusable, NO Ephemeral, con el tag
-`tag:remotemarvin` para que el nodo no venza) y un **OAuth client** (Settings → OAuth
-clients: scope "Auth Keys" write + el mismo tag) para generar los QR de los celulares.
+`tag:remotemarvin` para que el nodo no venza) y un **OAuth client** (Settings → Trust
+credentials: scope "Auth Keys" write + el mismo tag) para generar los QR de los celulares.
 En la ACL de la tailnet (Access controls) el tag tiene que tener dueño:
 `"tagOwners": { "tag:remotemarvin": ["autogroup:admin"] }` (la consola lo ofrece al crear el
 OAuth client; `.env.example` repite el paso a paso).

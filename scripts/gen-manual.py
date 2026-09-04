@@ -225,7 +225,7 @@ S.append(B("<b>TS_AUTHKEY</b> (pone tu PC en el tailnet): <i>Admin console → S
            "nodo de la PC <b>vence a los ~180 días</b> y un día el celular “no conecta” sin "
            "aviso; con tag, no vence nunca (igual que el nodo del celular)."))
 S.append(B("<b>OAuth client</b> (permite generar los QR para celulares; no vence): "
-           "<i>Admin console → Settings → OAuth clients → Generate</i>, con scope "
+           "<i>Admin console → Settings → Trust credentials → Generate OAuth client</i>, con scope "
            "<b>Auth Keys (write)</b> y el mismo tag → "
            "<font name='Mono' size='9'>TS_OAUTH_CLIENT_ID/SECRET</font>."))
 S.append(B("El tag tiene que existir en la ACL del tailnet (la consola ofrece agregarlo al "
