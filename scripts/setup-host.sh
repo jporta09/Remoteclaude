@@ -92,9 +92,19 @@ PasswordAuthentication no
 PubkeyAuthentication yes
 EOF
 # `ssh` o `sshd` según la distro (unit_sshd en la lib): antes hardcodeaba `ssh` y fallaba fuera de Debian.
+# El enable NO es fatal: en un host con activación por socket (Ubuntu 24.04 usa ssh.socket) o con
+# la unit ya habilitada de otra forma, puede fallar sin que el sshd esté mal. Lo que importa es que
+# el servidor RESPONDA; si no responde, ahí sí abortamos.
 unit_ssh="$(unit_sshd)"
-sudo systemctl enable --now "$unit_ssh"
-sudo systemctl restart "$unit_ssh"
+if ! sudo systemctl enable --now "$unit_ssh" 2>/dev/null; then
+    echo "    (no pude habilitar $unit_ssh.service; sigo y verifico que el sshd responda)"
+fi
+sudo systemctl restart "$unit_ssh" 2>/dev/null || true
+sudo systemctl restart "$unit_ssh".socket 2>/dev/null || true
+sshd_metodos 22 >/dev/null || {
+    echo "!! el sshd no responde en el puerto 22 tras configurarlo. Revisá: systemctl status $unit_ssh"
+    exit 1
+}
 fi
 
 echo "==> tmux.conf (persistencia + portapapeles del celu vía OSC 52)"

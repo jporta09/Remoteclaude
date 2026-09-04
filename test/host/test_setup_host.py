@@ -176,34 +176,54 @@ def test_no_confunde_publickey_con_password_por_substring(tmp_path):
 # `sshd` y el setup dejaba el host sin sshd levantado. La detección tiene que mirar las units
 # instaladas, no la distro.
 
-def systemctl_con_units(tmp_path, listado: str):
-    """systemctl de mentira cuyo `list-unit-files` devuelve ese listado."""
+def systemctl_falso_units(tmp_path, unidades: dict):
+    """systemctl de mentira: `unidades` mapea "ssh"/"sshd" -> Id canónico (o None si no existe).
+
+    Reproduce lo que devuelve `systemctl show -p LoadState/-p Id`, que es como se resuelven los
+    ALIAS: en Debian/Ubuntu `sshd.service` existe pero su Id es `ssh.service`.
+    """
     binn = tmp_path / "bin"
     binn.mkdir(exist_ok=True)
+    ramas = "\n".join(
+        f'    {u}.service) [ "$prop" = LoadState ] && echo loaded || echo {idc}; exit 0 ;;'
+        for u, idc in unidades.items() if idc
+    )
     (binn / "systemctl").write_text(textwrap.dedent(f"""\
         #!/usr/bin/env bash
         echo "$@" >> "{tmp_path}/llamadas.log"
-        [[ "$*" == *list-unit-files* ]] && {{ printf '%s\\n' "{listado}"; exit 0; }}
+        if [[ "$*" == *show* ]]; then
+          prop=""; [[ "$*" == *LoadState* ]] && prop=LoadState
+          unit="${{@: -1}}"
+          case "$unit" in
+        {ramas}
+          esac
+          [ "$prop" = LoadState ] && echo not-found || echo "$unit"
+          exit 0
+        fi
         exit 0
     """))
     (binn / "systemctl").chmod(0o755)
     return {"PATH": f"{binn}:{os.environ['PATH']}"}
 
 
-def test_unit_sshd_detecta_sshd_en_distros_redhat_arch(tmp_path):
-    env = systemctl_con_units(tmp_path, "sshd.service enabled enabled")
-    r = correr('unit_sshd', tmp_path, env)
-    assert r.stdout.strip() == "sshd", r.stdout + r.stderr
-
-
-def test_unit_sshd_devuelve_ssh_en_debian(tmp_path):
-    env = systemctl_con_units(tmp_path, "ssh.service enabled enabled")
+def test_unit_sshd_en_debian_ubuntu_resuelve_el_alias(tmp_path):
+    """El bug real (Ubuntu 24.04, 2026-09-04): existen ssh.service Y sshd.service, pero el
+    segundo es un ALIAS del primero y `systemctl enable sshd` falla con "Refusing to operate on
+    alias name". Hay que devolver el nombre CANÓNICO."""
+    env = systemctl_falso_units(tmp_path, {"ssh": "ssh.service", "sshd": "ssh.service"})
     r = correr('unit_sshd', tmp_path, env)
     assert r.stdout.strip() == "ssh", r.stdout + r.stderr
 
 
+def test_unit_sshd_detecta_sshd_en_distros_redhat_arch(tmp_path):
+    """Fedora/Arch/openSUSE: sólo existe sshd.service."""
+    env = systemctl_falso_units(tmp_path, {"ssh": None, "sshd": "sshd.service"})
+    r = correr('unit_sshd', tmp_path, env)
+    assert r.stdout.strip() == "sshd", r.stdout + r.stderr
+
+
 def test_unit_sshd_sin_systemd_cae_al_nombre_historico(tmp_path):
-    """Sin listado (systemctl ausente o falla) no hay que explotar: `ssh` como siempre."""
+    """Sin systemd (o si falla) no hay que explotar: `ssh` como siempre."""
     binn = tmp_path / "bin"
     binn.mkdir(exist_ok=True)
     (binn / "systemctl").write_text("#!/usr/bin/env bash\nexit 1\n")
@@ -220,6 +240,9 @@ def test_setup_host_usa_unit_sshd_y_no_hardcodea_ssh():
         contenido = f.read()
     assert "unit_sshd" in contenido
     assert "enable --now ssh\n" not in contenido and "restart ssh\n" not in contenido
+    # Y el enable no puede ser fatal: en hosts con activación por socket falla sin que el sshd
+    # esté mal, y abortaba el setup ANTES de instalar los helpers (visto en vivo).
+    assert "sshd_metodos 22" in contenido, "hay que verificar que el sshd responde, no el rc del enable"
 
 
 # --- escribir_marker_setup ------------------------------------------------------------

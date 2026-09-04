@@ -113,13 +113,20 @@ sshd_acepta_password() {
 # familias dnf/pacman/zypper el `enable --now ssh` fallaba y sshd no quedaba levantado (DEVOPS-5p-1).
 # Sin systemd o sin unit listada cae al nombre histórico.
 unit_sshd() {
-    local units
-    units="$(systemctl list-unit-files --type=service --no-legend 2>/dev/null || true)"
-    if printf '%s\n' "$units" | grep -qE '^sshd\.service'; then
-        echo sshd
-    else
-        echo ssh
-    fi
+    local u load id
+    # `systemctl show -p Id` resuelve el ALIAS al nombre canónico. Hace falta: en Debian/Ubuntu
+    # existen las DOS (ssh.service real y sshd.service como alias), y `enable` sobre un alias
+    # falla con "Refusing to operate on alias name or linked unit file" — lo que rompía el setup
+    # en Ubuntu 24.04 (visto en vivo 2026-09-04). LoadState descarta las que no existen.
+    for u in ssh sshd; do
+        load="$(systemctl show -p LoadState --value "$u.service" 2>/dev/null || true)"
+        [ "$load" = "loaded" ] || continue
+        id="$(systemctl show -p Id --value "$u.service" 2>/dev/null || true)"
+        case "$id" in
+            *.service) echo "${id%.service}"; return ;;
+        esac
+    done
+    echo ssh
 }
 
 # Marker de "host configurado": la app lo verifica al CONECTAR y bloquea hosts sin setup.
