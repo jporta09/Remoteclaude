@@ -24,8 +24,8 @@ android {
         // saltean para que cualquier celu que los haya instalado actualice igual. Y el NOMBRE
         // también saltea 1.28.0: Obtainium compara nombres, y contra el "1.28.0" efímero que
         // quedó instalado no ofrecía actualizar (el versionCode no lo mira).
-        versionCode = 50
-        versionName = "1.32.0"
+        versionCode = 51
+        versionName = "1.32.1"
         testInstrumentationRunner = "com.remoteclaude.app.MarvinTestRunner"
         // Producción: sólo arm64 (es lo que corre en el teléfono). El AAR además trae
         // x86_64, que se incluye únicamente en debug para que el emulador corra NATIVO
