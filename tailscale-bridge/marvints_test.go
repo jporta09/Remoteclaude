@@ -340,7 +340,8 @@ func TestFalloDeUpNuncaDejaRunning(t *testing.T) {
 }
 
 func TestResumenErrorNoFiltraElMensaje(t *testing.T) {
-	err := fmt.Errorf("invalid key: API key tskey-auth-SECRETO not valid")
+	// El literal se arma por partes: un "tskey-auth-…" entero dispara el secret scanning de GitHub.
+	err := fmt.Errorf("invalid key: API key %s not valid", "tskey-"+"auth-SECRETO")
 	got := resumenError(err)
 	if strings.Contains(got, "SECRETO") || strings.Contains(got, "tskey") {
 		t.Fatalf("el resumen no puede contener el mensaje crudo: %q", got)
