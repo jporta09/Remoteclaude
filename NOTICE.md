@@ -45,19 +45,19 @@ en `.gitignore`. Lo que sí se distribuye, en `android/app/src/main/res/font/`:
 | `ubuntu.ttf` | [Ubuntu](https://design.ubuntu.com/font) | Ubuntu Font Licence 1.0 | cuerpo del manual |
 | `mononoki.ttf` | [Mononoki](https://madmalik.github.io/mononoki/) | SIL Open Font License 1.1 | terminal y código |
 | `mononoki_bold.ttf` | Mononoki | SIL Open Font License 1.1 | destacados del manual |
-| `marvin_icons.ttf` | Noto Emoji + Noto Sans Math + Noto Sans Symbols 2 | SIL Open Font License 1.1 | los 8 íconos de la interfaz |
 | `jost.ttf` | [Jost*](https://github.com/indestructible-type/Jost) | SIL Open Font License 1.1 | detalles y comentarios (estados, textos de apoyo) |
 
-`marvin_icons.ttf` son 3 KB con exactamente los ocho glifos de los botones (🖥 📄 🔑 🎤 ⧉ ⇧
-⟳ ✕). Se arma con `scripts/build-icon-font.py`; ninguna fuente libre sola los cubre a los
-ocho. Antes los dibujaba la fuente del sistema, así que se veían distintos en cada teléfono
-y ⧉ (U+29C9) es tan poco frecuente que ni DejaVu lo tiene.
+Los íconos de la interfaz ya no son tipografía: son `VectorDrawable` propios
+(`res/drawable/ic_marvin_*.xml`, ver `Iconos.kt`), dibujados con la gramática del manual de marca.
+Hubo una fuente de íconos (`marvin_icons.ttf`, subsets de Noto) que se retiró; no queda nada de
+ella en el APK.
 
 Y fuera del APK, sólo para generar el manual en PDF:
 
 | Archivo | Fuente | Licencia | Dónde se usa |
 |---|---|---|---|
 | `scripts/manual-fonts/NotoEmoji-subset.ttf` | [Noto Emoji](https://fonts.google.com/noto/specimen/Noto+Emoji) | SIL Open Font License 1.1 (copia en `scripts/manual-fonts/OFL.txt`) | los íconos 🎤 🖥 📄 🔑 del manual |
+| `scripts/manual-fonts/DejaVuSans-subset.ttf` | [DejaVu Sans](https://dejavu-fonts.github.io/) (subset de símbolos: → ✓ ⟳ ▸ • ⇧ ✕ ⚡ ⇅ ↺ ↻ ⓘ) | Bitstream Vera / DejaVu (libre, redistribuible) | símbolos del manual |
 | `scripts/manual-fonts/Jost-Light.ttf` y `Jost-Bold.ttf` | [Jost*](https://github.com/indestructible-type/Jost) | SIL Open Font License 1.1 (copia en `scripts/manual-fonts/OFL-Jost.txt`) | detalles y comentarios del manual |
 
 Las tres fuentes de origen (Noto Emoji, Noto Sans Math, Noto Sans Symbols 2) son de Google

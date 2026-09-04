@@ -13,7 +13,7 @@ unit:            ## tests unitarios JVM de la app (sin dispositivo)
 host:            ## tests de los daemons del host
 	# websocket-client y pycryptodome son para test_vnc_auth: habla RFB de verdad contra el
 	# visor. Si el contenedor no está arriba esos tests se saltean solos.
-	uv run --with pytest --with websocket-client --with pycryptodome pytest test/host/ -q
+	uv run --with pytest --with websocket-client --with pycryptodome --with pillow pytest test/host/ -q
 
 go:              ## bridge de Tailscale: formato, vet y tests con detector de carreras
 	# Go está instalado pero fuera del PATH, así que `command -v go` no lo ve. Faltando

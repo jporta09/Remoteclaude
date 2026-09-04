@@ -107,6 +107,7 @@ class AvisosService : Service() {
         )
         val n = Notification.Builder(this, CANAL_FG)
             .setSmallIcon(R.drawable.ic_notif)
+            .setColor(Paleta.ACCENT)
             .setContentTitle("RemoteMarvin — avisos activos")
             .setContentText("Escuchando avisos de Claude en $etiqueta")
             .setContentIntent(abrir)

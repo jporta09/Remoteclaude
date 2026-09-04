@@ -106,7 +106,7 @@ class DocsActivity : AppCompatActivity() {
         }
         header.addView(botonSubir)
         botonRecargar = TextView(this).apply {
-            text = "⟳"
+            text = Iconos.etiqueta(this@DocsActivity, Iconos.RECARGAR, Paleta.AMBER, 20f, "")
             typeface = monoFont
             contentDescription = "Actualizar la lista"
             setTextColor(getColor(R.color.marvin_amber))
@@ -336,7 +336,7 @@ class DocsActivity : AppCompatActivity() {
             setOnLongClickListener { if (doc.soportado) menuDeDoc(doc) else avisoNoSoportado(); true }
         }
         card.addView(TextView(this).apply {
-            text = iconFor(doc.name)
+            text = Iconos.etiqueta(this@DocsActivity, iconFor(doc.name), null, 20f, "")
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 22f)
             setPadding(0, 0, dp(14), 0)
         })
@@ -408,10 +408,10 @@ class DocsActivity : AppCompatActivity() {
     }
 
     private fun iconFor(name: String) = when (DocKind.of(name)) {
-        DocKind.IMAGE -> "🖼"
-        DocKind.PDF -> "📕"
-        DocKind.TEXT -> "📄"
-        else -> "📎"
+        DocKind.IMAGE -> Iconos.IMAGEN
+        DocKind.PDF -> Iconos.PDF
+        DocKind.TEXT -> Iconos.DOC
+        else -> Iconos.ADJUNTO
     }
 
     private fun humanSize(b: Long): String = when {

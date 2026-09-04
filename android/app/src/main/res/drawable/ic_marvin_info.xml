@@ -1,0 +1,6 @@
+<!-- Información/diagnóstico: octógono con el punto y el trazo (ⓘ). Gramática de Iconos.kt: grilla de 24, trazo 2, sólo rectas y diagonales. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp"
+    android:viewportWidth="24" android:viewportHeight="24">
+    <path android:pathData="M9,3 L15,3 L21,9 L21,15 L15,21 L9,21 L3,15 L3,9 Z M12,7 L12,8 M12,11 L12,17" android:strokeColor="#FFF2F2F2" android:strokeWidth="2" android:strokeLineCap="round" android:strokeLineJoin="round" android:fillColor="@android:color/transparent"/>
+</vector>

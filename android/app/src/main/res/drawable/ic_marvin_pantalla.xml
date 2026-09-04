@@ -1,0 +1,6 @@
+<!-- Pantalla/escritorio remoto: monitor con pie (🖥). Gramática de Iconos.kt: grilla de 24, trazo 2, sólo rectas y diagonales. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp"
+    android:viewportWidth="24" android:viewportHeight="24">
+    <path android:pathData="M3,5 L21,5 L21,16 L3,16 Z M12,16 L12,20 M8,20 L16,20" android:strokeColor="#FFF2F2F2" android:strokeWidth="2" android:strokeLineCap="round" android:strokeLineJoin="round" android:fillColor="@android:color/transparent"/>
+</vector>

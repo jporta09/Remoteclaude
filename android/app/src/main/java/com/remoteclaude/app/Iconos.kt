@@ -32,6 +32,21 @@ object Iconos {
     val ENTER = R.drawable.ic_marvin_enter
     val REENGANCHAR = R.drawable.ic_marvin_reenganchar
     val CERRAR = R.drawable.ic_marvin_cerrar
+    // 5ª pasada (DG-5): los "íconos" que eran glifos de texto/emoji (↺ ↻ ⟳ ⓘ 🔒 ⧉ 🖥 🔍 ⛶ 📄 📎 📕 🖼)
+    // los dibujaba el fallback del sistema (ninguna fuente bundleada los tiene) — distintos en cada
+    // equipo y con el color del emoji. Ahora son vectores con la misma gramática.
+    val REESCANEAR = R.drawable.ic_marvin_reescanear
+    val RECARGAR = R.drawable.ic_marvin_recargar
+    val INFO = R.drawable.ic_marvin_info
+    val CANDADO = R.drawable.ic_marvin_candado
+    val COPIAR = R.drawable.ic_marvin_copiar
+    val PANTALLA = R.drawable.ic_marvin_pantalla
+    val ZOOM = R.drawable.ic_marvin_zoom
+    val AJUSTAR = R.drawable.ic_marvin_ajustar
+    val DOC = R.drawable.ic_marvin_doc
+    val ADJUNTO = R.drawable.ic_marvin_adjunto
+    val PDF = R.drawable.ic_marvin_pdf
+    val IMAGEN = R.drawable.ic_marvin_imagen
 
     /**
      * El drawable medido, listo para usar. Con `color` se tinta MONOCROMO (pisa el acento:

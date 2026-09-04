@@ -33,7 +33,7 @@ GREEN = colors.HexColor("#71BF44")
 PETROL = colors.HexColor("#0F232D")
 AMBER = colors.HexColor("#FDB940")
 LIGHT = colors.HexColor("#F2F2F2")
-MUTED = colors.HexColor("#5E8B7E")
+MUTED = colors.HexColor("#567E73")   # muted del manual oscurecido hasta ≥ 4,5:1 sobre blanco (DG-6)
 INK = colors.HexColor("#15242B")
 SURFACE = colors.HexColor("#EAF0EC")
 
@@ -50,7 +50,9 @@ pdfmetrics.registerFont(TTFont("MonoB", f"{FONTS}/mononoki_bold.ttf"))
 pdfmetrics.registerFont(TTFont("Detail", "scripts/manual-fonts/Jost-Light.ttf"))
 pdfmetrics.registerFont(TTFont("DetailB", "scripts/manual-fonts/Jost-Bold.ttf"))
 # Las fuentes de marca no tienen flechas/checks/bullets; DejaVu sí.
-pdfmetrics.registerFont(TTFont("Sym", "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"))
+# Subset VERSIONADO (antes una ruta absoluta del sistema, que no existe en otra máquina): sólo los
+# símbolos que el manual usa, incluidos ↺ ↻ ⓘ que salían en tofu (DG-7/UX5-7).
+pdfmetrics.registerFont(TTFont("Sym", "scripts/manual-fonts/DejaVuSans-subset.ttf"))
 # Y DejaVu tampoco tiene los emoji de los botones de la app. Subset de Noto Emoji
 # (SIL OFL 1.1) con los cuatro glifos que usamos: 2 KB en vez de los 1,9 MB del original.
 pdfmetrics.registerFont(TTFont("Emoji", "scripts/manual-fonts/NotoEmoji-subset.ttf"))
@@ -58,7 +60,7 @@ pdfmetrics.registerFont(TTFont("Emoji", "scripts/manual-fonts/NotoEmoji-subset.t
 # --- Estilos ----------------------------------------------------------------
 h1 = ParagraphStyle("h1", fontName="Title", fontSize=20, textColor=PETROL,
                     spaceBefore=18, spaceAfter=8, leading=23)
-h2 = ParagraphStyle("h2", fontName="Title", fontSize=14, textColor=GREEN,
+h2 = ParagraphStyle("h2", fontName="Title", fontSize=14, textColor=PETROL,   # verde sobre blanco daba 2,27:1 (DG-6)
                     spaceBefore=12, spaceAfter=4, leading=17)
 body = ParagraphStyle("body", fontName="Body", fontSize=10.5, textColor=INK,
                       leading=16, spaceAfter=6, alignment=TA_LEFT)
@@ -68,7 +70,7 @@ code = ParagraphStyle("code", fontName="Mono", fontSize=9, textColor=PETROL,
                       spaceBefore=4, spaceAfter=8, borderPadding=(6, 6, 6, 6))
 # Detalles y comentarios: viñetas, recuadros, texto flotante y epígrafes. Antes usaba la
 # mono, que el manual de marca reserva para los SUBTÍTULOS: dos roles pisándose.
-small = ParagraphStyle("small", fontName="Detail", fontSize=9, textColor=MUTED, leading=12)
+small = ParagraphStyle("small", fontName="Detail", fontSize=10, textColor=MUTED, leading=13)
 smallB = ParagraphStyle("smallB", parent=small, fontName="DetailB", textColor=INK)
 icon = ParagraphStyle("icon", fontName="Sym", fontSize=13, textColor=GREEN, leading=16)
 
@@ -80,7 +82,8 @@ def ic(nombre, lado=0.5):
 
 
 _SYMS = {"→": "&#8594;", "✓": "&#10003;", "⟳": "&#10227;", "▸": "&#9656;",
-         "•": "&#8226;", "⇧": "&#8679;", "✕": "&#10005;", "⚡": "&#9889;", "⇅": "&#8645;"}
+         "•": "&#8226;", "⇧": "&#8679;", "✕": "&#10005;", "⚡": "&#9889;", "⇅": "&#8645;",
+         "↺": "&#8634;", "↻": "&#8635;", "ⓘ": "&#9432;"}
 # Emoji de los botones de la app. Van en otra fuente que los símbolos de arriba porque
 # DejaVu no los tiene y Noto Emoji no tiene los otros.
 _EMOJI = {"🎤": "&#127908;", "🖥": "&#128421;", "📄": "&#128196;", "🔑": "&#128273;"}
@@ -116,7 +119,8 @@ def cover(canvas, doc):
         from reportlab.lib.utils import ImageReader
         img = ImageReader(LOGO)
         iw, ih = img.getSize()
-        w = 7 * cm
+        # El isologo CON "SOFTWARE SOLUTIONS" va sólo a 75 mm o más (manual p03); 7 cm lo violaba (DG-7).
+        w = 8.5 * cm
         h = w * ih / iw
         canvas.drawImage(img, (A4[0] - w) / 2, A4[1] - 8 * cm - h, w, h,
                          mask="auto", preserveAspectRatio=True)

@@ -1,0 +1,6 @@
+<!-- Imagen: marco con la montaña de diagonales (🖼). Gramática de Iconos.kt: grilla de 24, trazo 2, sólo rectas y diagonales. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp"
+    android:viewportWidth="24" android:viewportHeight="24">
+    <path android:pathData="M4,5 L20,5 L20,19 L4,19 Z M6,17 L10,11 L13,15 L15,13 L18,17" android:strokeColor="#FFF2F2F2" android:strokeWidth="2" android:strokeLineCap="round" android:strokeLineJoin="round" android:fillColor="@android:color/transparent"/>
+</vector>

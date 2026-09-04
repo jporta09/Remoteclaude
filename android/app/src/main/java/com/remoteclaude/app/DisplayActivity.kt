@@ -300,14 +300,14 @@ class DisplayActivity : AppCompatActivity() {
             setBackgroundColor(BAR_BG)
             visibility = View.GONE
         }
-        btnFit = tabButton("⛶ Pantalla") { setMode(true) }
-        btnDesk = tabButton("🖥 Escritorio") { setMode(false) }
-        btnZoom = tabButton("🔍 Zoom") { toggleZoom() }
+        btnFit = tabButton(Iconos.etiqueta(this, Iconos.AJUSTAR, FG, 14f, "Pantalla")) { setMode(true) }
+        btnDesk = tabButton(Iconos.etiqueta(this, Iconos.PANTALLA, FG, 14f, "Escritorio")) { setMode(false) }
+        btnZoom = tabButton(Iconos.etiqueta(this, Iconos.ZOOM, FG, 14f, "Zoom")) { toggleZoom() }
         panel.addView(btnFit)
         panel.addView(btnDesk)
         panel.addView(btnZoom)                                  // reserva su lugar (INVISIBLE en Pantalla)
         panel.addView(View(this), LinearLayout.LayoutParams(0, 1, 1f))   // empuja ↻ a la derecha
-        panel.addView(tabButton("↻") { web.reload() })
+        panel.addView(tabButton(Iconos.etiqueta(this, Iconos.RECARGAR, FG, 16f, "")) { web.reload() })
 
         handle = TextView(this).apply {
             text = "▴  Controles"
@@ -325,7 +325,7 @@ class DisplayActivity : AppCompatActivity() {
     }
 
     /** Botón del panel: ancho fijo (wrap), posición estable (no se reacomoda). */
-    private fun tabButton(label: String, onTap: () -> Unit) = TextView(this).apply {
+    private fun tabButton(label: CharSequence, onTap: () -> Unit) = TextView(this).apply {
         text = label
         typeface = monoFont
         gravity = Gravity.CENTER
@@ -435,10 +435,10 @@ class DisplayActivity : AppCompatActivity() {
         private const val FB_W = 1920f
         private const val MATCH = ViewGroup.LayoutParams.MATCH_PARENT
         private const val WRAP = ViewGroup.LayoutParams.WRAP_CONTENT
-        private val PETROL = Color.parseColor("#0F232D")
-        private val BAR_BG = Color.parseColor("#0A1A20")
-        private val FG = Color.parseColor("#F2F2F2")
-        private val MUTED = Color.parseColor("#5E8B7E")    // opción inactiva
-        private val GREEN = Color.parseColor("#71BF44")
+        private val PETROL = Paleta.KEYPAD_BG
+        private val BAR_BG = Paleta.CHEV_BG
+        private val FG = Paleta.KEY_FG
+        private val MUTED = Paleta.CHEV_FG    // opción inactiva
+        private val GREEN = Paleta.ACCENT
     }
 }

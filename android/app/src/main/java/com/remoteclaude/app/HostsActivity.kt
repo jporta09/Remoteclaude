@@ -199,12 +199,13 @@ class HostsActivity : AppCompatActivity() {
             hayError = TailscaleBridge.error() != null,
             tailnet = TailscaleBridge.tailnet(),
         )
-        vpnStatus.text = txt
-        vpnStatus.setTextColor(getColor(when (tono) {
-            TonoLinea.MUTED -> R.color.marvin_muted
-            TonoLinea.GREEN -> R.color.marvin_green
-            TonoLinea.AMBER -> R.color.marvin_amber
-        }))
+        val color = when (tono) {
+            TonoLinea.MUTED -> Paleta.CHEV_FG
+            TonoLinea.GREEN -> Paleta.ACCENT
+            TonoLinea.AMBER -> Paleta.AMBER
+        }
+        vpnStatus.text = Iconos.etiqueta(this, Iconos.CANDADO, color, 13f, txt)
+        vpnStatus.setTextColor(color)
         // Repoll SIEMPRE mientras el nodo esté habilitado — también en verde: antes se cortaba al
         // quedar ready y, como el latch nunca bajaba, hosts quedaba "conectada ✓" 3-5 min con la
         // terminal en vencido (UF5-2). Ahora ready es barato (estado del bus, sin JNI bloqueante).
@@ -518,7 +519,7 @@ class HostsActivity : AppCompatActivity() {
                 layoutParams = lp
             })
             box.addView(TextView(this).apply {
-                text = "⧉ Copiar"
+                text = Iconos.etiqueta(this@HostsActivity, Iconos.COPIAR, Paleta.ACCENT, 12f, "Copiar")
                 typeface = monoFont
                 setTextColor(getColor(R.color.marvin_green))
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
@@ -590,11 +591,11 @@ enum class TonoLinea { MUTED, GREEN, AMBER }
  */
 internal fun lineaTailscale(enabled: Boolean, vencido: Boolean, ready: Boolean, hayError: Boolean, tailnet: String = ""): Pair<String, TonoLinea> =
     when {
-        !enabled -> "🔒 VPN: directa · tocá para usar Tailscale embebido" to TonoLinea.MUTED
-        vencido -> "🔒 Tailscale: enrolamiento vencido — reescaneá el QR (los hosts de LAN siguen)" to TonoLinea.AMBER
+        !enabled -> "VPN: directa · tocá para usar Tailscale embebido" to TonoLinea.MUTED
+        vencido -> "Tailscale: enrolamiento vencido — reescaneá el QR (los hosts de LAN siguen)" to TonoLinea.AMBER
         // La identidad de red visible SIEMPRE, no sólo en un toast de 3,5 s (A5-5/UX5-5).
-        ready -> (if (tailnet.isBlank()) "🔒 Tailscale: conectada ✓" else "🔒 Tailscale: conectada ✓ · $tailnet") to TonoLinea.GREEN
-        hayError -> "🔒 Tailscale: no se pudo conectar — tocá para reintentar o reescanear" to TonoLinea.AMBER
-        else -> "🔒 Tailscale: conectando…" to TonoLinea.AMBER
+        ready -> (if (tailnet.isBlank()) "Tailscale: conectada ✓" else "Tailscale: conectada ✓ · $tailnet") to TonoLinea.GREEN
+        hayError -> "Tailscale: no se pudo conectar — tocá para reintentar o reescanear" to TonoLinea.AMBER
+        else -> "Tailscale: conectando…" to TonoLinea.AMBER
     }
 

@@ -205,6 +205,7 @@ class NotificacionesRemotas(
         val subtexto = if (sesion.isNotBlank()) "$etiqueta · $sesion" else etiqueta
         val n = Notification.Builder(ctx, CANAL)
             .setSmallIcon(R.drawable.ic_notif)
+            .setColor(Paleta.ACCENT)
             .setContentTitle("Claude te espera")
             .setContentText(mensaje)
             .setSubText(subtexto)

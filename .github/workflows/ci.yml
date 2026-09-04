@@ -91,7 +91,7 @@ jobs:
       - name: ruff (daemons del host)
         run: uv run --with ruff ruff check scripts/*.py test/host/*.py test/e2e/fixture/*.py
       - name: Tests de los daemons
-        run: uv run --with pytest --with websocket-client --with pycryptodome pytest test/host/ -q
+        run: uv run --with pytest --with websocket-client --with pycryptodome --with pillow pytest test/host/ -q
 
   go-bridge:
     name: Bridge de Tailscale (Go)

@@ -1,0 +1,6 @@
+<!-- Adjunto/otro: clip de rectas (📎). Gramática de Iconos.kt: grilla de 24, trazo 2, sólo rectas y diagonales. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp"
+    android:viewportWidth="24" android:viewportHeight="24">
+    <path android:pathData="M7,7 L7,17 L12,21 L17,17 L17,5 L10,5 L10,15 L14,15" android:strokeColor="#FFF2F2F2" android:strokeWidth="2" android:strokeLineCap="round" android:strokeLineJoin="round" android:fillColor="@android:color/transparent"/>
+</vector>

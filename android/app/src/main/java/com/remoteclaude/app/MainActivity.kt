@@ -563,11 +563,10 @@ class MainActivity : AppCompatActivity() {
         if (vencido) {
             // El ↺ se ofrece siempre que el nodo esté vencido: en ámbar si la terminal anda igual
             // (LAN), en rojo si está caída (probablemente por eso).
-            barraReconectar.text = "↺ Reescanear QR"
+            val colorRe = if (estado == SshTerminalSession.Estado.CONECTADO) Paleta.AMBER else Paleta.REC_FG
+            barraReconectar.text = Iconos.etiqueta(this, Iconos.REESCANEAR, colorRe, 14f, "Reescanear QR")
             barraReconectar.contentDescription = "Reescanear el QR de Tailscale"
-            barraReconectar.setTextColor(
-                if (estado == SshTerminalSession.Estado.CONECTADO) getColor(R.color.marvin_amber) else Paleta.REC_FG,
-            )
+            barraReconectar.setTextColor(colorRe)
             barraReconectar.setOnClickListener { qrScanner.launch(EnrolarTailscale.opciones()) }
             // UX5-3: toque largo → pegar una auth key (si no estás en la PC para escanear el QR).
             barraReconectar.setOnLongClickListener {
@@ -581,9 +580,9 @@ class MainActivity : AppCompatActivity() {
             barraReconectar.visibility = View.VISIBLE
         } else {
             barraReconectar.setOnLongClickListener(null)
-            barraReconectar.text = "↻ Reconectar"
+            barraReconectar.text = Iconos.etiqueta(this, Iconos.RECARGAR, Paleta.AMBER, 14f, "Reconectar")
             barraReconectar.contentDescription = "Reconectar"
-            barraReconectar.setTextColor(getColor(R.color.marvin_amber))
+            barraReconectar.setTextColor(Paleta.AMBER)
             barraReconectar.setOnClickListener { tabs.reconectarActiva() }
             barraReconectar.visibility =
                 if (estado == SshTerminalSession.Estado.CAIDO) View.VISIBLE else View.GONE
@@ -727,12 +726,12 @@ class MainActivity : AppCompatActivity() {
             setPadding(0, dpx(10), 0, dpx(12))
         })
         box.addView(Button(this).apply {
-            text = "⧉ Copiar comando (pegá en la PC)"
+            text = Iconos.etiqueta(this@MainActivity, Iconos.COPIAR, null, 14f, "Copiar comando (pegá en la PC)")
             isAllCaps = false
             setOnClickListener { copiarAlPortapapeles(comandoAutorizar(pub)) }
         })
         box.addView(Button(this).apply {
-            text = "⧉ Copiar solo la clave"
+            text = Iconos.etiqueta(this@MainActivity, Iconos.COPIAR, null, 14f, "Copiar solo la clave")
             isAllCaps = false
             setOnClickListener { copiarAlPortapapeles(pub) }
         })
@@ -779,7 +778,7 @@ class MainActivity : AppCompatActivity() {
         // un botón claro para reintentar — el que existía ("Reenganchar") reattachea tmux,
         // no reconecta SSH. Su propio click lo consume; el resto de la barra sigue volviendo.
         barraReconectar = TextView(this@MainActivity).apply {
-            text = "↻ Reconectar"
+            text = Iconos.etiqueta(this@MainActivity, Iconos.RECARGAR, Paleta.AMBER, 14f, "Reconectar")
             typeface = monoFont
             setTextColor(getColor(R.color.marvin_amber))
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
@@ -792,9 +791,9 @@ class MainActivity : AppCompatActivity() {
         // presente, para que se encuentre justo cuando cae la conexión. Su propio click lo consume,
         // así que no dispara el finish() del contenedor.
         addView(TextView(this@MainActivity).apply {
-            text = "ⓘ"
+            text = Iconos.etiqueta(this@MainActivity, Iconos.INFO, Paleta.CHEV_FG, 18f, "")
             typeface = monoFont
-            setTextColor(getColor(R.color.marvin_muted))
+            setTextColor(Paleta.CHEV_FG)
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
             setPadding(dp(10), 0, dp(10), 0)
             // Target táctil ≥44dp (antes ~21dp de alto): la zona tocable crece con min-size + gravity

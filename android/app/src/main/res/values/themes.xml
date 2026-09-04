@@ -1,6 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.Remoteclaude" parent="Theme.Material3.DayNight.NoActionBar">
+    <!-- Dark FORZADO, no DayNight (DG-1, 5ª pasada): con el sistema en modo claro, lo que heredaba del
+         tema (EditText, Switch, hints) quedaba a 1,1:1 sobre el surface oscuro — lo que tipeabas era
+         invisible. La app tiene UNA paleta (CRT), no dos. -->
+    <style name="Theme.Remoteclaude" parent="Theme.Material3.Dark.NoActionBar">
         <item name="colorPrimary">@color/rc_accent</item>
         <item name="android:windowBackground">@color/rc_bg</item>
         <item name="android:statusBarColor">@color/rc_bg</item>
