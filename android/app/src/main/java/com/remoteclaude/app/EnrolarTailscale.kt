@@ -81,6 +81,7 @@ object EnrolarTailscale {
                     if (red.isNotBlank()) {
                         // La identidad de red queda en Diagnóstico, no sólo en un toast de 3,5 s
                         // (UX5-5/A5-5: consentimiento con información que se evaporaba).
+                        TailscaleBridge.recordarTailnet(red)
                         Diagnostico.registrar(Diagnostico.Nivel.AVISO, "tailscale", "re-vinculado a la tailnet: $red")
                         activity.runOnUiThread {
                             if (!activity.isFinishing && !activity.isDestroyed) {

@@ -473,7 +473,7 @@ class MainActivity : AppCompatActivity() {
     private fun crearSesion(nombre: String) = SshTerminalSession(
         this, host, port, user, keyPair, nombre, clients.sesion,
         onAuthFailed = { runOnUiThread { faltaAutorizar() } },
-        onHostKeyChanged = { vieja, nueva -> runOnUiThread { cambioLaClave(vieja, nueva) } },
+        onHostKeyChanged = { vieja, nueva, redDistinta -> runOnUiThread { cambioLaClave(vieja, nueva, redDistinta) } },
         onEstadoCambio = { runOnUiThread { alCambiarEstadoConexion() } },
         onSesionPerdida = { nombre ->
             runOnUiThread {
@@ -487,31 +487,17 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         },
-        onAccesoVencido = { runOnUiThread { accesoVencido = true; pintarBarra() } },
+        onAccesoVencido = { runOnUiThread { pintarBarra() } },
     )
-
-    // El acceso de Tailscale venció: la barra muestra ↺ Reescanear QR. Lo prende el
-    // callback de la sesión (donde ya se detecta, sin sondas JNI en el main thread) y lo
-    // apaga una reconexión exitosa.
-    @Volatile private var accesoVencido = false
-
-    // Estado transitorio tras escanear un QR: el nodo se está re-vinculando. NO se apaga el
-    // "vencido" de forma optimista (QA4-2) — se muestra "re-vinculando…" hasta que una
-    // reconexión REAL por la tailnet confirme (o hasta que la ventana venza y vuelva el ↺).
-    @Volatile private var reVinculando = false
-    private var reVinculandoDesde = 0L
 
     // Re-enrolar de un toque: scanner de QR desde la terminal (mismo flujo que en hosts).
     private val qrScanner = registerForActivityResult(
         com.journeyapps.barcodescanner.ScanContract(),
     ) { result ->
         if (EnrolarTailscale.aplicar(this, result.contents)) {
-            // QA4-2: no apagar accesoVencido acá (sería optimista, antes de que el nodo
-            // levante). Se muestra "re-vinculando…" y lo apaga una reconexión real por tailnet.
             // Los toasts ("Re-vinculando…" + a qué tailnet te vinculaste, A4-1) los da
-            // EnrolarTailscale.aplicar, común a los tres caminos de re-enrol.
-            reVinculando = true
-            reVinculandoDesde = android.os.SystemClock.elapsedRealtime()
+            // EnrolarTailscale.aplicar, común a los tres caminos de re-enrol. El estado del
+            // nodo lo sigue el bus: la barra se repinta sola cuando cambie.
             pintarBarra()
             // onResume (al volver del scanner) ya reintenta; esto fuerza también las caídas.
             tabs.forzarReconexiones()
@@ -546,45 +532,32 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    /** Pinta la barra según el estado REAL de la pestaña activa (no del extra del Intent). */
+    /**
+     * Pinta la barra según el estado REAL de la pestaña activa. v1.32 ("el terminal es la
+     * verdad; el nodo explica"): el color lo decide SOLO la conexión SSH — una terminal viva por
+     * LAN con el nodo vencido es verde, porque anda. El nodo vencido aparece como CAUSA (sufijo
+     * bajo caída) y como acción (↺ Reescanear QR), leído del bus, sin latches ni ventanas.
+     */
     private fun pintarBarra() {
         val estado = tabs.sesionActiva?.estado
-        // Una reconexión REAL por la tailnet apaga el "vencido"; una conexión DIRECTA (fallback
-        // a LAN cuando el nodo embebido no levantó) NO lo apaga — si no, la barra diría
-        // "conectado" sobre un nodo vencido (QA4-1). Sin Tailscale (modo directo puro) no hay
-        // concepto de vencido: cualquier CONECTADO lo apaga. isReady()/isEnabled() son flags
-        // @Volatile, sin JNI: seguros en el main thread.
-        val conexionRealPorTailnet = estado == SshTerminalSession.Estado.CONECTADO &&
-            (!TailscaleBridge.isEnabled() || TailscaleBridge.isReady())
-        if (conexionRealPorTailnet) {
-            accesoVencido = false
-            reVinculando = false
-        }
-        // La ventana de "re-vinculando" (tras escanear) es transitoria: si vence sin reconectar,
-        // vuelve a mostrarse el ↺ para reintentar.
-        val reVinc = reVinculando &&
-            (android.os.SystemClock.elapsedRealtime() - reVinculandoDesde) < 25_000
-        if (!reVinc) reVinculando = false
-        val (sufijo, color) = when {
-            // Re-vinculando: ámbar (progreso), no el rojo de alarma.
-            reVinc -> " · re-vinculando…" to getColor(R.color.marvin_amber)
-            // Sin sufijo: el botón ↺ Reescanear QR ya ocupa la barra y el texto largo
-            // quedaba aplastado en 5 renglones (visto en vivo, S23). El rojo del título
-            // + el ↺ + el banner de la terminal comunican el estado igual.
-            accesoVencido -> "" to Paleta.REC_FG
-            estado == SshTerminalSession.Estado.CONECTADO -> "" to Paleta.ACCENT
-            estado == SshTerminalSession.Estado.RECONECTANDO -> " · reconectando…" to getColor(R.color.marvin_amber)
-            estado == SshTerminalSession.Estado.CAIDO -> " · sin conexión" to Paleta.REC_FG
+        val vencido = TailscaleBridge.accesoVencido()
+        val (sufijo, color) = when (estado) {
+            SshTerminalSession.Estado.CONECTADO -> "" to Paleta.ACCENT
+            SshTerminalSession.Estado.RECONECTANDO -> " · reconectando…" to getColor(R.color.marvin_amber)
+            SshTerminalSession.Estado.CAIDO ->
+                (if (vencido) " · sin conexión — Tailscale vencido" else " · sin conexión") to Paleta.REC_FG
             else -> " · conectando…" to getColor(R.color.marvin_amber)   // CONECTANDO o null
         }
         barraLabel.text = "‹  $hostLabel$sufijo"
         barraLabel.setTextColor(color)
-        // Con el acceso vencido (o re-vinculando), el botón de la barra muta a ↺ Reescanear QR
-        // (reconectar no serviría de nada); si no, es el ↻ Reconectar de siempre para CAIDO.
-        if (accesoVencido || reVinc) {
+        if (vencido) {
+            // El ↺ se ofrece siempre que el nodo esté vencido: en ámbar si la terminal anda igual
+            // (LAN), en rojo si está caída (probablemente por eso).
             barraReconectar.text = "↺ Reescanear QR"
             barraReconectar.contentDescription = "Reescanear el QR de Tailscale"
-            barraReconectar.setTextColor(if (reVinc) getColor(R.color.marvin_amber) else Paleta.REC_FG)
+            barraReconectar.setTextColor(
+                if (estado == SshTerminalSession.Estado.CONECTADO) getColor(R.color.marvin_amber) else Paleta.REC_FG,
+            )
             barraReconectar.setOnClickListener { qrScanner.launch(EnrolarTailscale.opciones()) }
             barraReconectar.visibility = View.VISIBLE
         } else {
@@ -601,42 +574,80 @@ class MainActivity : AppCompatActivity() {
             if (barraReconectar.visibility == View.VISIBLE) View.GONE else View.VISIBLE
     }
 
-    /** La clave del host cambió: la conexión YA fue rechazada; acá sólo se decide qué hacer. */
-    private fun cambioLaClave(vieja: String, nueva: String) {
+    /**
+     * La clave del host cambió: la conexión YA fue rechazada; acá sólo se decide qué hacer.
+     * A5-2 / UX5-4 (5ª pasada): la variante DURA la decide el pin (la tailnet cambió desde que se
+     * fijó la clave = escenario de key ajena), no un timer de 60 s que un atacante puede esperar;
+     * ninguna rama es "aceptá y listo": para confiar hay que tipear el final de la huella nueva, y
+     * el diálogo dice CÓMO verificarla en la PC (antes eso vivía sólo en la skill).
+     */
+    private fun cambioLaClave(vieja: String, nueva: String, redDistinta: Boolean) {
         if (isFinishing || isDestroyed || dialogoClaveVisible) return
         dialogoClaveVisible = true
-        // A4-1: si el mismatch aparece JUSTO tras un re-enrol (QR desde la terminal o desde
-        // hosts, o key pegada), NO lo presentes como "esperable" — ese es exactamente el
-        // escenario en que una key ajena te metió en la tailnet de un atacante y su nodo-espejo
-        // presenta otra host-key. En vez de la coartada, advertí. El marcador global de
-        // TailscaleBridge cubre los tres caminos; `reVinculando` sólo el ↺ de esta pantalla
-        // (v1.31.1: antes, tras pegar la key desde hosts, salía la versión ablandada).
-        val enReEnrol = TailscaleBridge.reEnrolReciente() || (reVinculando &&
-            (android.os.SystemClock.elapsedRealtime() - reVinculandoDesde) < VENTANA_RE_ENROL_MS)
-        val explicacion = if (enReEnrol) {
-            "Cambió justo después de que re-vinculaste Tailscale (QR o key pegada). Si vos NO " +
-                "reinstalaste el server, desconfiá: una key ajena pudo haberte vinculado a otra red " +
-                "y este server puede ser un impostor. No confíes salvo que estés seguro."
+        val explicacion = if (redDistinta) {
+            "Además, tu nodo Tailscale está hoy en una tailnet DISTINTA de la que tenía cuando se " +
+                "fijó esta clave. Ese es exactamente el escenario de una key ajena: te vinculó a otra " +
+                "red y este server puede ser un impostor. No confíes salvo que verifiques la huella."
         } else {
-            "Si reinstalaste el server o lo recreaste, es esperable. Si no, alguien " +
-                "puede estar interceptando la conexión."
+            "Si reinstalaste el server o lo recreaste, es esperable. Si no, alguien puede estar " +
+                "interceptando la conexión. Verificá la huella en la PC antes de confiar."
         }
-        AlertDialog.Builder(this)
+        val mono = resources.getFont(R.font.mononoki)
+        val p = (20 * resources.displayMetrics.density).toInt()
+        val cuerpo = android.widget.TextView(this).apply {
+            text = "El servidor $host:$port presentó una clave distinta a la que teníamos.\n\n$explicacion\n\n" +
+                "Para verificar, en la PC:"
+        }
+        val comando = android.widget.TextView(this).apply {
+            text = "ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub"
+            typeface = mono; setTextIsSelectable(true); setPadding(0, p / 4, 0, p / 2)
+        }
+        val huellas = android.widget.TextView(this).apply {
+            text = "Antes: $vieja\nAhora: $nueva"
+            typeface = mono; setTextIsSelectable(true)
+        }
+        val confirmacion = android.widget.EditText(this).apply {
+            hint = "Para confiar, tipeá los últimos 4 caracteres de la huella nueva"
+            isSingleLine = true
+        }
+        val vista = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            setPadding(p, p / 2, p, 0)
+            addView(cuerpo); addView(comando); addView(huellas); addView(confirmacion)
+        }
+        val dlg = AlertDialog.Builder(this)
             .setTitle("La clave del host cambió")
-            .setMessage(
-                "El servidor $host:$port presentó una clave distinta a la que teníamos.\n\n" +
-                    "Antes: $vieja\nAhora: $nueva\n\n" + explicacion
-            )
+            .setView(vista)
             .setNegativeButton("Cancelar") { _, _ -> dialogoClaveVisible = false }
-            .setPositiveButton("Confiar en la nueva") { _, _ ->
+            .setNeutralButton("Copiar huella", null)
+            .setPositiveButton("Confiar en la nueva", null)
+            .setCancelable(false)
+            .create()
+        dlg.setOnShowListener {
+            dlg.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener {
+                getSystemService(android.content.ClipboardManager::class.java)
+                    .setPrimaryClip(android.content.ClipData.newPlainText("huella del host", nueva))
+                Toast.makeText(this, "Huella nueva copiada", Toast.LENGTH_SHORT).show()
+            }
+            dlg.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                if (!confirmaHuella(confirmacion.text.toString(), nueva)) {
+                    Toast.makeText(this, "No coincide con el final de la huella nueva", Toast.LENGTH_SHORT).show()
+                    return@setOnClickListener
+                }
+                Diagnostico.registrar(
+                    Diagnostico.Nivel.AVISO, "clave-host",
+                    "$host:$port — el usuario confió en la clave nueva ($nueva)" +
+                        if (redDistinta) " con la tailnet CAMBIADA" else "",
+                )
                 HostKeys.forget(this, host, port)
                 dialogoClaveVisible = false
+                dlg.dismiss()
                 // Todas, no sólo la activa: confiar en la clave nueva vale para el host
                 // entero, y las pestañas que ya habían fallado quedaban muertas.
                 tabs.reconectarTodas()
             }
-            .setCancelable(false)
-            .show()
+        }
+        dlg.show()
     }
 
     /** La clave de la app no está autorizada en el host: se muestra cuál es y qué hacer. */
@@ -892,3 +903,14 @@ class MainActivity : AppCompatActivity() {
         Toast.makeText(this, "Copiado", Toast.LENGTH_SHORT).show()
     }
 }
+
+/**
+ * Confirmación explícita del mismatch de host-key: lo tipeado tiene que ser el final (≥4 chars)
+ * de la huella nueva. Sin esto "Confiar" era un toque reflejo (SEC5-5 / UX5-4).
+ */
+internal fun confirmaHuella(tipeado: String, huella: String): Boolean {
+    val t = tipeado.trim()
+    val h = huella.trim()
+    return t.length >= 4 && h.length >= 4 && h.endsWith(t) && t.length <= h.length
+}
+

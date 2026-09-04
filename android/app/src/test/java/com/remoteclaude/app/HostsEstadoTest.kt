@@ -17,9 +17,11 @@ class HostsEstadoTest {
         assertEquals(TonoLinea.AMBER, tono)
     }
 
-    @Test fun `ready sin vencido es verde`() {
+    @Test fun `ready sin vencido es verde y muestra la tailnet si se conoce`() {
         val (t, tono) = lineaTailscale(enabled = true, vencido = false, ready = true, hayError = false)
         assertTrue(t.contains("conectada ✓")); assertEquals(TonoLinea.GREEN, tono)
+        val (t2, _) = lineaTailscale(enabled = true, vencido = false, ready = true, hayError = false, tailnet = "juan.github")
+        assertTrue(t2, t2.endsWith("conectada ✓ · juan.github"))
     }
 
     @Test fun `error sin ready es ambar y no filtra el error crudo`() {

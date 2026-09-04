@@ -28,7 +28,7 @@ class SshTerminalSession(
     @Volatile var tmuxSession: String,   // mutable: renombrar lo actualiza (lo lee el reconnect)
     client: TerminalSessionClient,
     private val onAuthFailed: (() -> Unit)? = null,   // clave no autorizada -> avisar a la UI
-    private val onHostKeyChanged: ((old: String, new: String) -> Unit)? = null,
+    private val onHostKeyChanged: ((old: String, new: String, redDistinta: Boolean) -> Unit)? = null,
     // El estado REAL de la conexión, para que el chrome (barra, tour) no mienta. Antes la
     // barra se pintaba "conectado" del extra del Intent aunque la auth hubiera fallado o el
     // host estuviera caído. Corre en el hilo ssh-loop: el consumidor debe saltar a la UI.
@@ -65,7 +65,7 @@ class SshTerminalSession(
     private val appCtx = ctx.applicationContext
 
     /** Si la clave del host cambió, guarda (vieja, nueva) para cortar y avisar. */
-    @Volatile private var keyChanged: Pair<String, String>? = null
+    @Volatile private var keyChanged: Triple<String, String, Boolean>? = null
 
     // Para no repetir "[reconectando…]" en cada intento del backoff: se anuncia una vez y se
     // resetea al reconectar con éxito.
@@ -135,7 +135,7 @@ class SshTerminalSession(
                                 Diagnostico.Nivel.INFO, "clave-host", "$host:$port — clave fijada ($fp)",
                             )
                         },
-                        onMismatch = { old, new -> keyChanged = old to new },
+                        onMismatch = { old, new, redDist -> keyChanged = Triple(old, new, redDist) },
                         // La terminal es la ÚNICA ruta que fija la primera clave: muestra la
                         // huella por onNew, así confiar es una decisión visible del usuario.
                         permitePin = true,
@@ -280,7 +280,7 @@ class SshTerminalSession(
                 closeCurrent()
             }
 
-            keyChanged?.let { (old, new) ->
+            keyChanged?.let { (old, new, redDist) ->
                 status(
                     "\r\n[LA CLAVE DEL HOST CAMBIÓ — conexión bloqueada]\r\n" +
                         "  antes: $old\r\n  ahora: $new\r\n" +
@@ -292,7 +292,7 @@ class SshTerminalSession(
                 )
                 userClosed = true
                 cambiarEstado(Estado.CAIDO)
-                onHostKeyChanged?.invoke(old, new)
+                onHostKeyChanged?.invoke(old, new, redDist)
             }
             if (userClosed) break
             attempt++

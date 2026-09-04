@@ -36,4 +36,17 @@ class HostKeysTest {
         assertThat(HostKeys.decide("", "")).isEqualTo(HostKeys.Decision.MATCH)
         assertThat(HostKeys.decide("", A)).isEqualTo(HostKeys.Decision.MISMATCH)
     }
+
+    // --- A5-2 (5ª pasada): la variante dura la decide la RED, no un timer ------------------
+
+    @Test fun `mismatch con la tailnet cambiada es red distinta`() {
+        assertThat(HostKeys.redDistinta("juan.github", "atacante.github")).isTrue()
+    }
+
+    @Test fun `misma tailnet o sin identidad conocida no afirma nada`() {
+        assertThat(HostKeys.redDistinta("juan.github", "juan.github")).isFalse()
+        assertThat(HostKeys.redDistinta(null, "juan.github")).isFalse()
+        assertThat(HostKeys.redDistinta("", "juan.github")).isFalse()
+        assertThat(HostKeys.redDistinta("juan.github", "")).isFalse()   // modo directo / sin nodo aún
+    }
 }

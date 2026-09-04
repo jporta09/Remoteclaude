@@ -26,12 +26,9 @@ object TailscaleBridge {
     // Si ya esperamos el timeout completo sin que el nodo levante (mala red / nodo trabado),
     // las llamadas siguientes NO vuelven a colgar 15s cada una: esperan poco y caen al directo.
     @Volatile private var esperaExpiro = false
-    // A4-1: momento del último re-enrol (configure() con key). Es GLOBAL y no un flag de
-    // Activity porque el re-enrol se hace en HostsActivity (pegar la key / Escanear QR) o en
-    // la terminal (↺), y el mismatch de host-key salta en MainActivity: el flag local
-    // `reVinculando` de MainActivity sólo lo pone su propio scanner, así que tras re-enrolar
-    // por pegado el diálogo salía "ablandado" (hallazgo en vivo, 2026-09-03). 0 = nunca.
-    @Volatile private var ultimoReEnrolMs = 0L
+    // Tailnet a la que está vinculado el nodo (nombre), cacheada: identidadRed() es JNI de hasta
+    // 3 s. La llena el arranque (init) y el re-enrol (EnrolarTailscale); la vacía configure().
+    @Volatile private var tailnetCache = ""
     private var readyLatch = CountDownLatch(1)
     private val forwards = HashMap<String, Int>()
     private var nextPort = 21000
@@ -48,30 +45,17 @@ object TailscaleBridge {
     private fun esRunning(): Boolean = runCatching { marvints.Marvints.esRunning() }.getOrDefault(false)
     /** ipn.State del backend ("Running", "NeedsLogin", "Starting", "Stopped"…); barato. */
     fun backendState(): String = if (!enabled) "Directo" else runCatching { marvints.Marvints.backendState() }.getOrDefault("Desconocido")
-    /** A4-1: true si hubo un re-enrol (configure con key) hace menos de `ventanaMs`. */
-    fun reEnrolReciente(ventanaMs: Long = VENTANA_RE_ENROL_MS): Boolean =
-        reEnrolRecienteDesde(ultimoReEnrolMs, android.os.SystemClock.elapsedRealtime(), ventanaMs)
+    /** Nombre de la tailnet vinculada ("" si no se sabe todavía o no hay nodo). Barato. */
+    fun tailnet(): String = if (enabled) tailnetCache else ""
+    fun recordarTailnet(red: String) { if (red.isNotBlank()) tailnetCache = red }
     fun error(): String? = lastError
 
     /**
-     * Estado del nodo embebido, para distinguir "mala red" de "el acceso de Tailscale VENCIÓ y
-     * hay que re-escanear el QR" (la node key expira a los ~180 días). Devuelve el string crudo
-     * de marvints.Estado(): "<backendState>;<expired 0|1>;<keyExpiryEpoch|0>". Sin nodo embebido
-     * (modo directo) no aplica: "Directo;0;0".
+     * true si el acceso de Tailscale venció y hay que re-enrolar: el backend está en NeedsLogin
+     * (node key vencida o revocada). Lo dice el observador del bus: barato, sin JNI bloqueante, y
+     * en vivo (antes se consultaba al LocalClient con hasta 5 s de espera desde un hilo aparte).
      */
-    fun estado(): String {
-        if (!enabled) return "Directo;0;0"
-        return runCatching { marvints.Marvints.estado() }.getOrDefault("Desconocido;0;0")
-    }
-
-    /**
-     * true si el acceso de Tailscale venció y hay que re-enrolar: el backend cayó a NeedsLogin
-     * o la node key expiró. Se consulta cuando las conexiones fallan seguido, para dar una causa
-     * clara en vez de reconectar en silencio para siempre. Alta confianza (no grita "reescaneá"
-     * por una caída de red pasajera): sólo el nodo VIVO en NeedsLogin/expired dispara true.
-     */
-    fun accesoVencido(): Boolean =
-        enabled && (backendState() == "NeedsLogin" || accesoVencidoDeEstado(estado()))
+    fun accesoVencido(): Boolean = enabled && backendState() == "NeedsLogin"
 
     /**
      * A qué tailnet está vinculado el nodo embebido (nombre del tailnet, o el DNSName del nodo).
@@ -109,6 +93,7 @@ object TailscaleBridge {
                 marvints.Marvints.setInterfaces(enumerateInterfaces())
                 marvints.Marvints.start(key, dir.absolutePath, hostname)
                 started = true
+                tailnetCache = identidadRed()
             } catch (e: Exception) {
                 lastError = e.message
             } finally {
@@ -168,14 +153,13 @@ object TailscaleBridge {
      */
     fun configure(ctx: Context, authKey: String) {
         SecretStore.put(ctx, "ts_authkey", authKey.trim())
-        // Vacío = conexión directa, no es un re-enrol; con key sí (cualquiera de los 3 caminos).
-        if (authKey.isNotBlank()) ultimoReEnrolMs = android.os.SystemClock.elapsedRealtime()
         // por las dudas: si quedaba una copia en claro de una versión anterior, fuera
         ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
             .remove("ts_authkey").apply()
         // El error del Up ANTERIOR no describe a esta key: sin esto hosts decía "no se pudo
         // conectar" a 1 s de pegar una key nueva (QA5-2).
         lastError = null
+        tailnetCache = ""
         val app = ctx.applicationContext
         thread(name = "tailscale-configure") { reiniciar(app) }
     }
@@ -228,22 +212,3 @@ object TailscaleBridge {
         return lp
     }
 }
-
-/** Parseo puro del string de marvints.Estado() ("<backendState>;<expired>;<epoch>"): true si el
- *  acceso venció (backend en NeedsLogin, o la node key marcada como expirada). Top-level para
- *  testearlo sin el nodo nativo. Un string mal formado no dispara falso positivo. */
-fun accesoVencidoDeEstado(crudo: String): Boolean {
-    val campos = crudo.split(";")
-    return campos.getOrNull(0) == "NeedsLogin" || campos.getOrNull(1) == "1"
-}
-
-/** Ventana en la que un mismatch de host-key se considera "justo después de re-enrolar". */
-const val VENTANA_RE_ENROL_MS = 60_000L
-
-/**
- * Lógica pura de [TailscaleBridge.reEnrolReciente], separada para testearla en JVM: hubo
- * re-enrol (`ultimoMs != 0`) y pasó menos de `ventanaMs` desde entonces. Un reloj que retrocede
- * (ahora < ultimo) no cuenta como reciente.
- */
-fun reEnrolRecienteDesde(ultimoMs: Long, ahoraMs: Long, ventanaMs: Long): Boolean =
-    ultimoMs != 0L && ahoraMs >= ultimoMs && (ahoraMs - ultimoMs) < ventanaMs

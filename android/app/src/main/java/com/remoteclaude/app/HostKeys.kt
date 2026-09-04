@@ -26,6 +26,11 @@ object HostKeys {
     private const val PREFS = "remotemarvin"
 
     private fun entry(host: String, port: Int, algo: String) = "hostkey_${host}_${port}_$algo"
+    // A5-2 (5ª pasada): junto a la clave se guarda a qué TAILNET estaba vinculado el nodo al
+    // fijarla. Un mismatch con la red cambiada es el escenario de la key ajena (te metieron en
+    // otra tailnet y un nodo-espejo presenta otra host-key): el diálogo lo dice sin depender de
+    // ningún timer que un atacante pueda esperar a que venza.
+    private fun entryRed(host: String, port: Int, algo: String) = entry(host, port, algo) + "_red"
 
     private fun prefs(ctx: Context) =
         ctx.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -43,6 +48,14 @@ object HostKeys {
         presented -> Decision.MATCH
         else -> Decision.MISMATCH
     }
+
+    /**
+     * ¿El mismatch ocurre con el nodo en una tailnet DISTINTA de la que tenía al fijar la clave?
+     * Sólo cuando las dos identidades se conocen: sin nodo embebido (o sin identidad todavía) no
+     * se afirma nada. Puro, para testear sin Android.
+     */
+    fun redDistinta(redGuardada: String?, redActual: String): Boolean =
+        !redGuardada.isNullOrBlank() && redActual.isNotBlank() && redGuardada != redActual
 
     /** Huella estilo OpenSSH: SHA256:<base64 sin padding>. */
     fun fingerprint(key: ByteArray): String {
@@ -84,10 +97,12 @@ object HostKeys {
         host: String,
         port: Int,
         onNew: ((String) -> Unit)? = null,
-        onMismatch: ((old: String, new: String) -> Unit)? = null,
+        onMismatch: ((old: String, new: String, redDistinta: Boolean) -> Unit)? = null,
         permitePin: Boolean = false,
+        redActual: () -> String = { TailscaleBridge.tailnet() },
     ) = ServerHostKeyVerifier { _, _, algo, key ->
         val k = entry(host, port, algo)
+        val kRed = entryRed(host, port, algo)
         val p = prefs(ctx)
         val seen = p.getString(k, null)
         val now = Base64.encodeToString(key, Base64.NO_WRAP)
@@ -95,10 +110,10 @@ object HostKeys {
             Decision.PIN -> {
                 if (!permitePin) {
                     // Ruta no interactiva en primer contacto: NO fijar en silencio.
-                    onMismatch?.invoke("(ninguna)", fingerprint(key))
+                    onMismatch?.invoke("(ninguna)", fingerprint(key), false)
                     false
                 } else {
-                    p.edit().putString(k, now).apply()
+                    p.edit().putString(k, now).putString(kRed, redActual()).apply()
                     onNew?.invoke(fingerprint(key))
                     true
                 }
@@ -110,7 +125,7 @@ object HostKeys {
                 } catch (_: Exception) {
                     "desconocida"
                 }
-                onMismatch?.invoke(old, fingerprint(key))
+                onMismatch?.invoke(old, fingerprint(key), redDistinta(p.getString(kRed, null), redActual()))
                 false
             }
         }

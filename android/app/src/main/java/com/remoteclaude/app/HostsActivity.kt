@@ -189,27 +189,15 @@ class HostsActivity : AppCompatActivity() {
 
     private val vpnPoll = Runnable { updateVpnStatus() }
 
-    // Cache de "el acceso venció": TailscaleBridge.accesoVencido() consulta el nodo por JNI
-    // (hasta 5s) y updateVpnStatus corre en el main thread — sondear ahí sería un ANR en
-    // potencia. Un hilo corto lo refresca y repinta; la UI sólo lee el flag.
-    @Volatile private var vencidoCache = false
-    private fun refrescarVencido() {
-        thread(name = "vpn-vencido") {
-            val v = try { TailscaleBridge.accesoVencido() } catch (_: Exception) { false }
-            if (v != vencidoCache) {
-                vencidoCache = v
-                runOnUiThread { if (!isFinishing && !isDestroyed) updateVpnStatus() }
-            }
-        }
-    }
-
     private fun updateVpnStatus() {
         if (isFinishing || isDestroyed) return
+        // Todo barato y del estado real del bus (v1.32: sin cache ni sondas JNI en un hilo).
         val (txt, tono) = lineaTailscale(
             enabled = TailscaleBridge.isEnabled(),
-            vencido = vencidoCache,
+            vencido = TailscaleBridge.accesoVencido(),
             ready = TailscaleBridge.isReady(),
             hayError = TailscaleBridge.error() != null,
+            tailnet = TailscaleBridge.tailnet(),
         )
         vpnStatus.text = txt
         vpnStatus.setTextColor(getColor(when (tono) {
@@ -217,7 +205,6 @@ class HostsActivity : AppCompatActivity() {
             TonoLinea.GREEN -> R.color.marvin_green
             TonoLinea.AMBER -> R.color.marvin_amber
         }))
-        refrescarVencido()
         // Repoll SIEMPRE mientras el nodo esté habilitado — también en verde: antes se cortaba al
         // quedar ready y, como el latch nunca bajaba, hosts quedaba "conectada ✓" 3-5 min con la
         // terminal en vencido (UF5-2). Ahora ready es barato (estado del bus, sin JNI bloqueante).
@@ -274,13 +261,11 @@ class HostsActivity : AppCompatActivity() {
         } else if (!EnrolarTailscale.aplicar(this, key)) {
             return   // forma inválida: aplicar ya avisó; no reiniciar el nodo con basura
         }
-        vencidoCache = false   // episodio nuevo: el sticky viejo ya no aplica
         refrescarVpnEscalonado()
     }
 
     /** Repinta el estado ya, a los 3s y a los 9s (el nodo tarda en levantar). */
     private fun refrescarVpnEscalonado() {
-        vencidoCache = false
         updateVpnStatus()
         vpnStatus.postDelayed({ updateVpnStatus() }, 3000)
         vpnStatus.postDelayed({ updateVpnStatus() }, 9000)
@@ -628,11 +613,12 @@ enum class TonoLinea { MUTED, GREEN, AMBER }
  * (QA4-1/UX-1): lo que venció es el enrolamiento del nodo embebido; los hosts por LAN siguen.
  * Sin filtrar el error crudo del control-plane (QA4-3).
  */
-internal fun lineaTailscale(enabled: Boolean, vencido: Boolean, ready: Boolean, hayError: Boolean): Pair<String, TonoLinea> =
+internal fun lineaTailscale(enabled: Boolean, vencido: Boolean, ready: Boolean, hayError: Boolean, tailnet: String = ""): Pair<String, TonoLinea> =
     when {
         !enabled -> "🔒 VPN: directa · tocá para usar Tailscale embebido" to TonoLinea.MUTED
         vencido -> "🔒 Tailscale: enrolamiento vencido — reescaneá el QR (los hosts de LAN siguen)" to TonoLinea.AMBER
-        ready -> "🔒 Tailscale: conectada ✓" to TonoLinea.GREEN
+        // La identidad de red visible SIEMPRE, no sólo en un toast de 3,5 s (A5-5/UX5-5).
+        ready -> (if (tailnet.isBlank()) "🔒 Tailscale: conectada ✓" else "🔒 Tailscale: conectada ✓ · $tailnet") to TonoLinea.GREEN
         hayError -> "🔒 Tailscale: no se pudo conectar — tocá para reintentar o reescanear" to TonoLinea.AMBER
         else -> "🔒 Tailscale: conectando…" to TonoLinea.AMBER
     }
