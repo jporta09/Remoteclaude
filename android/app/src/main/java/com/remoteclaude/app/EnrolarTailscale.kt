@@ -4,6 +4,7 @@ import android.app.Activity
 import android.content.Context
 import android.widget.Toast
 import com.journeyapps.barcodescanner.ScanOptions
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.concurrent.thread
 
 /**
@@ -35,6 +36,7 @@ object EnrolarTailscale {
         return when {
             key.isEmpty() -> false
             esAuthKeyPlausible(key) -> {
+                Diagnostico.registrar(Diagnostico.Nivel.INFO, "tailscale", "re-enrol iniciado (auth key nueva)")
                 TailscaleBridge.configure(ctx, key)
                 // A4-1: el feedback del re-enrol va ACÁ, en el funnel común, y no en cada
                 // caller: así lo dan los tres caminos. Antes vivía sólo en el callback del
@@ -62,37 +64,59 @@ object EnrolarTailscale {
      */
     fun anunciarVinculacion(activity: Activity) {
         Toast.makeText(activity, "Re-vinculando Tailscale…", Toast.LENGTH_SHORT).show()
+        // Un solo sondeo vivo por vez: N toques del ↺ lanzaban N hilos y N toasts (DEV-N5).
+        if (!sondeando.compareAndSet(false, true)) return
         thread(name = "ts-identidad") {
+            try { sondearIdentidad(activity) } finally { sondeando.set(false) }
+        }
+    }
+
+    private val sondeando = AtomicBoolean(false)
+
+    private fun sondearIdentidad(activity: Activity) {
             val t0 = android.os.SystemClock.elapsedRealtime()
             while (android.os.SystemClock.elapsedRealtime() - t0 < VENTANA_IDENTIDAD_MS) {
                 if (TailscaleBridge.isReady()) {
                     val red = TailscaleBridge.identidadRed()
                     if (red.isNotBlank()) {
+                        // La identidad de red queda en Diagnóstico, no sólo en un toast de 3,5 s
+                        // (UX5-5/A5-5: consentimiento con información que se evaporaba).
+                        Diagnostico.registrar(Diagnostico.Nivel.AVISO, "tailscale", "re-vinculado a la tailnet: $red")
                         activity.runOnUiThread {
                             if (!activity.isFinishing && !activity.isDestroyed) {
                                 Toast.makeText(activity, "Vinculado a la tailnet: $red", Toast.LENGTH_LONG).show()
                             }
                         }
-                        return@thread
+                        return
                     }
                     // Listo pero todavía sin identidad (backend en "Starting": CurrentTailnet y
                     // DNSName vacíos): seguir sondeando en vez de rendirse. Antes se cortaba acá
                     // y el toast se perdía en silencio — observado en el emulador con ráfaga de
                     // 60 frames: salía "Re-vinculando…" y nunca la identidad.
                 }
-                try { Thread.sleep(1000) } catch (_: InterruptedException) { return@thread }
+                try { Thread.sleep(1000) } catch (_: InterruptedException) { return }
             }
-        }
+            // Tope: no quedar "Re-vinculando…" para siempre (DEV-N3). Se dice y se registra.
+            Diagnostico.registrar(
+                Diagnostico.Nivel.AVISO, "tailscale",
+                "re-vinculación sin confirmar tras ${VENTANA_IDENTIDAD_MS / 1000} s (backend: ${TailscaleBridge.backendState()})",
+            )
+            activity.runOnUiThread {
+                if (!activity.isFinishing && !activity.isDestroyed) {
+                    Toast.makeText(activity, "No pude confirmar la tailnet todavía — mirá ⓘ Diagnóstico", Toast.LENGTH_LONG).show()
+                }
+            }
     }
 
     private const val VENTANA_IDENTIDAD_MS = 30_000L
 
     /**
-     * Forma mínima esperada de una auth key de Tailscale: prefijo `tskey-`, sin espacios, y un
-     * largo razonable (una key real ronda 50+ caracteres). No valida contra la tailnet —eso lo
-     * hace el Up—, sólo descarta un QR truncado/ajeno antes de reiniciar el nodo con basura
-     * (QA4-2: antes se aceptaba cualquier string con el prefijo).
+     * Forma mínima esperada de una AUTH key de Tailscale: prefijo `tskey-auth-` (un `tskey-api-` o
+     * `tskey-client-` son otros secretos y nunca enrolan: QA5-2), sin espacios ni caracteres de
+     * control/invisibles (NUL, ZWSP, ESC…), largo acotado. No valida contra la tailnet —eso lo
+     * hace el Up—, sólo descarta un QR truncado/ajeno antes de reiniciar el nodo con basura.
      */
-    private fun esAuthKeyPlausible(key: String): Boolean =
-        key.startsWith("tskey-") && key.length >= 24 && key.none { it.isWhitespace() }
+    internal fun esAuthKeyPlausible(key: String): Boolean =
+        key.startsWith("tskey-auth-") && key.length in 24..200 &&
+            key.none { it.isWhitespace() || it.isISOControl() || it == '\u200B' || it == '\uFEFF' }
 }

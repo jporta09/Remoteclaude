@@ -20,8 +20,10 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
+	"tailscale.com/ipn"
 	"tailscale.com/ipn/ipnstate"
 	"tailscale.com/net/netmon"
 	"tailscale.com/tsnet"
@@ -52,7 +54,18 @@ var (
 	// Up es el ÚNICO que cierra su server; Stop() sólo cancela y, si el Up ya terminó (nodo
 	// vivo, sin goroutine), cierra él. Se setea en Start bajo mu y se limpia en finish/Stop.
 	upCancel context.CancelFunc
+	// Estado del backend (ipn.State: "Running", "NeedsLogin", "Starting", "Stopped"…) mantenido
+	// por vigilarEstado(), el observador del bus IPN. Es lo que la app lee para decidir si el
+	// nodo está VIVO: antes usaba un latch propio (`started`) que sólo bajaba al re-enrolar, así
+	// que un nodo que caía a NeedsLogin a mitad de sesión seguía "listo" para la app y mandaba
+	// hasta la LAN por el netstack muerto (UX5-1/UF5-1, 5ª pasada). Lectura atómica y barata:
+	// sin JNI bloqueante (Estado() consulta al LocalClient con hasta 5 s de espera).
+	estadoBackend atomic.Value // string; "" = nunca arrancó -> "Stopped"
+	// cancel del observador vigente; Stop() lo corta. Bajo mu.
+	watchCancel context.CancelFunc
 )
+
+func fijarEstado(s string) { estadoBackend.Store(s) }
 
 // Ventana de espera de Up. Variable (y no constante) sólo para que los tests no tengan
 // que esperar el minuto entero de un Up condenado a fallar.
@@ -158,6 +171,7 @@ func Start(authKey, stateDir, hostname string) error {
 	// Asignar antes de Up: si la key está vencida/consumida, Up bloquea esperando login;
 	// así Stop() puede cerrar el nodo y liberar el stateDir (un re-escaneo arranca limpio).
 	srv = s
+	fijarEstado("Starting")
 	done := make(chan struct{})
 	upDone, upErr = done, nil
 	// Timeout: con una key válida pre-autorizada conecta en segundos; si es inválida no
@@ -195,9 +209,11 @@ func Start(authKey, stateDir, hostname string) error {
 			// Ni la foto ni el error se reconocen como "vencido": si Tailscale cambió el
 			// wording del rechazo de credenciales, esto es lo que hay que mirar en los logs
 			// para actualizar errorDeAuthRechazada (SRE-4p-2).
-			log.Printf("marvints: Up falló SIN clasificar como vencido (err=%v) — si es un rechazo de auth, ampliar errorDeAuthRechazada", err)
+			// Sólo la CLASE del error, no el texto crudo: el control-plane podría ecoar la key o el
+			// token rechazado y esto va a logcat, legible por adb/USB (SEC5-3).
+			log.Printf("marvints: Up falló SIN clasificar como vencido (%s) — si es un rechazo de auth, ampliar errorDeAuthRechazada", resumenError(err))
 		} else {
-			log.Printf("marvints: Up falló (%v); vencido detectado, foto=%q", err, foto)
+			log.Printf("marvints: Up falló (%s); vencido detectado, foto=%q", resumenError(err), foto)
 		}
 		mu.Lock()
 		mine := srv == s
@@ -208,6 +224,13 @@ func Start(authKey, stateDir, hostname string) error {
 			}
 		}
 		mu.Unlock()
+		if mine {
+			if foto != "" {
+				fijarEstado("NeedsLogin")
+			} else {
+				fijarEstado("Stopped")
+			}
+		}
 		// El goroutine de Up es el ÚNICO que cierra su server: cierra SIEMPRE que el Up
 		// falló (era el dueño de s mientras Up corría). Stop() nunca cierra un server con Up
 		// en vuelo — sólo cancela y espera que lo cierre acá. Así no hay Close concurrente
@@ -218,13 +241,78 @@ func Start(authKey, stateDir, hostname string) error {
 	// Up tuvo éxito. Si mientras tanto un Stop()/Start-nuevo nos superseded (srv != s), este
 	// server quedó huérfano: Stop() no lo cerró (esperaba que lo cerremos acá), así que lo
 	// cerramos. Si seguimos vigentes, el nodo queda VIVO y lo cerrará el próximo Stop().
+	var wctx context.Context
 	mu.Lock()
 	mine := srv == s
+	if mine {
+		wctx = nuevoCtxObservador() // guarda el cancel en watchCancel (bajo mu); lo corta Stop()
+	}
 	mu.Unlock()
 	if !mine {
 		s.Close()
+		return finish(nil)
 	}
+	// Up devuelve con el backend en Running. Desde acá el observador del bus IPN mantiene
+	// estadoBackend al día: si la node key vence o la revocan a mitad de sesión, el backend cae
+	// a NeedsLogin y la app lo ve al instante (sin esto sólo lo veía al reiniciar).
+	fijarEstado("Running")
+	go vigilarEstado(wctx, s)
 	return finish(nil)
+}
+
+// nuevoCtxObservador crea el ctx del observador y deja su cancel en watchCancel. Llamar con mu
+// tomado. Va en función aparte para que el cancel tenga un dueño explícito (Stop) y vet no lo
+// tome por una fuga.
+func nuevoCtxObservador() context.Context {
+	ctx, cancel := context.WithCancel(context.Background())
+	watchCancel = cancel
+	return ctx
+}
+
+// vigilarEstado sigue el bus IPN del server y publica cada cambio de ipn.State en
+// estadoBackend. Termina cuando el ctx se cancela (Stop), el server deja de ser el vigente
+// (re-enrol) o el bus se cierra.
+func vigilarEstado(ctx context.Context, s *tsnet.Server) {
+	lc, err := s.LocalClient()
+	if err != nil {
+		return
+	}
+	w, err := lc.WatchIPNBus(ctx, ipn.NotifyInitialState)
+	if err != nil {
+		return
+	}
+	defer w.Close()
+	for {
+		n, err := w.Next()
+		if err != nil {
+			return
+		}
+		if n.State == nil {
+			continue
+		}
+		mu.Lock()
+		vigente := srv == s
+		mu.Unlock()
+		if !vigente {
+			return
+		}
+		fijarEstado(n.State.String())
+	}
+}
+
+// resumenError describe un error de Up por su CLASE (auth rechazada / timeout / otro), sin el
+// mensaje crudo del control-plane. Es lo único que va al log.
+func resumenError(err error) string {
+	switch {
+	case err == nil:
+		return "sin error"
+	case errorDeAuthRechazada(err):
+		return "auth rechazada por el control-plane"
+	case strings.Contains(strings.ToLower(err.Error()), "deadline") || strings.Contains(strings.ToLower(err.Error()), "timeout"):
+		return "timeout"
+	default:
+		return fmt.Sprintf("otro (%T)", err)
+	}
 }
 
 // fotoSiVencido consulta el estado del server y devuelve la línea de Estado() SOLO si el
@@ -298,12 +386,27 @@ func errorDeAuthRechazada(err error) bool {
 	return false
 }
 
-// Running indica si el nodo está levantado.
+// Running indica si hay un server creado (no si está conectado: ver EsRunning).
 func Running() bool {
 	mu.Lock()
 	defer mu.Unlock()
 	return srv != nil
 }
+
+// BackendState devuelve el último ipn.State visto por el observador del bus ("Running",
+// "NeedsLogin", "Starting", "Stopped"…). Atómico y barato: la app lo puede leer en el hilo
+// principal. Sin nodo o antes del primer Start: "Stopped".
+func BackendState() string {
+	v, _ := estadoBackend.Load().(string)
+	if v == "" {
+		return "Stopped"
+	}
+	return v
+}
+
+// EsRunning: el nodo está VIVO y conectado a la tailnet (BackendState == Running). Es lo que
+// decide si los forwards embebidos sirven; con cualquier otro estado la app va directo.
+func EsRunning() bool { return BackendState() == "Running" }
 
 // Estado consulta el estado del nodo por el LocalClient, para que la app pueda distinguir
 // "la red está mal" de "el acceso de Tailscale VENCIÓ y hay que re-escanear el QR". Esto último
@@ -457,12 +560,20 @@ func Stop() {
 	// terminó (nodo vivo, sin goroutine), lo cierra Stop().
 	upEnVuelo := upDone != nil
 	cancel := upCancel
+	wc := watchCancel
+	watchCancel = nil
 	listeners := lns
 	lns = nil
 	// Stop es deliberado (re-enrolado/teardown): el sticky de "vencido" deja de valer.
 	ultimoEstado = ""
 	mu.Unlock()
 
+	// El observador del bus se corta y el estado publicado pasa a Stopped (un Start nuevo lo
+	// vuelve a poner en Starting/Running).
+	if wc != nil {
+		wc()
+	}
+	fijarEstado("Stopped")
 	// Cerrar los listeners despierta a sus goroutines de accept, que terminan solas.
 	for _, ln := range listeners {
 		ln.Close()

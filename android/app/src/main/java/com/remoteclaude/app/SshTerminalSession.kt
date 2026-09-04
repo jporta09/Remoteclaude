@@ -299,9 +299,11 @@ class SshTerminalSession(
             // Tras un par de intentos fallidos, si el nodo embebido dice que el acceso venció,
             // reconectar no va a lograr nada: se avisa una vez con una causa accionable.
             if (!avisoVencidoDado && attempt >= 2 && TailscaleBridge.accesoVencido()) {
+                // Honesto con la LAN: los hosts por tailnet no conectan hasta reescanear, los
+                // directos siguen (y este loop sigue reintentando: endpoint() ya cae a directo).
                 status(
-                    "\r\n[el acceso de Tailscale venció — tocá ↺ Reescanear QR en la barra " +
-                        "de arriba para volver a habilitar la conexión]\r\n"
+                    "\r\n[el enrolamiento de Tailscale venció — los hosts por tailnet no conectan " +
+                        "hasta reescanear el QR (↺ en la barra); los de LAN siguen]\r\n"
                 )
                 // Diagnóstico: una sola vez por episodio (no una por pestaña) — ver companion.
                 if (episodioVencidoLogueado.compareAndSet(false, true)) {
@@ -313,7 +315,7 @@ class SshTerminalSession(
                 avisoVencidoDado = true
                 onAccesoVencido?.invoke()
             }
-            val waitMs = minOf(1000L * attempt, 8000L)
+            val waitMs = esperaRetry(attempt, Math.random())
             synchronized(reconnectLock) {
                 waitingToReconnect = true
                 // Si ya pidieron reconectar (p. ej. volviste a la app mientras caíamos), no esperar.

@@ -302,3 +302,50 @@ func TestReenrolRepetidoNoRompe(t *testing.T) {
 		t.Fatal("Estado() vacío tras re-enroles repetidos")
 	}
 }
+
+// --- BackendState: el estado del backend que lee la app (5ª pasada, UX5-1/UF5-1) --------------
+
+func TestBackendStateSinNodoEsStopped(t *testing.T) {
+	mu.Lock()
+	srv = nil
+	mu.Unlock()
+	Stop()
+	if got := BackendState(); got != "Stopped" {
+		t.Fatalf("sin nodo esperaba \"Stopped\", dio %q", got)
+	}
+	if EsRunning() {
+		t.Fatal("sin nodo EsRunning() debe ser false")
+	}
+}
+
+func TestFalloDeUpNuncaDejaRunning(t *testing.T) {
+	// Start con key vacía falla (timeout corto). Lo que importa: el estado publicado NO puede
+	// quedar en Running ni Starting (la app decidiría rutas por un nodo que no está), y Stop()
+	// lo deja en Stopped.
+	mu.Lock()
+	srv = nil
+	ultimoEstado = ""
+	mu.Unlock()
+	viejo := upTimeout
+	upTimeout = 2 * time.Second
+	defer func() { upTimeout = viejo }()
+	_ = Start("", t.TempDir(), "test-backendstate")
+	if got := BackendState(); got == "Running" || got == "Starting" {
+		t.Fatalf("tras un Up fallido el estado no puede ser %q", got)
+	}
+	Stop()
+	if got := BackendState(); got != "Stopped" {
+		t.Fatalf("tras Stop esperaba \"Stopped\", dio %q", got)
+	}
+}
+
+func TestResumenErrorNoFiltraElMensaje(t *testing.T) {
+	err := fmt.Errorf("invalid key: API key tskey-auth-SECRETO not valid")
+	got := resumenError(err)
+	if strings.Contains(got, "SECRETO") || strings.Contains(got, "tskey") {
+		t.Fatalf("el resumen no puede contener el mensaje crudo: %q", got)
+	}
+	if got != "auth rechazada por el control-plane" {
+		t.Fatalf("esperaba la clase 'auth rechazada', dio %q", got)
+	}
+}

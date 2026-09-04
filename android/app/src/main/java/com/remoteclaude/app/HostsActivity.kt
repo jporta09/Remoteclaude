@@ -204,32 +204,30 @@ class HostsActivity : AppCompatActivity() {
     }
 
     private fun updateVpnStatus() {
-        val (txt, color) = when {
-            !TailscaleBridge.isEnabled() ->
-                "🔒 VPN: directa · tocá para usar Tailscale embebido" to R.color.marvin_muted
-            TailscaleBridge.isReady() ->
-                "🔒 Tailscale: conectada ✓" to R.color.marvin_green
-            // Enrolamiento vencido: ÁMBAR, no rojo, y reencuadrado (QA4-1/UX-1). Lo que venció
-            // es el enrolamiento del nodo embebido, no "tu acceso": los hosts alcanzables por
-            // LAN siguen andando (la terminal lo muestra conectado). Un rojo global y permanente
-            // sobre eso era fatiga de alarma. Se sigue ofreciendo reescanear.
-            vencidoCache ->
-                "🔒 Tailscale: enrolamiento vencido — reescaneá el QR (los hosts de LAN siguen)" to R.color.marvin_amber
-            // No filtrar el error CRUDO del control-plane (traía el id de la key) a la UI (QA4-3):
-            // mensaje genérico y accionable.
-            TailscaleBridge.error() != null ->
-                "🔒 Tailscale: no se pudo conectar — tocá para reintentar o reescanear" to R.color.marvin_amber
-            else -> "🔒 Tailscale: conectando…" to R.color.marvin_amber
-        }
+        if (isFinishing || isDestroyed) return
+        val (txt, tono) = lineaTailscale(
+            enabled = TailscaleBridge.isEnabled(),
+            vencido = vencidoCache,
+            ready = TailscaleBridge.isReady(),
+            hayError = TailscaleBridge.error() != null,
+        )
         vpnStatus.text = txt
-        vpnStatus.setTextColor(getColor(color))
+        vpnStatus.setTextColor(getColor(when (tono) {
+            TonoLinea.MUTED -> R.color.marvin_muted
+            TonoLinea.GREEN -> R.color.marvin_green
+            TonoLinea.AMBER -> R.color.marvin_amber
+        }))
         refrescarVencido()
-        // Repoll mientras el nodo esté habilitado pero no conectado — incluido el estado de
-        // error: antes se cortaba al latchear error() (QA4-3), y si la causa era un vencido que
-        // el único sondeo no alcanzó a detectar, quedaba pegado sin volver a chequear.
+        // Repoll SIEMPRE mientras el nodo esté habilitado — también en verde: antes se cortaba al
+        // quedar ready y, como el latch nunca bajaba, hosts quedaba "conectada ✓" 3-5 min con la
+        // terminal en vencido (UF5-2). Ahora ready es barato (estado del bus, sin JNI bloqueante).
         vpnStatus.removeCallbacks(vpnPoll)
-        if (TailscaleBridge.isEnabled() && !TailscaleBridge.isReady()) {
-            vpnStatus.postDelayed(vpnPoll, if (TailscaleBridge.error() != null) 3000 else 1500)
+        if (TailscaleBridge.isEnabled()) {
+            vpnStatus.postDelayed(vpnPoll, when {
+                TailscaleBridge.isReady() -> 5000
+                TailscaleBridge.error() != null -> 3000
+                else -> 1500
+            })
         }
     }
 
@@ -619,3 +617,23 @@ class HostsActivity : AppCompatActivity() {
         private const val WRAP = ViewGroup.LayoutParams.WRAP_CONTENT
     }
 }
+
+/** Tono de la línea de estado de Tailscale en hosts (sin R.color, para testear la lógica en JVM). */
+enum class TonoLinea { MUTED, GREEN, AMBER }
+
+/**
+ * Qué dice la línea de estado de Tailscale en hosts. ORDEN: el vencido va ANTES que ready.
+ * Antes ready ganaba, y como ready era un latch que nunca bajaba, con el nodo vencido a mitad
+ * de sesión hosts seguía en verde (UF5-2, 5ª pasada). Ámbar y reencuadrado para el vencido
+ * (QA4-1/UX-1): lo que venció es el enrolamiento del nodo embebido; los hosts por LAN siguen.
+ * Sin filtrar el error crudo del control-plane (QA4-3).
+ */
+internal fun lineaTailscale(enabled: Boolean, vencido: Boolean, ready: Boolean, hayError: Boolean): Pair<String, TonoLinea> =
+    when {
+        !enabled -> "🔒 VPN: directa · tocá para usar Tailscale embebido" to TonoLinea.MUTED
+        vencido -> "🔒 Tailscale: enrolamiento vencido — reescaneá el QR (los hosts de LAN siguen)" to TonoLinea.AMBER
+        ready -> "🔒 Tailscale: conectada ✓" to TonoLinea.GREEN
+        hayError -> "🔒 Tailscale: no se pudo conectar — tocá para reintentar o reescanear" to TonoLinea.AMBER
+        else -> "🔒 Tailscale: conectando…" to TonoLinea.AMBER
+    }
+

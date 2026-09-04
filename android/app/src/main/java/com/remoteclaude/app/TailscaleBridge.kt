@@ -37,7 +37,17 @@ object TailscaleBridge {
     private var nextPort = 21000
 
     fun isEnabled(): Boolean = enabled
-    fun isReady(): Boolean = started
+    /**
+     * ¿El nodo embebido está VIVO (backend Running)? v1.31.2: lo dice el observador del bus IPN
+     * del bridge (atómico, sin JNI bloqueante), no el latch `started`, que sólo bajaba al
+     * re-enrolar: con la node key vencida a mitad de sesión el backend cae a NeedsLogin y la app
+     * seguía creyendo "listo" — mandaba hasta la LAN por el netstack muerto y pintaba hosts
+     * en verde (UX5-1/UF5-1/UF5-2, 5ª pasada).
+     */
+    fun isReady(): Boolean = enabled && started && esRunning()
+    private fun esRunning(): Boolean = runCatching { marvints.Marvints.esRunning() }.getOrDefault(false)
+    /** ipn.State del backend ("Running", "NeedsLogin", "Starting", "Stopped"…); barato. */
+    fun backendState(): String = if (!enabled) "Directo" else runCatching { marvints.Marvints.backendState() }.getOrDefault("Desconocido")
     /** A4-1: true si hubo un re-enrol (configure con key) hace menos de `ventanaMs`. */
     fun reEnrolReciente(ventanaMs: Long = VENTANA_RE_ENROL_MS): Boolean =
         reEnrolRecienteDesde(ultimoReEnrolMs, android.os.SystemClock.elapsedRealtime(), ventanaMs)
@@ -60,7 +70,8 @@ object TailscaleBridge {
      * clara en vez de reconectar en silencio para siempre. Alta confianza (no grita "reescaneá"
      * por una caída de red pasajera): sólo el nodo VIVO en NeedsLogin/expired dispara true.
      */
-    fun accesoVencido(): Boolean = enabled && accesoVencidoDeEstado(estado())
+    fun accesoVencido(): Boolean =
+        enabled && (backendState() == "NeedsLogin" || accesoVencidoDeEstado(estado()))
 
     /**
      * A qué tailnet está vinculado el nodo embebido (nombre del tailnet, o el DNSName del nodo).
@@ -149,7 +160,12 @@ object TailscaleBridge {
         runCatching { marvints.Marvints.setInterfaces(enumerateInterfaces()) }
     }
 
-    /** Reconfigura la auth key (la guarda) y reinicia el nodo. */
+    /**
+     * Reconfigura la auth key (la guarda) y reinicia el nodo. El reinicio (stop del nodo viejo +
+     * arranque del nuevo) va en un hilo: antes corría en el hilo principal desde el diálogo
+     * de hosts y el ↺ de la terminal (DEV-N2). Vuelve enseguida; el estado se sigue por
+     * [isReady]/[backendState]/[error].
+     */
     fun configure(ctx: Context, authKey: String) {
         SecretStore.put(ctx, "ts_authkey", authKey.trim())
         // Vacío = conexión directa, no es un re-enrol; con key sí (cualquiera de los 3 caminos).
@@ -157,6 +173,14 @@ object TailscaleBridge {
         // por las dudas: si quedaba una copia en claro de una versión anterior, fuera
         ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
             .remove("ts_authkey").apply()
+        // El error del Up ANTERIOR no describe a esta key: sin esto hosts decía "no se pudo
+        // conectar" a 1 s de pegar una key nueva (QA5-2).
+        lastError = null
+        val app = ctx.applicationContext
+        thread(name = "tailscale-configure") { reiniciar(app) }
+    }
+
+    private fun reiniciar(ctx: Context) {
         synchronized(this) {
             // Siempre cerrar el nodo anterior (aunque aún esté conectando con una key
             // consumida) para liberar el stateDir antes de reiniciar con la nueva.
@@ -186,7 +210,11 @@ object TailscaleBridge {
                 if (!readyLatch.await(espera, TimeUnit.SECONDS) && !started) esperaExpiro = true
             } catch (_: Exception) {}
         }
-        if (!started) return host to port   // fallback si el nodo no levantó
+        // La ruta la decide el estado REAL del nodo, no el latch: con el backend fuera de Running
+        // (NeedsLogin = vencido/revocado, Starting, Stopped) TODO va directo. Antes, con el nodo
+        // vencido a mitad de sesión, hasta 10.0.2.2 (LAN) iba por el forward embebido, que no
+        // devolvía banner y agotaba 15 s por intento (UF5-1, sondeado en vivo).
+        if (!started || !esRunning()) return host to port
         return "127.0.0.1" to localPort(host, port)
     }
 
