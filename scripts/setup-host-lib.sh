@@ -88,9 +88,17 @@ quitar_unidad() {
 # sin que intentemos autenticarnos con ninguno. Es la forma de verificar esto SIN root:
 # `sshd -T` exige privilegios.
 sshd_metodos() {
-    LC_ALL=C ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=5 \
-        -o PreferredAuthentications=none -p "${1:-22}" nadie@127.0.0.1 true 2>&1 |
-        grep -oE "Permission denied \(([^)]*)\)" | head -1 | sed 's/.*(\(.*\)).*/\1/'
+    local salida
+    # El `|| true` es imprescindible: un sshd SANO rechaza la auth y ssh sale con 255. Sin esto,
+    # bajo `set -o pipefail` (como corre setup-host.sh) el rc de la función era 255 aunque la
+    # respuesta fuera perfecta, y quien mirara el rc en vez de la SALIDA concluía "no responde".
+    # El resultado de esta función es lo que imprime, nunca su código de salida.
+    salida="$(LC_ALL=C ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=5 \
+        -o PreferredAuthentications=none -p "${1:-22}" nadie@127.0.0.1 true 2>&1 || true)"
+    # El `|| true` final cubre el otro extremo: cuando NO hay respuesta, grep no matchea y sale 1,
+    # que pipefail también propagaría. La función SIEMPRE termina bien; hablar es su salida.
+    printf '%s\n' "$salida" |
+        grep -oE "Permission denied \(([^)]*)\)" | head -1 | sed 's/.*(\(.*\)).*/\1/' || true
 }
 
 # 0 = acepta contraseñas (RIESGO) · 1 = sólo clave · 2 = no se pudo verificar.

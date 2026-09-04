@@ -101,10 +101,13 @@ if ! sudo systemctl enable --now "$unit_ssh" 2>/dev/null; then
 fi
 sudo systemctl restart "$unit_ssh" 2>/dev/null || true
 sudo systemctl restart "$unit_ssh".socket 2>/dev/null || true
-sshd_metodos 22 >/dev/null || {
+# Lo que vale es la RESPUESTA del servidor, no el rc (un sshd sano rechaza la auth: ssh sale 255).
+metodos_sshd="$(sshd_metodos 22)"
+if [ -z "$metodos_sshd" ]; then
     echo "!! el sshd no responde en el puerto 22 tras configurarlo. Revisá: systemctl status $unit_ssh"
     exit 1
-}
+fi
+echo "    sshd responde en :22 (métodos: $metodos_sshd)"
 fi
 
 echo "==> tmux.conf (persistencia + portapapeles del celu vía OSC 52)"

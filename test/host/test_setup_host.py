@@ -164,6 +164,27 @@ def test_si_no_se_puede_verificar_se_distingue_de_estar_seguro(tmp_path):
     assert "rc=2" in r.stdout, r.stdout + r.stderr
 
 
+def test_sshd_metodos_no_propaga_el_255_del_ssh(tmp_path):
+    """Un sshd SANO rechaza la auth y `ssh` sale con 255. Si la función deja escapar ese rc,
+    bajo `set -euo pipefail` —como corre setup-host.sh— el llamador concluye "el sshd no
+    responde" con un servidor perfecto, y el setup abortaba antes de instalar los helpers
+    (visto en vivo, Ubuntu 24.04, 2026-09-04). El resultado es lo que IMPRIME, no su rc.
+    """
+    env = ssh_falso(tmp_path, "nadie@127.0.0.1: Permission denied (publickey).")
+    # `correr` ya usa bash -euo pipefail: si el rc se propaga, la asignación aborta el script.
+    r = correr('m="$(sshd_metodos 22)"; echo "m=$m"', tmp_path, env)
+    assert r.returncode == 0, f"abortó bajo pipefail: {r.stderr}"
+    assert "m=publickey" in r.stdout, r.stdout
+
+
+def test_sin_respuesta_sshd_metodos_no_imprime_nada(tmp_path):
+    """Y cuando de verdad no responde, la salida vacía es la señal (la que mira el setup)."""
+    env = ssh_falso(tmp_path, "ssh: connect to host 127.0.0.1 port 22: Connection refused")
+    r = correr('m="$(sshd_metodos 22)"; echo "[$m]"', tmp_path, env)
+    assert r.returncode == 0, r.stderr
+    assert "[]" in r.stdout, r.stdout
+
+
 def test_no_confunde_publickey_con_password_por_substring(tmp_path):
     """'password' no puede matchear dentro de otra palabra."""
     env = ssh_falso(tmp_path, "Permission denied (publickey,gssapi-with-mic).")
@@ -243,6 +264,8 @@ def test_setup_host_usa_unit_sshd_y_no_hardcodea_ssh():
     # Y el enable no puede ser fatal: en hosts con activación por socket falla sin que el sshd
     # esté mal, y abortaba el setup ANTES de instalar los helpers (visto en vivo).
     assert "sshd_metodos 22" in contenido, "hay que verificar que el sshd responde, no el rc del enable"
+    # Y hay que mirar la SALIDA, no el rc: `sshd_metodos ... ||` vuelve a romperlo bajo pipefail.
+    assert "sshd_metodos 22 >" not in contenido and "sshd_metodos 22 |" not in contenido
 
 
 # --- escribir_marker_setup ------------------------------------------------------------
