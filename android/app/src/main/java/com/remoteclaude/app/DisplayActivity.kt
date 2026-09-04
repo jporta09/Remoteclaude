@@ -412,7 +412,8 @@ class DisplayActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
-        tunnel?.close(); tunnel = null
+        val t = tunnel; tunnel = null
+        Hilos.cerrarEnFondo("visor-cierre") { t?.close() }   // close de trilead fuera del main (SRE-5-4)
         // sacarla de la jerarquía antes de destruirla (requisito de WebView)
         (web.parent as? android.view.ViewGroup)?.removeView(web)
         web.destroy()

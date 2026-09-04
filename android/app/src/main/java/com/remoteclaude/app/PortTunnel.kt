@@ -34,7 +34,8 @@ class PortTunnel(
     fun open(remotePort: Int): Int? = try {
         val (h, p) = TailscaleBridge.endpoint(host, sshPort)
         val c = Connection(h, p).also { conn = it }
-        c.connect(HostKeys.verifier(appCtx, host, sshPort), 8000, 8000)
+        // 5 s (antes 8): es lo que retiene el lock de la Connection mientras un close() espera.
+        c.connect(HostKeys.verifier(appCtx, host, sshPort), 5000, 5000)
         if (!c.authenticateWithPublicKey(user, key)) {
             close(); null
         } else {

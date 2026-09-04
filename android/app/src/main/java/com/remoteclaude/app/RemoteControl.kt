@@ -62,18 +62,14 @@ class RemoteControl(
             conn.connect(verifier(), 10000, 10000)
             if (!conn.authenticateWithPublicKey(user, key))
                 return Exec("", false, "la clave de la app no está autorizada en el host")
-            val s = conn.openSession()
-            s.execCommand(command)
-            val out = String(s.stdout.readBytes(), Charsets.UTF_8)
-            // El EOF del stdout puede llegar ANTES que el paquete de exit-status: sin esperar,
-            // `s.exitStatus` volvía null en comandos rápidos (ej. `rm` de un archivo que no
-            // existe) y el rc null se tomaba como éxito, ocultando el fallo. Esperar la
-            // condición EXIT_STATUS lo vuelve confiable (los callers deciden error/éxito por él).
-            s.waitForCondition(ChannelCondition.EXIT_STATUS, 3000)
-            val rc = s.exitStatus
-            s.close()
-            if (rc != null && rc != 0) Exec(out, false, "el host devolvió código $rc")
-            else Exec(out, true)
+            // Acotado en tiempo y bytes (SEC5-4/N4): un host que no cierra stdout ya no cuelga el
+            // hilo, y uno que streamea GB no tira la app. SshExec espera además el exit-status
+            // (el EOF puede llegar antes; sin eso un rc null se tomaba como éxito).
+            val r = SshExec.leer(conn, command, timeoutMs = 30_000, maxBytes = 1_048_576)
+            val rc = r.rc
+            if (!r.completo) Exec(r.salida, false, "el host no respondió a tiempo (o devolvió demasiado)")
+            else if (rc != null && rc != 0) Exec(r.salida, false, "el host devolvió código $rc")
+            else Exec(r.salida, true)
         } catch (e: Exception) {
             Exec("", false, motivoLegible(e))
         } finally {
@@ -219,21 +215,14 @@ class RemoteControl(
             c.connect(verifier(), 10000, 10000)
             if (!c.authenticateWithPublicKey(user, key))
                 return Exec("", false, "la clave de la app no está autorizada en el host")
-            val s = c.openSession()
-            s.execCommand("mkdir -p ~/RemoteMarvinDocs/subidos && cat > ${rutaDoc(name, subido = true)}")
-            s.stdin.use { stdin ->
-                var i = 0
-                while (i < bytes.size) {
-                    val n = minOf(64 * 1024, bytes.size - i)
-                    stdin.write(bytes, i, n)
-                    i += n
-                }
-            }
-            val out = String(s.stdout.readBytes(), Charsets.UTF_8)
-            val rc = s.exitStatus
-            s.close()
-            if (rc != null && rc != 0) Exec(out, false, "el host devolvió código $rc")
-            else Exec(out, true)
+            val r = SshExec.leer(
+                c, "mkdir -p ~/RemoteMarvinDocs/subidos && cat > ${rutaDoc(name, subido = true)}",
+                timeoutMs = 60_000, maxBytes = 65_536, stdin = bytes,
+            )
+            val rc = r.rc
+            if (!r.completo) Exec(r.salida, false, "el host no confirmó la subida a tiempo")
+            else if (rc != null && rc != 0) Exec(r.salida, false, "el host devolvió código $rc")
+            else Exec(r.salida, true)
         } catch (e: Exception) {
             Exec("", false, motivoLegible(e))
         } finally {
@@ -262,12 +251,11 @@ class RemoteControl(
             c.connect(verifier(), 10000, 10000)
             if (!c.authenticateWithPublicKey(user, key))
                 throw IllegalStateException("no autenticó (clave no autorizada)")
-            val s = c.openSession()
-            s.execCommand("~/.local/bin/marvin-stt 2>&1")
-            s.stdin.use { it.write(wav) }        // close = EOF: el cliente empieza
-            val out = String(s.stdout.readBytes(), Charsets.UTF_8).trim()
-            val rc = s.exitStatus
-            s.close()
+            // El modelo en frío puede tardar ~105 s: tope generoso, pero tope (antes ninguno).
+            val r = SshExec.leer(c, "~/.local/bin/marvin-stt 2>&1", timeoutMs = 180_000, maxBytes = 1_048_576, stdin = wav)
+            if (!r.completo) throw IllegalStateException("el dictado no respondió a tiempo en el host")
+            val out = r.salida.trim()
+            val rc = r.rc
             // El exit status es la señal confiable: sin esto, cualquier cosa que el
             // cliente imprima al fallar (p.ej. "curl: (28) Operation timed out") se
             // devolvía como si fuera la transcripción y se tipeaba en la terminal.

@@ -82,6 +82,9 @@ class MainActivity : AppCompatActivity() {
     private lateinit var hostLabel: String
 
     private val connectivity by lazy { getSystemService(ConnectivityManager::class.java) }
+    // El callback de red corría en el main y onLost cerraba la Connection synchronized de trilead
+    // ahí mismo (SRE-5-4): con un connect en vuelo contra un endpoint colgado, ANR. Hilo propio.
+    private val hiloRed by lazy { android.os.HandlerThread("red").apply { start() } }
     private val networkCallback = object : ConnectivityManager.NetworkCallback() {
         override fun onAvailable(network: Network) {
             // Al cambiar de red hay que re-alimentar la lista de interfaces al nodo embebido:
@@ -226,7 +229,7 @@ class MainActivity : AppCompatActivity() {
             addView(keypad, LinearLayout.LayoutParams(Paleta.MATCH, Paleta.WRAP))
         })
 
-        connectivity.registerDefaultNetworkCallback(networkCallback, Handler(mainLooper))
+        connectivity.registerDefaultNetworkCallback(networkCallback, Handler(hiloRed.looper))
         vigilarTecladoDelSistema()
         tabs.restaurarOCrear()
         pedirPermisoNotificaciones()
@@ -345,6 +348,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         try { connectivity.unregisterNetworkCallback(networkCallback) } catch (_: Exception) {}
+        hiloRed.quitSafely()
         if (::vigia.isInitialized) vigia.detener()
         // El canal best-effort de la Activity muere con ella. El de AvisosService NO se toca acá: su
         // razón de ser es sobrevivir a que la app se cierre (swipe) para seguir avisando; se apaga por

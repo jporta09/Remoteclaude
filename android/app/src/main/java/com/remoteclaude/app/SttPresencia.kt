@@ -46,10 +46,16 @@ class SttPresencia(
 
     @Synchronized fun cerrar() {
         activa = false
-        try { socket?.close() } catch (_: Exception) {}
-        try { tunel?.close() } catch (_: Exception) {}
-        hilo?.interrupt()   // por si estaba en el sleep del reintento
-        hilo = null
+        val s = socket; val t = tunel; val h = hilo
+        socket = null; tunel = null; hilo = null
+        // Los close() hacen I/O y el de trilead toma el lock de la Connection, que puede tenerlo
+        // el hilo stt-presencia colgado en connect() contra un forward muerto: desde onPause eso
+        // era un ANR determinista (QA5-1). El estado ya quedó cerrado; el I/O va en fondo.
+        Hilos.cerrarEnFondo("stt-presencia-cierre") {
+            try { s?.close() } catch (_: Exception) {}
+            try { t?.close() } catch (_: Exception) {}
+            h?.interrupt()   // por si estaba en el sleep del reintento
+        }
     }
 
     private fun bucle() {

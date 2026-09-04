@@ -379,11 +379,17 @@ class SshTerminalSession(
     }
 
     private fun closeCurrent() {
-        try { sshSession?.close() } catch (_: Exception) {}
-        try { conn?.close() } catch (_: Exception) {}
+        val s = sshSession; val c = conn
         sshSession = null
         conn = null
         stdin = null
+        // Desde el ssh-loop/keepalive/forzarReconexion ya estamos en un hilo (inline). Desde el main
+        // (cerrar pestaña, reconectar, onDestroy, red perdida) el close synchronized de trilead va en
+        // fondo: con un connect en vuelo contra un endpoint colgado era un ANR (SRE-5-4).
+        Hilos.cerrarEnFondo("ssh-cierre") {
+            try { s?.close() } catch (_: Exception) {}
+            try { c?.close() } catch (_: Exception) {}
+        }
     }
 
     /** ¿Correr el probe de half-open? Sólo en primer plano y conectado, y si mandaste input pero no
@@ -447,13 +453,11 @@ class SshTerminalSession(
     // setup anterior al marker). Fail-open ante error del exec: un chequeo que no pudo
     // correr no debe bloquear una conexión que sí funciona.
     private fun hostConfigurado(c: Connection): Boolean = try {
-        val chk = c.openSession()
-        chk.execCommand(
-            "test -f ~/.config/marvin/setup-ok -o -x ~/.local/bin/marvin-stt && echo CONFIGURADO",
+        val r = SshExec.leer(
+            c, "test -f ~/.config/marvin/setup-ok -o -x ~/.local/bin/marvin-stt && echo CONFIGURADO",
+            timeoutMs = 3_000, maxBytes = 4_096,
         )
-        val out = String(chk.stdout.readBytes(), Charsets.UTF_8)
-        chk.close()
-        out.contains("CONFIGURADO")
+        !r.completo || r.salida.contains("CONFIGURADO")   // sin respuesta a tiempo: fail-open
     } catch (_: Exception) {
         true
     }
@@ -470,26 +474,36 @@ class SshTerminalSession(
         if (expiryHostChequeado) return
         expiryHostChequeado = true
         try {
-            val chk = c.openSession()
-            chk.execCommand(
-                "docker exec remoteclaude-ts tailscale status --json 2>/dev/null | " +
-                    "jq -r '$EXPIRY_HOST_JQ' 2>/dev/null",
+            // Acotado: un dockerd colgado bloqueaba este hilo (ssh-loop) ANTES de abrir tmux, en
+            // cada primera conexión, sin límite (SRE-5-1). 5 s y 4 KB sobran para una línea.
+            val r = SshExec.leer(
+                c, "docker exec remoteclaude-ts tailscale status --json 2>/dev/null | jq -r '$EXPIRY_HOST_JQ' 2>/dev/null",
+                timeoutMs = 5_000, maxBytes = 4_096,
             )
-            val out = String(chk.stdout.readBytes(), Charsets.UTF_8).trim()
-            chk.close()
-            // TAGGED / NOEXP / SINSELF / NORUN / vacío -> no avisar (v1.31.2: un ENTERO negativo = ya
-            // venció; el manejo de NORUN/negativo llega con el exec acotado de la Fase A3).
-            val dias = out.toIntOrNull() ?: return
-            if (dias in 0..UMBRAL_EXPIRY_HOST_DIAS) {
-                status(
-                    "\r\n[el acceso Tailscale de la PC vence en $dias día(s) — renovalo en la PC " +
-                        "(agregale el tag al nodo, o deshabilitá el key expiry en la consola) o " +
-                        "vas a perder la conexión remota]\r\n",
-                )
-                Diagnostico.registrar(
-                    Diagnostico.Nivel.AVISO, "tailscale",
-                    "el nodo del host vence en $dias días (sin tag) — renovar antes del corte",
-                )
+            if (!r.completo) return
+            val out = r.salida.trim()
+            // TAGGED / NOEXP / SINSELF / vacío -> no avisar. NORUN y un entero negativo son el caso
+            // que antes se callaba: el nodo del host YA venció (o fue revocado).
+            val aviso: String? = when {
+                out == "NORUN" ->
+                    "el nodo Tailscale de la PC no está activo (vencido o revocado): por tailnet el celu " +
+                        "no va a poder conectar — re-enrolá el nodo del host (con tag, así no vuelve a vencer)"
+                else -> {
+                    val dias = out.toIntOrNull()
+                    when {
+                        dias == null -> null
+                        dias < 0 -> "el acceso Tailscale de la PC YA VENCIÓ hace ${-dias} día(s) — re-enrolá " +
+                            "el nodo del host (con tag) o deshabilitá el key expiry en la consola"
+                        dias <= UMBRAL_EXPIRY_HOST_DIAS -> "el acceso Tailscale de la PC vence en $dias día(s) — " +
+                            "renovalo en la PC (agregale el tag al nodo, o deshabilitá el key expiry en la " +
+                            "consola) o vas a perder la conexión remota"
+                        else -> null
+                    }
+                }
+            }
+            if (aviso != null) {
+                status("\r\n[$aviso]\r\n")
+                Diagnostico.registrar(Diagnostico.Nivel.AVISO, "tailscale", "nodo del host: $aviso")
             }
         } catch (_: Exception) {
             // best-effort: sin docker/jq/permiso, no se avisa (y no se rompe la conexión)
@@ -497,11 +511,11 @@ class SshTerminalSession(
     }
 
     private fun tmuxSesionVive(c: Connection): Boolean = try {
-        val chk = c.openSession()
-        chk.execCommand("tmux has-session -t " + ShellQuote.sq(tmuxSession) + " 2>/dev/null && echo VIVE")
-        val out = String(chk.stdout.readBytes(), Charsets.UTF_8)
-        chk.close()
-        out.contains("VIVE")
+        val r = SshExec.leer(
+            c, "tmux has-session -t " + ShellQuote.sq(tmuxSession) + " 2>/dev/null && echo VIVE",
+            timeoutMs = 3_000, maxBytes = 1_024,
+        )
+        !r.completo || r.salida.contains("VIVE")   // sin respuesta a tiempo: no asustar
     } catch (_: Exception) {
         true
     }

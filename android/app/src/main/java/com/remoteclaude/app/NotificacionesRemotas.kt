@@ -78,13 +78,29 @@ class NotificacionesRemotas(
     // el archivo de notificaciones y bloquea leyendo líneas hasta que se cae.
     private fun bucle() {
         var backoffMs = 2_000L
+        var fallosSeguidos = 0
+        var estabaConectado = false
+        // Registrar sólo TRANSICIONES (conectado <-> caído) y un latido cada 10 reintentos: bajo un
+        // nodo vencido esto escribía "canal caído, reintento" cada 30 s durante horas y empujaba el
+        // histórico útil fuera del Diagnóstico (SRE-5-3, 21 de 27 filas en 12 min).
+        fun caido() {
+            fallosSeguidos++
+            if (estabaConectado) {
+                estabaConectado = false
+                Diagnostico.registrar(Diagnostico.Nivel.AVISO, "avisos", "canal caído ($etiqueta), reintentando")
+            } else if (fallosSeguidos % 10 == 0) {
+                Diagnostico.registrar(Diagnostico.Nivel.AVISO, "avisos", "canal sigue caído ($etiqueta): $fallosSeguidos reintentos")
+            }
+        }
         while (corriendo) {
             var c: Connection? = null
             try {
                 val (h, p) = TailscaleBridge.endpoint(host, port)
                 val conn = Connection(h, p).also { c = it }
                 conn.connect(HostKeys.verifier(ctx.applicationContext, host, port), 10_000, 10_000)
-                if (!conn.authenticateWithPublicKey(user, key)) { esperar(backoffMs); continue }
+                if (!conn.authenticateWithPublicKey(user, key)) {
+                    caido(); esperar(backoffMs); backoffMs = proximoBackoff(backoffMs, fallosSeguidos, Math.random()); continue
+                }
                 // Primer arranque: sembrar el cursor con la última línea (no re-emitir el historial).
                 if (cursor < 0L) { cursor = semillaCursor(conn); guardarCursor(cursor) }
                 val s = conn.openSession()
@@ -96,27 +112,27 @@ class NotificacionesRemotas(
                         "exec tail -n 200 -F ~/.config/marvin/notify.jsonl",
                 )
                 backoffMs = 2_000L   // conexión sana: resetear el backoff
-                Diagnostico.registrar(Diagnostico.Nivel.INFO, "avisos", "canal conectado ($etiqueta)")
+                fallosSeguidos = 0
+                if (!estabaConectado) {
+                    estabaConectado = true
+                    Diagnostico.registrar(Diagnostico.Nivel.INFO, "avisos", "canal conectado ($etiqueta)")
+                }
                 val r = BufferedReader(InputStreamReader(s.stdout, Charsets.UTF_8))
                 while (corriendo) {
                     val linea = r.readLine() ?: break   // EOF = se cayó el canal
                     procesar(linea)
                 }
                 s.close()
-                if (corriendo) {
-                    Diagnostico.registrar(Diagnostico.Nivel.AVISO, "avisos", "canal caído ($etiqueta), reintento")
-                }
+                if (corriendo) caido()
             } catch (_: InterruptedException) {
                 break
             } catch (_: Exception) {
                 // caída de red / auth / endpoint: reconectar con backoff
-                if (corriendo) {
-                    Diagnostico.registrar(Diagnostico.Nivel.AVISO, "avisos", "canal caído ($etiqueta), reintento")
-                }
+                if (corriendo) caido()
             } finally {
                 try { c?.close() } catch (_: Exception) {}
             }
-            if (corriendo) { esperar(backoffMs); backoffMs = (backoffMs * 2).coerceAtMost(30_000L) }
+            if (corriendo) { esperar(backoffMs); backoffMs = proximoBackoff(backoffMs, fallosSeguidos, Math.random()) }
         }
     }
 
@@ -124,10 +140,8 @@ class NotificacionesRemotas(
 
     // Lee la última línea del archivo para inicializar el cursor sin re-emitir el historial.
     private fun semillaCursor(conn: Connection): Long = try {
-        val s = conn.openSession()
-        s.execCommand("tail -n1 ~/.config/marvin/notify.jsonl 2>/dev/null")
-        val linea = BufferedReader(InputStreamReader(s.stdout, Charsets.UTF_8)).readLine()
-        s.close()
+        val r = SshExec.leer(conn, "tail -n1 ~/.config/marvin/notify.jsonl 2>/dev/null", timeoutMs = 5_000, maxBytes = 65_536)
+        val linea = r.salida.lineSequence().firstOrNull { it.isNotBlank() }
         linea?.let { try { JSONObject(it).optLong("ts", 0L) } catch (_: Exception) { 0L } } ?: 0L
     } catch (_: Exception) { 0L }
 

@@ -37,6 +37,10 @@ object Diagnostico {
 
     @Volatile private var archivo: File? = null
     private val archivoLock = Any()   // serializa el read-modify-write de la persistencia
+    // Identidad de ESTE proceso: va en cada cabecera persistida. Así "(previo)" sólo muestra lo
+    // que escribió OTRO proceso (un crash real), no lo de este mismo cada vez que MainActivity se
+    // recrea (UX5-5: el bloque "previo" repetía eventos propios, con epoch crudos).
+    internal val idProceso: String = java.util.UUID.randomUUID().toString().take(8)
 
     /** Habilita la persistencia a `filesDir`. Llamar una vez al arranque, DESPUÉS de
      *  [cargarPersistidos] (para no re-persistir lo recuperado). */
@@ -68,7 +72,7 @@ object Diagnostico {
                     val lineas = f.readLines()
                     f.writeText(lineas.drop(lineas.size / 2).joinToString("\n", postfix = "\n"))
                 }
-                f.appendText("=== ${System.currentTimeMillis()} ===\n[$categoria] $detalle\n")
+                f.appendText("=== ${System.currentTimeMillis()} pid=$idProceso ===\n[$categoria] $detalle\n")
             } catch (_: Exception) {
             }
         }
@@ -86,13 +90,16 @@ object Diagnostico {
         try {
             if (!f.exists()) return
             val contenido = f.readText()
+            if (contenido.isBlank()) { f.delete(); return }
+            // Si TODO lo persistido es de este mismo proceso, no es "previo": ya está en el ring y
+            // el archivo tiene que quedar para el post-mortem de un crash posterior.
+            if (esDeEsteProceso(contenido, idProceso)) return
             f.delete()
-            if (contenido.isBlank()) return
             synchronized(eventos) {
                 eventos.addLast(
                     Evento(
                         System.currentTimeMillis(), Nivel.AVISO, "conexión (previo)",
-                        "Eventos de conexión registrados antes de este arranque:\n$contenido",
+                        "Eventos de conexión registrados antes de este arranque:\n" + formatearPersistido(contenido),
                     ),
                 )
                 while (eventos.size > MAX) eventos.removeFirst()
@@ -129,3 +136,19 @@ object Diagnostico {
         return sb.toString()
     }
 }
+
+/** true si todas las cabeceras "=== <epoch> pid=<id> ===" del archivo son de `idProceso`. */
+internal fun esDeEsteProceso(contenido: String, idProceso: String): Boolean {
+    val cabeceras = contenido.lineSequence().filter { it.startsWith("=== ") }.toList()
+    return cabeceras.isNotEmpty() && cabeceras.all { it.contains(" pid=$idProceso ") }
+}
+
+/** Reemplaza "=== <epoch> pid=<id> ===" por "— yyyy-MM-dd HH:mm:ss —" (el epoch crudo no le sirve a nadie). */
+internal fun formatearPersistido(contenido: String): String {
+    val fmt = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US)
+    val re = Regex("""^=== (\d+)(?: pid=\S+)? ===$""")
+    return contenido.lineSequence().joinToString("\n") { linea ->
+        re.matchEntire(linea)?.let { m -> "— ${fmt.format(Date(m.groupValues[1].toLong()))} —" } ?: linea
+    }
+}
+

@@ -156,9 +156,13 @@ class LiveDictation(
     private fun closeQuiet() {
         closed = true
         available = false
-        try { ws?.close(1000, null) } catch (_: Exception) {}
-        try { fwd?.close() } catch (_: Exception) {}
-        try { conn?.close() } catch (_: Exception) {}
+        val w = ws; val f = fwd; val c = conn
         ws = null; fwd = null; conn = null
+        // cancel() llega desde el touch del micrófono (main): el close de trilead va en fondo (SRE-5-4).
+        Hilos.cerrarEnFondo("dictado-cierre") {
+            try { w?.close(1000, null) } catch (_: Exception) {}
+            try { f?.close() } catch (_: Exception) {}
+            try { c?.close() } catch (_: Exception) {}
+        }
     }
 }
