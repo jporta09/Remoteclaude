@@ -293,6 +293,18 @@ echo "    prewarm del modelo en background (log: $PREWARM_LOG)"
 escribir_marker_setup "$(dirname "$0")"
 echo "==> marker de host configurado: ~/.config/marvin/setup-ok"
 
+# El paso del .env depende de si YA existe y está completado: sugerir un `cp` a secas en un host
+# ya configurado PISA las credenciales del usuario (le pasó a un host real el 2026-09-04, y el
+# OAuth client no se puede recuperar de ningún lado). Nunca proponemos un comando que sobrescriba.
+env_estado="falta"
+if [ -f "$REPO/.env" ]; then
+    if cmp -s "$REPO/.env" "$REPO/.env.example"; then
+        env_estado="plantilla"
+    else
+        env_estado="listo"
+    fi
+fi
+
 cat <<'EOF'
 
 ============================================================
@@ -300,8 +312,28 @@ cat <<'EOF'
  1) Autorizar la clave de la app: pegá el texto del botón 🔑 de
     RemoteMarvin en  ~/.ssh/authorized_keys
       install -d -m700 ~/.ssh && chmod 600 ~/.ssh/authorized_keys
- 2) cp .env.example .env  y completar TS_AUTHKEY (con tag:remotemarvin,
-    si no el nodo vence a los ~180 dias) + OAuth para el QR
+EOF
+case "$env_estado" in
+    listo)
+        echo " 2) .env: ya está completado — NO lo toques (un 'cp .env.example .env' lo pisaría)."
+        ;;
+    plantilla)
+        echo " 2) .env existe pero es la plantilla SIN completar: cargale TS_AUTHKEY (con"
+        echo "    tag:remotemarvin, si no el nodo vence a los ~180 dias) + OAuth para el QR."
+        if docker inspect remoteclaude-ts --format '{{range .Config.Env}}{{println .}}{{end}}' 2>/dev/null | grep -q '^TS_AUTHKEY=..*'; then
+            echo "    Ojo: el contenedor remoteclaude-ts sigue corriendo CON una TS_AUTHKEY cargada."
+            echo "    Si el .env se pisó por accidente, recuperala de ahí sin imprimirla:"
+            echo "      KEY=\$(docker inspect remoteclaude-ts --format '{{range .Config.Env}}{{println .}}{{end}}' | sed -n 's/^TS_AUTHKEY=//p' | head -1)"
+            echo "      [ -n \"\$KEY\" ] && sed -i \"s|^TS_AUTHKEY=.*|TS_AUTHKEY=\$KEY|\" .env; unset KEY"
+        fi
+        ;;
+    *)
+        echo " 2) [ -f .env ] || cp .env.example .env   # no pisa el tuyo si ya existe"
+        echo "    y completar TS_AUTHKEY (con tag:remotemarvin, si no el nodo vence a los"
+        echo "    ~180 dias) + OAuth para el QR"
+        ;;
+esac
+cat <<'EOF'
  3) docker compose up -d --build
  Desde la app:  conectá a  <tu-usuario>@remoteclaude:22
 

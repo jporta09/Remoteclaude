@@ -147,7 +147,7 @@ class HostsActivity : AppCompatActivity() {
                 "requiere una clave de la página de Tailscale (el único paso con login, " +
                 "detallado en la Guía rápida y en .env.example). El manual completo " +
                 "quedará luego disponible en Documentos.",
-            codigo = "bash scripts/setup-host.sh\ncp .env.example .env\ndocker compose up -d --build",
+            codigo = "bash scripts/setup-host.sh\n[ -f .env ] || cp .env.example .env\ndocker compose up -d --build",
         ),
         Tour.Paso(
             "Las skills de Claude",
@@ -534,7 +534,7 @@ class HostsActivity : AppCompatActivity() {
 
         titulo("1 · En la PC: preparar el host (una sola vez)")
         parrafo("Cloná el repo de RemoteMarvin y corré (dentro de la carpeta clonada):")
-        comando("git clone https://github.com/jporta09/Remoteclaude\ncd Remoteclaude\nbash scripts/setup-host.sh\ncp .env.example .env   # completá TS_AUTHKEY (ver abajo)\ndocker compose up -d --build")
+        comando("git clone https://github.com/jporta09/Remoteclaude\ncd Remoteclaude\nbash scripts/setup-host.sh\n[ -f .env ] || cp .env.example .env   # no pisa el tuyo; completá TS_AUTHKEY (ver abajo)\ndocker compose up -d --build")
         parrafo("Las claves del .env salen de la página de Tailscale (login.tailscale.com — "
             + "es el único momento con login; en el teléfono nunca): TS_AUTHKEY en Settings → "
             + "Keys → Generate (Reusable, NO Ephemeral, con el tag tag:remotemarvin — sin tag "

@@ -209,7 +209,7 @@ S.append(B("<b>Contenedor de display</b>: una pantalla virtual aislada donde cor
 S.append(P("Puesta en marcha (en la PC)", h1))
 S.append(P("Una sola vez, en el repo:"))
 S.append(C("bash scripts/setup-host.sh   # sshd solo-clave, tmux y daemons\n"
-           "cp .env.example .env         # completá TS_AUTHKEY\n"
+           "[ -f .env ] || cp .env.example .env   # no pisa el tuyo si ya existe\n"
            "docker compose up -d --build"))
 S.append(P("Y dentro de <b>Claude Code</b>, instalá el plugin de RemoteMarvin — le enseña "
            "a Claude a usar la app (compartir documentos al teléfono, encontrar lo que "

@@ -287,3 +287,62 @@ def test_setup_host_exige_uv(tmp_path):
     assert 'exit 1' in contenido.split('falta uv')[1][:400], \
         "el bloque de uv faltante tiene que salir con error, no saltear el STT"
     assert "SALTAR_STT" not in contenido, "no debe quedar el modo 'saltear STT en silencio'"
+
+
+# --- el paso del .env en el mensaje final (no puede proponer un cp que PISE) ---------------
+# Le pasó a un host real (2026-09-04): el script sugería `cp .env.example .env` incluso con el
+# host ya configurado, el usuario lo corrió y perdió TS_AUTHKEY y el OAuth client (este último
+# no se recupera de ningún lado: no viaja al contenedor). El mensaje ahora depende del estado.
+
+def _bloque_env(tmp_path, estado: str) -> str:
+    """Corre el bloque del mensaje final del setup con un .env en ese estado."""
+    setup = os.path.join(os.path.dirname(LIB), "setup-host.sh")
+    with open(setup) as f:
+        texto = f.read()
+    ini = texto.index('env_estado="falta"')
+    fin = texto.index("\nesac\n", ini) + len("\nesac\n")
+    bloque = tmp_path / "bloque.sh"
+    bloque.write_text(texto[ini:fin])
+
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / ".env.example").write_text("TS_AUTHKEY=tskey-auth-xxxx\nTS_OAUTH_CLIENT_ID=\n")
+    if estado == "plantilla":
+        (repo / ".env").write_text("TS_AUTHKEY=tskey-auth-xxxx\nTS_OAUTH_CLIENT_ID=\n")
+    elif estado == "listo":
+        (repo / ".env").write_text("TS_AUTHKEY=valor-real-de-prueba\nTS_OAUTH_CLIENT_ID=abc\n")
+    r = subprocess.run(["bash", str(bloque)], cwd=repo, env=dict(os.environ, REPO=str(repo)),
+                       capture_output=True, text=True, check=False)
+    assert r.returncode == 0, r.stderr
+    return r.stdout
+
+
+def test_sin_env_sugiere_un_cp_que_no_pisa(tmp_path):
+    salida = _bloque_env(tmp_path, "falta")
+    assert "[ -f .env ] || cp .env.example .env" in salida
+    # nunca el cp pelado, que es el que se lleva puestas las credenciales
+    assert "\n 2) cp .env.example .env" not in salida
+
+
+def test_con_env_completado_dice_que_no_lo_toque(tmp_path):
+    salida = _bloque_env(tmp_path, "listo")
+    assert "ya está completado" in salida and "NO lo toques" in salida
+    assert "|| cp .env.example" not in salida, "no hay que proponer copiar nada si ya está"
+
+
+def test_con_env_plantilla_pide_completarlo_sin_copiar(tmp_path):
+    salida = _bloque_env(tmp_path, "plantilla")
+    assert "la plantilla SIN completar" in salida
+    assert "cp .env.example .env" not in salida, "existe: copiar de nuevo no aporta y confunde"
+
+
+def test_ninguna_superficie_sugiere_un_cp_que_pise():
+    """§1.6: el README, la guía rápida de la app y el manual dicen lo mismo que el script."""
+    raiz = os.path.abspath(os.path.join(os.path.dirname(LIB), ".."))
+    for rel in ("README.md",
+                "scripts/gen-manual.py",
+                "android/app/src/main/java/com/remoteclaude/app/HostsActivity.kt"):
+        with open(os.path.join(raiz, rel)) as f:
+            for n, linea in enumerate(f, 1):
+                if "cp .env.example .env" in linea and "-f .env" not in linea and "pisar" not in linea:
+                    raise AssertionError(f"{rel}:{n} sugiere un cp que pisa el .env: {linea.strip()[:90]}")

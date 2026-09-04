@@ -58,7 +58,7 @@ En el **host** (una vez):
 
 ```bash
 bash scripts/setup-host.sh     # sshd solo-clave, tmux, daemons de usuario, ssh/config
-cp .env.example .env           # completá TS_AUTHKEY (y el OAuth si querés vincular por QR)
+[ -f .env ] || cp .env.example .env   # NO pisa el tuyo si ya existe; completá TS_AUTHKEY (y el OAuth para el QR)
 docker compose up -d --build   # contenedores: tailscale (red) + display (visor)
 ```
 
