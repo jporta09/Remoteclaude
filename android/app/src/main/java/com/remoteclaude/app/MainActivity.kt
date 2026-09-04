@@ -67,6 +67,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var control: RemoteControl
     private lateinit var keyPair: java.security.KeyPair
     private lateinit var barraHost: View
+    private lateinit var bannerApp: TextView
     private lateinit var barraLabel: TextView
     private lateinit var barraReconectar: TextView
     private lateinit var barraLogo: ImageView
@@ -220,9 +221,12 @@ class MainActivity : AppCompatActivity() {
         )
 
         barraHost = barraDeHost()
+
+        bannerApp = bannerDeAvisos()
         setContentView(LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             addView(barraHost, LinearLayout.LayoutParams(Paleta.MATCH, Paleta.WRAP))
+            addView(bannerApp, LinearLayout.LayoutParams(Paleta.MATCH, Paleta.WRAP))
             addView(tabs.vista, LinearLayout.LayoutParams(Paleta.MATCH, Paleta.WRAP))
             addView(terminalView, LinearLayout.LayoutParams(Paleta.MATCH, 0, 1f))
             addView(burbuja, LinearLayout.LayoutParams(Paleta.MATCH, Paleta.WRAP))
@@ -488,6 +492,7 @@ class MainActivity : AppCompatActivity() {
             }
         },
         onAccesoVencido = { runOnUiThread { pintarBarra() } },
+        onAvisoApp = { tipo, texto -> runOnUiThread { mostrarAvisoApp(tipo, texto) } },
     )
 
     // Re-enrolar de un toque: scanner de QR desde la terminal (mismo flujo que en hosts).
@@ -515,6 +520,11 @@ class MainActivity : AppCompatActivity() {
      *  conexión, disparar la demo de la terminal (antes se disparaba al activar la pestaña,
      *  aunque la auth hubiera fallado — mostraba "Host conectado" sobre una conexión muerta). */
     private fun alCambiarEstadoConexion() {
+        // Una conexión REAL apaga el aviso de vencido (el de host-key y el de expiry quedan hasta
+        // que los toques: no dependen de esta reconexión).
+        if (tabs.sesionActiva?.estado == SshTerminalSession.Estado.CONECTADO &&
+            avisoAppTipo == SshTerminalSession.AvisoApp.VENCIDO
+        ) ocultarAvisoApp()
         pintarBarra()
         if (demoPendiente && tabs.sesionActiva?.estado == SshTerminalSession.Estado.CONECTADO) {
             demoPendiente = false
@@ -559,8 +569,18 @@ class MainActivity : AppCompatActivity() {
                 if (estado == SshTerminalSession.Estado.CONECTADO) getColor(R.color.marvin_amber) else Paleta.REC_FG,
             )
             barraReconectar.setOnClickListener { qrScanner.launch(EnrolarTailscale.opciones()) }
+            // UX5-3: toque largo → pegar una auth key (si no estás en la PC para escanear el QR).
+            barraReconectar.setOnLongClickListener {
+                DialogoTailscale.mostrar(
+                    this,
+                    onKey = { k -> if (EnrolarTailscale.aplicar(this, k)) { pintarBarra(); tabs.forzarReconexiones() } },
+                    onScan = { qrScanner.launch(EnrolarTailscale.opciones()) },
+                )
+                true
+            }
             barraReconectar.visibility = View.VISIBLE
         } else {
+            barraReconectar.setOnLongClickListener(null)
             barraReconectar.text = "↻ Reconectar"
             barraReconectar.contentDescription = "Reconectar"
             barraReconectar.setTextColor(getColor(R.color.marvin_amber))
@@ -792,6 +812,40 @@ class MainActivity : AppCompatActivity() {
             adjustViewBounds = true
         }
         addView(barraLogo, LinearLayout.LayoutParams(Paleta.WRAP, dp(22)))
+    }
+
+    /**
+     * Banner nativo de avisos de la APP, bajo la barra (A5-1): host-key cambió, enrolamiento del
+     * celu vencido, expiry del nodo de la PC. Antes iban al pty, donde un host (o un Claude
+     * inyectado) los imita byte a byte y tmux los borra al redibujar. Se cierra al tocarlo.
+     */
+    @Volatile private var avisoAppTipo: SshTerminalSession.AvisoApp? = null
+
+    private fun bannerDeAvisos(): TextView = TextView(this).apply {
+        typeface = resources.getFont(R.font.ubuntu)
+        setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+        setPadding(dp(12), dp(8), dp(12), dp(8))
+        visibility = View.GONE
+        contentDescription = "Aviso de la app (tocá para cerrarlo)"
+        setOnClickListener { ocultarAvisoApp() }
+    }
+
+    private fun mostrarAvisoApp(tipo: SshTerminalSession.AvisoApp, texto: String) {
+        if (isFinishing || isDestroyed) return
+        avisoAppTipo = tipo
+        val (fg, bg) = when (tipo) {
+            SshTerminalSession.AvisoApp.HOST_KEY -> Paleta.REC_FG to Paleta.CHEV_BG
+            else -> getColor(R.color.marvin_amber) to Paleta.CHEV_BG
+        }
+        bannerApp.text = texto
+        bannerApp.setTextColor(fg)
+        bannerApp.setBackgroundColor(bg)
+        bannerApp.visibility = View.VISIBLE
+    }
+
+    private fun ocultarAvisoApp() {
+        avisoAppTipo = null
+        bannerApp.visibility = View.GONE
     }
 
     /** Burbuja del dictado en vivo: los parciales mientras sostenés 🎤. */

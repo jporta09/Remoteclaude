@@ -40,7 +40,17 @@ class SshTerminalSession(
     // El acceso de Tailscale venció (una vez por episodio, junto con el banner): la UI
     // muestra el ↺ Reescanear QR en la barra. Corre en el hilo ssh-loop.
     private val onAccesoVencido: (() -> Unit)? = null,
+    // A5-1 (5ª pasada): los avisos de la APP (host-key cambió, enrolamiento vencido, expiry del
+    // nodo de la PC) NO se escriben más al pty: ahí son bytes iguales a los del host, un host o un
+    // agente inyectado los imita byte a byte, y tmux los borra al redibujar. Van a un banner
+    // nativo bajo la barra (MainActivity) y al Diagnóstico.
+    private val onAvisoApp: ((AvisoApp, String) -> Unit)? = null,
 ) : TerminalSession(5000, client) {
+
+    /** Tipos de aviso de la app (para el color del banner). */
+    enum class AvisoApp { HOST_KEY, VENCIDO, EXPIRY_HOST }
+
+    private fun avisar(tipo: AvisoApp, texto: String) { onAvisoApp?.invoke(tipo, texto) }
 
     /** Estado real de la conexión SSH, leído por la UI. */
     enum class Estado { CONECTANDO, CONECTADO, RECONECTANDO, CAIDO }
@@ -281,11 +291,7 @@ class SshTerminalSession(
             }
 
             keyChanged?.let { (old, new, redDist) ->
-                status(
-                    "\r\n[LA CLAVE DEL HOST CAMBIÓ — conexión bloqueada]\r\n" +
-                        "  antes: $old\r\n  ahora: $new\r\n" +
-                        "  Puede ser una reinstalación del server… o alguien interceptando.\r\n"
-                )
+                avisar(AvisoApp.HOST_KEY, "La clave del host cambió — conexión bloqueada (antes $old · ahora $new)")
                 Diagnostico.registrar(
                     Diagnostico.Nivel.ERROR, "clave-host",
                     "$host:$port — LA CLAVE DEL HOST CAMBIÓ (antes $old / ahora $new) — bloqueado",
@@ -301,9 +307,10 @@ class SshTerminalSession(
             if (!avisoVencidoDado && attempt >= 2 && TailscaleBridge.accesoVencido()) {
                 // Honesto con la LAN: los hosts por tailnet no conectan hasta reescanear, los
                 // directos siguen (y este loop sigue reintentando: endpoint() ya cae a directo).
-                status(
-                    "\r\n[el enrolamiento de Tailscale venció — los hosts por tailnet no conectan " +
-                        "hasta reescanear el QR (↺ en la barra); los de LAN siguen]\r\n"
+                avisar(
+                    AvisoApp.VENCIDO,
+                    "El enrolamiento del celu venció — los hosts por tailnet no conectan hasta reescanear " +
+                        "el QR (↺); los de LAN siguen.",
                 )
                 // Diagnóstico: una sola vez por episodio (no una por pestaña) — ver companion.
                 if (episodioVencidoLogueado.compareAndSet(false, true)) {
@@ -484,26 +491,10 @@ class SshTerminalSession(
             val out = r.salida.trim()
             // TAGGED / NOEXP / SINSELF / vacío -> no avisar. NORUN y un entero negativo son el caso
             // que antes se callaba: el nodo del host YA venció (o fue revocado).
-            val aviso: String? = when {
-                out == "NORUN" ->
-                    "el nodo Tailscale de la PC no está activo (vencido o revocado): por tailnet el celu " +
-                        "no va a poder conectar — re-enrolá el nodo del host (con tag, así no vuelve a vencer)"
-                else -> {
-                    val dias = out.toIntOrNull()
-                    when {
-                        dias == null -> null
-                        dias < 0 -> "el acceso Tailscale de la PC YA VENCIÓ hace ${-dias} día(s) — re-enrolá " +
-                            "el nodo del host (con tag) o deshabilitá el key expiry en la consola"
-                        dias <= UMBRAL_EXPIRY_HOST_DIAS -> "el acceso Tailscale de la PC vence en $dias día(s) — " +
-                            "renovalo en la PC (agregale el tag al nodo, o deshabilitá el key expiry en la " +
-                            "consola) o vas a perder la conexión remota"
-                        else -> null
-                    }
-                }
-            }
+            val aviso = textoExpiryHost(out, UMBRAL_EXPIRY_HOST_DIAS)
             if (aviso != null) {
-                status("\r\n[$aviso]\r\n")
-                Diagnostico.registrar(Diagnostico.Nivel.AVISO, "tailscale", "nodo del host: $aviso")
+                avisar(AvisoApp.EXPIRY_HOST, aviso)
+                Diagnostico.registrar(Diagnostico.Nivel.AVISO, "tailscale", "nodo de la PC: $aviso")
             }
         } catch (_: Exception) {
             // best-effort: sin docker/jq/permiso, no se avisa (y no se rompe la conexión)
@@ -576,3 +567,24 @@ fun sondearAlcanzableEn(host: String, port: Int, timeoutMs: Int): Boolean = try 
  * jq 1.7 rechaza RFC3339Nano en fromdateiso8601.
  */
 internal const val EXPIRY_HOST_JQ = "if .Self == null then \"SINSELF\" elif (.BackendState != null and .BackendState != \"Running\") then \"NORUN\" elif (.Self.Tags // [] | length) > 0 then \"TAGGED\" elif .Self.KeyExpiry == null then \"NOEXP\" else (((.Self.KeyExpiry | sub(\"\\\\.[0-9]+\"; \"\") | fromdateiso8601) - now) / 86400 | floor | tostring) end"
+
+
+/**
+ * Texto del aviso sobre el nodo Tailscale de la PC a partir de la salida del filtro canónico
+ * (scripts/lib/expiry-host.jq): NORUN, un entero de días (negativo = ya venció), o nada. Glosario
+ * único (UX5-6): "el nodo de la PC" (el del host) vs "el enrolamiento del celu" (el embebido).
+ */
+internal fun textoExpiryHost(out: String, umbralDias: Int): String? {
+    if (out == "NORUN") {
+        return "El nodo Tailscale de la PC no está activo (vencido o revocado): por tailnet el celu no va " +
+            "a poder conectar. Re-enrolá el nodo de la PC (con tag, así no vuelve a vencer)."
+    }
+    val dias = out.toIntOrNull() ?: return null
+    return when {
+        dias < 0 -> "El nodo Tailscale de la PC YA VENCIÓ hace ${-dias} día(s). Re-enrolalo (con tag) o " +
+            "deshabilitá su key expiry en la consola; hasta entonces el celu no conecta por tailnet."
+        dias <= umbralDias -> "El nodo Tailscale de la PC vence en $dias día(s). Renovalo en la PC (agregale " +
+            "el tag al nodo, o deshabilitá el key expiry en la consola) o vas a perder la conexión remota."
+        else -> null
+    }
+}

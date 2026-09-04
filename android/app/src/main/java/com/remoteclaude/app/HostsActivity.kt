@@ -218,36 +218,11 @@ class HostsActivity : AppCompatActivity() {
         }
     }
 
-    private fun showVpnDialog() {
-        // No se precarga la key: mostrarla entera en pantalla (y dejarla en la jerarquía
-        // de vistas) es innecesario. Se indica si hay una configurada y listo.
-        val current = SecretStore.get(this, "ts_authkey")
-        val input = EditText(this).apply {
-            hint = if (current.isBlank()) "tskey-auth-…"
-                   else "configurada (…${current.takeLast(6)}) — pegá otra para reemplazar"
-            setSingleLine()
-            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
-            setPadding(dp(16), dp(12), dp(16), dp(12))
-        }
-        AlertDialog.Builder(this)
-            .setTitle("Tailscale embebido")
-            .setMessage(
-                "La app levanta su propio nodo Tailscale (no necesitás la app de Tailscale " +
-                    "aparte). Lo más fácil: en la PC corré  ./scripts/ts-link-qr.sh  y escaneá " +
-                    "el QR. O pegá una auth key a mano. Vacío = conexión directa."
-            )
-            .setView(input)
-            .setPositiveButton("Guardar y conectar") { _, _ ->
-                val typed = input.text.toString().trim()
-                // vacío = no tocar la que ya está (antes la borraba sin querer)
-                if (typed.isNotEmpty() || current.isBlank()) applyTailscaleKey(typed)
-            }
-            .setNeutralButton("Escanear QR") { _, _ ->
-                qrScanner.launch(EnrolarTailscale.opciones())
-            }
-            .setNegativeButton("Cancelar", null)
-            .show()
-    }
+    private fun showVpnDialog() = DialogoTailscale.mostrar(
+        this,
+        onKey = { applyTailscaleKey(it) },
+        onScan = { qrScanner.launch(EnrolarTailscale.opciones()) },
+    )
 
     /**
      * Guarda la auth key, reinicia el nodo embebido y refresca el estado. Vacío = conexión

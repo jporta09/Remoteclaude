@@ -63,7 +63,7 @@ object EnrolarTailscale {
      * emulador, y con 20s el sondeo expiraba justo cuando el nodo quedaba listo (observado).
      */
     fun anunciarVinculacion(activity: Activity) {
-        Toast.makeText(activity, "Re-vinculando Tailscale…", Toast.LENGTH_SHORT).show()
+        Toast.makeText(activity, "Re-vinculando el celu a Tailscale…", Toast.LENGTH_SHORT).show()
         // Un solo sondeo vivo por vez: N toques del ↺ lanzaban N hilos y N toasts (DEV-N5).
         if (!sondeando.compareAndSet(false, true)) return
         thread(name = "ts-identidad") {
@@ -85,7 +85,7 @@ object EnrolarTailscale {
                         Diagnostico.registrar(Diagnostico.Nivel.AVISO, "tailscale", "re-vinculado a la tailnet: $red")
                         activity.runOnUiThread {
                             if (!activity.isFinishing && !activity.isDestroyed) {
-                                Toast.makeText(activity, "Vinculado a la tailnet: $red", Toast.LENGTH_LONG).show()
+                                Toast.makeText(activity, "Celu vinculado a la tailnet: $red", Toast.LENGTH_LONG).show()
                             }
                         }
                         return
