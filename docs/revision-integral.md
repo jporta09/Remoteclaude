@@ -1094,6 +1094,40 @@ sin limite ≈ 25-45 puntos): maximo 2 concurrentes, lanzar solo con el medidor 
 `~/claude-refs/pasada<N>/` (un reboot borro el scratchpad de /tmp y devolvio el AVD a un snapshot
 viejo); para el AVD, siempre el build emuabi.
 
+### Estado de aplicación (v1.31.2, 2026-09-04) — Fase A del plan post-5ª pasada
+
+Release A shipeado (tag v1.31.2, vc49; plugin 1.10.2; el APK publicado lleva por primera vez el AAR
+construido en CI desde el source Go). Commits d000d6c (A1), 3439149+709c210 (A2), 68df67a (A3a),
+b7585f4 (A3b), 28f4a5f (release). Aplicado y verificado:
+- **Estructural del vencido**: observador del bus IPN en el bridge (`BackendState()`/`EsRunning()`);
+  `isReady()` deja de ser un latch; `endpoint()` cae a directo cuando el backend no está Running;
+  hosts mira vencido antes que ready y repollea también en verde; banner honesto con la LAN;
+  retry con jitter → UX5-1 / UF5-1 / UF5-2 (EJECUTADO en el AVD: barra ↺ a los 5 s, hosts ámbar
+  ≤5 s, terminal LAN sigue conectada).
+- **ANR**: `Hilos.cerrarEnFondo` en presencia STT, dictado en vivo, cierre de pestañas/onDestroy/
+  red perdida, visor; NetworkCallback en HandlerThread; PortTunnel 5 s → QA5-1 / SRE-5-4
+  (EJECUTADO: 0 ANR en HOME ×5, ‹, cerrar pestaña, wifi off/on con el nodo vencido).
+- **Exec acotados** (`SshExec`, 7 sitios) y expiry del host con NORUN / días negativos / RFC3339Nano
+  / BackendState ausente; filtro jq CANÓNICO compartido con marvin-doctor (test de paridad) →
+  SRE-5-1 / DEV-N4 / SEC5-4 / DEVOPS-5p-3 / SRE-5-2 (código; el doctor desplegado se actualiza al
+  re-correr setup-host.sh).
+- **Avisos**: backoff con jitter y tope creciente, sólo transiciones → SRE-5-3 (EJECUTADO: 2 filas
+  bajo vencido en vez de 1 cada 30 s).
+- **Re-enrol**: `configure()` fuera del main (DEV-N2), un sondeo (DEV-N5) con tope (DEV-N3),
+  `tskey-auth-` + sin control chars (QA5-2, EJECUTADO: api token rechazado), identidad y re-enrol
+  en Diagnóstico (UX5-5 / A5-5, EJECUTADO), "(previo)" sólo de otro proceso con hora legible.
+- **Host/CI/plugin**: unit ssh/sshd (DEVOPS-5p-1), setup-ok se va con el teardown (5p-2),
+  tmux status-style de marca (DG-3), ts-link-qr con --help y aviso SEC5-2, AAR reconstruido y
+  verificado en CI (SEC5-1 / L5), hook de subidos sin barra y con extractores (A5-4), la skill ya
+  no acuña keys (A5-3, decisión del dueño).
+
+Pendiente para el Release B (v1.32.0): retiro del estado paralelo (B1), pin ↔ red (A5-2) y diálogo
+de host-key (UX5-4), banner nativo fuera del pty (A5-1) y copy (UX5-3/6/8/9), identidad visual
+(DG-1/2/4/5/6), superficies (UX5-7). Nota de la validación: con la terminal viva por LAN y el nodo
+vencido, el título de la barra sigue en rojo (vencido como ESTADO): es lo que B1 convierte en causa.
+Sin ejercer en A4: S23 real (smoke al instalar por Obtainium), shim con negativo/NORUN en vivo
+(cubierto por tests de host + paridad).
+
 ---
 
 ## L · 4ª pasada COMPLETA — 8 perfiles sobre v1.28->v1.30 + fixes de hoy (2026-08-27)
