@@ -1121,12 +1121,43 @@ b7585f4 (A3b), 28f4a5f (release). Aplicado y verificado:
   verificado en CI (SEC5-1 / L5), hook de subidos sin barra y con extractores (A5-4), la skill ya
   no acuña keys (A5-3, decisión del dueño).
 
-Pendiente para el Release B (v1.32.0): retiro del estado paralelo (B1), pin ↔ red (A5-2) y diálogo
-de host-key (UX5-4), banner nativo fuera del pty (A5-1) y copy (UX5-3/6/8/9), identidad visual
-(DG-1/2/4/5/6), superficies (UX5-7). Nota de la validación: con la terminal viva por LAN y el nodo
-vencido, el título de la barra sigue en rojo (vencido como ESTADO): es lo que B1 convierte en causa.
-Sin ejercer en A4: S23 real (smoke al instalar por Obtainium), shim con negativo/NORUN en vivo
-(cubierto por tests de host + paridad).
+### Estado de aplicación (v1.32.0, 2026-09-04) — Fase B del plan post-5ª pasada
+
+Release B shipeado (tag v1.32.0, vc50; plugin 1.11.0). Commits 52384bc (B1+B2), ad75ee6 (B3),
+44012cf (B4), 62cf28e (B5), b8e1b43 (release). Aplicado y verificado en el emulador:
+- **Capstone §1.5 aplicado (B1)**: se retiraron los latches y ventanas del vencido
+  (`ultimoReEnrolMs`/`reEnrolReciente`/`VENTANA_RE_ENROL_MS`, `reVinculando` 25 s, `accesoVencido`
+  como flag de Activity, `vencidoCache` + su sonda JNI, `estado()`/`accesoVencidoDeEstado`). El
+  estado sale del bus IPN; la barra pinta el color por la conexión SSH real y el vencido es CAUSA
+  (sufijo) y ACCIÓN (↺). EJECUTADO: con el nodo vencido y el host por LAN, la terminal sigue verde
+  y conectada. **Gap encontrado en la validación y arreglado**: `pintarBarra()` quedó colgando de
+  eventos que no ocurren con la terminal viva, así que el ↺ recién aparecía al volver a entrar →
+  repoll de 3 s en foreground (el ↺ aparece a ~20 s del expire y se va solo tras re-enrolar).
+- **Pin ↔ red (B2, A5-2/UX5-4/SEC5-5)**: `HostKeys` guarda la tailnet vigente al fijar la clave; el
+  mismatch con red distinta dispara la rama dura SIN timer. EJECUTADO: el diálogo trae el comando
+  de verificación y las huellas en mononoki, "Copiar huella", y "Confiar en la nueva" RECHAZA vacío
+  y con 4 caracteres incorrectos; acepta con los correctos y reconecta. La decisión queda en
+  Diagnóstico.
+- **Avisos fuera del pty (B3, A5-1)**: los tres avisos van a un banner nativo bajo la barra +
+  Diagnóstico. EJECUTADO: el aviso real del expiry del host sale en el banner, mientras el MISMO
+  texto escrito desde el host al pty queda dentro de la terminal sin generar banner — el spoof que
+  ejercitó arquitecto-ia ya no se hace pasar por la app. Diálogo de Tailscale compartido con
+  "pegar key" desde el ↺ (toque largo, UX5-3, EJECUTADO) y glosario único (UX5-6/8/9).
+- **Identidad visual (B4)**: tema `Theme.Material3.Dark` (DG-1: modo claro medido, "Nuevo host"
+  1,27:1 → 12,04:1 y el hint 1,11:1 → 3,90:1); Paleta.kt única con test de paridad contra
+  colors.xml (DG-4); `scripts/retint-brand.py` lleva isologo, isotipo, launcher e íconos del manual
+  al verde canónico #71BF44 con test por píxel (DG-2, decisión del dueño); 12 VectorDrawable nuevos
+  reemplazan los glifos de texto/emoji (DG-5) y NOTICE.md deja de citar la fuente retirada (DG-11);
+  notificaciones con color de marca (DG-8); manual con h2 en petróleo, texto chico ≥ 4,5:1, subset
+  de símbolos versionado (el ↺ salía en tofu) y portada a 85 mm (DG-6/DG-7).
+- **Superficies (B5, UX5-7)**: manual, README (isologo, ACL escrita, fila real de botones, el AAR
+  del APK se construye en CI), guía rápida y visor con "línea de estado de Tailscale", y la skill
+  con la regla del corchete ("la app nunca escribe en la terminal") y el mismatch por red cambiada.
+
+Sin ejercer en B6: la rama de red DISTINTA del pin (necesita dos tailnets; cubierta por tests JVM),
+cámara/QR y el S23 real. Quedan como acción del usuario: (a) "Disable key expiry" del nodo real
+(vence 2026-12-12), (b) chequeo manual del QR de terminal en el S23, y re-correr `setup-host.sh`
+para actualizar el `marvin-doctor` desplegado.
 
 ---
 
