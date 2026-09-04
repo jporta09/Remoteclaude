@@ -340,6 +340,22 @@ class MainActivity : AppCompatActivity() {
         }
         // La presencia del dictado sigue al foreground (mantiene despierto al server en vivo).
         if (::dictado.isInitialized) dictado.enPrimerPlano(true)
+        barraHost.removeCallbacks(repintarBarra)
+        barraHost.post(repintarBarra)
+    }
+
+    /**
+     * Repinta la barra mientras la pantalla está al frente. El estado del NODO (vencido) cambia sin
+     * que la conexión SSH cambie de estado — con un host por LAN la terminal sigue viva y feliz —,
+     * así que sin este repoll el ↺ Reescanear QR recién aparecía al volver a entrar (visto en la
+     * validación de v1.32.0). Es barato: pintarBarra sólo lee flags atómicos, sin JNI ni red.
+     */
+    private val repintarBarra = object : Runnable {
+        override fun run() {
+            if (isFinishing || isDestroyed) return
+            pintarBarra()
+            barraHost.postDelayed(this, 3000)
+        }
     }
 
     override fun onPause() {
@@ -347,6 +363,7 @@ class MainActivity : AppCompatActivity() {
         pausadoEnMs = android.os.SystemClock.elapsedRealtime()
         if (::vigia.isInitialized) vigia.pausar()
         if (::dictado.isInitialized) dictado.enPrimerPlano(false)
+        if (::barraHost.isInitialized) barraHost.removeCallbacks(repintarBarra)
         super.onPause()
     }
 
