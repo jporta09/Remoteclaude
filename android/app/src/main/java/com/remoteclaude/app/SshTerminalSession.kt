@@ -575,4 +575,4 @@ fun sondearAlcanzableEn(host: String, port: Int, timeoutMs: Int): Boolean = try 
  * NOEXP, SINSELF, NORUN o un entero de días (negativo = ya venció). Recorta los nanosegundos porque
  * jq 1.7 rechaza RFC3339Nano en fromdateiso8601.
  */
-internal const val EXPIRY_HOST_JQ = "if .Self == null then \"SINSELF\" elif .BackendState != \"Running\" then \"NORUN\" elif (.Self.Tags // [] | length) > 0 then \"TAGGED\" elif .Self.KeyExpiry == null then \"NOEXP\" else (((.Self.KeyExpiry | sub(\"\\\\.[0-9]+\"; \"\") | fromdateiso8601) - now) / 86400 | floor | tostring) end"
+internal const val EXPIRY_HOST_JQ = "if .Self == null then \"SINSELF\" elif (.BackendState != null and .BackendState != \"Running\") then \"NORUN\" elif (.Self.Tags // [] | length) > 0 then \"TAGGED\" elif .Self.KeyExpiry == null then \"NOEXP\" else (((.Self.KeyExpiry | sub(\"\\\\.[0-9]+\"; \"\") | fromdateiso8601) - now) / 86400 | floor | tostring) end"

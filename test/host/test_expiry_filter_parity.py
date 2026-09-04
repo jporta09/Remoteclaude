@@ -69,6 +69,8 @@ def test_tokens_del_filtro():
     assert _jq({"BackendState": "Running", "Self": {"KeyExpiry": None}}) == "NOEXP"
     assert _jq({"BackendState": "Running"}) == "SINSELF"
     assert _jq({"BackendState": "NeedsLogin", "Self": {"KeyExpiry": _iso(dt.timedelta(days=5))}}) == "NORUN"
+    # Sin BackendState (un JSON parcial, como el shim de prueba) NO es alarma: se mira el expiry igual.
+    assert _jq({"Self": {"KeyExpiry": _iso(dt.timedelta(days=30, hours=1))}}) == "30"
 
 
 @necesita_jq

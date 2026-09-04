@@ -86,7 +86,7 @@ if command -v docker >/dev/null 2>&1 && [ "$tiene_jq" = 1 ]; then
   st=$(docker exec remoteclaude-ts tailscale status --json 2>/dev/null)
   if [ -n "$st" ]; then
     # Filtro CANÓNICO (scripts/lib/expiry-host.jq; la app embebe el mismo — paridad testeada).
-    res=$(printf '%s' "$st" | jq -r 'if .Self == null then "SINSELF" elif .BackendState != "Running" then "NORUN" elif (.Self.Tags // [] | length) > 0 then "TAGGED" elif .Self.KeyExpiry == null then "NOEXP" else (((.Self.KeyExpiry | sub("\\.[0-9]+"; "") | fromdateiso8601) - now) / 86400 | floor | tostring) end' 2>/dev/null)
+    res=$(printf '%s' "$st" | jq -r 'if .Self == null then "SINSELF" elif (.BackendState != null and .BackendState != "Running") then "NORUN" elif (.Self.Tags // [] | length) > 0 then "TAGGED" elif .Self.KeyExpiry == null then "NOEXP" else (((.Self.KeyExpiry | sub("\\.[0-9]+"; "") | fromdateiso8601) - now) / 86400 | floor | tostring) end' 2>/dev/null)
     case "$res" in
       TAGGED|NOEXP)
         echo "  ✅ key expiry deshabilitado (nodo con tag o sin vencimiento): no vence" ;;
