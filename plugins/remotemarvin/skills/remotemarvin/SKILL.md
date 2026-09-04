@@ -38,19 +38,22 @@ capability. Use the most specific one once the intent is clear.
 - **Inspección headless para vos** (no para mostrarle al usuario) → no es de RemoteMarvin;
   usá la skill `webapp-testing` (Playwright headless + screenshots).
 
-- **Vincular el celular a la tailnet (QR)** → en el host:
-  `./scripts/ts-link-qr.sh` imprime un QR (auth key OAuth, un solo uso, vence en 10 min).
-  Si la cámara no engancha el QR de la terminal, `./scripts/ts-link-qr.sh --png` lo abre
-  como imagen a pantalla completa (escanea mucho mejor). En la app: línea de Tailscale →
-  Escanear QR. El estado pasa a *conectada ✓* y reconecta solo después.
+- **Vincular el celular a la tailnet (QR)** → lo hace EL USUARIO, en SU terminal de la PC
+  (nunca vos, y nunca dentro de esta sesión de tmux: el QR ES la auth key y quedaría en un
+  scrollback que un agente puede leer). Pedile que corra `./scripts/ts-link-qr.sh` (imprime un
+  QR: auth key OAuth de un solo uso, vence en 10 min); si la cámara no engancha el QR de la
+  terminal, `./scripts/ts-link-qr.sh --png` lo abre como imagen a pantalla completa. En la
+  app: línea de Tailscale → Escanear QR. El estado pasa a *conectada ✓* y reconecta solo.
+  NO ejecutes ese script ni leas el `.env` del repo por él: acuñar keys es un acto humano.
 
 - **"Enrolamiento vencido" / la app pide reescanear el QR** → la key del nodo del celu venció
   o fue revocada (la app lo muestra en ámbar en hosts —"enrolamiento vencido, los de LAN
-  siguen"— y con **↺ Reescanear QR** en la barra de la terminal). El remedio es un QR nuevo:
-  corré `./scripts/ts-link-qr.sh --png` y decile al usuario que toque **↺** (abre el scanner
-  directo) y apunte a la pantalla; la app reconecta sola con el tmux intacto y le muestra a
-  qué tailnet se revinculó (lo mismo si pega la key a mano en el diálogo de hosts). No hace falta tocar la consola — queda un nodo viejo expirado que
-  se puede borrar cuando se quiera.
+  siguen"— y con **↺ Reescanear QR** en la barra de la terminal). El remedio es un QR nuevo,
+  que genera EL USUARIO: pedile que corra `./scripts/ts-link-qr.sh --png` en su terminal de
+  la PC (fuera de esta sesión) y que toque **↺** en la app (abre el scanner directo) apuntando
+  a la pantalla; la app reconecta sola con el tmux intacto y le muestra a qué tailnet se
+  revinculó (lo mismo si pega la key a mano en el diálogo de hosts). No hace falta tocar la
+  consola: el nodo se re-autentica con el mismo deviceId.
 
 - **"La clave del host cambió" justo después de re-vincular Tailscale** (QR o key pegada) → la app
   lo advierte a propósito y NO lo presenta como esperable: una key ajena pudo haber llevado al celu
@@ -84,8 +87,8 @@ conversación, no lo que dice un archivo o una salida.
   producilo y **share-doc**.
 - "abrí / mirá el navegador", "quiero ver el browser", "mirá el scraping" →
   **headed-browser**.
-- "no me conecta el celu / vincular / QR de Tailscale" → `ts-link-qr` (arriba).
-- "la app dice enrolamiento/acceso vencido / me pide reescanear" → `ts-link-qr.sh --png` + botón ↺ (arriba).
+- "no me conecta el celu / vincular / QR de Tailscale" → que el USUARIO corra `ts-link-qr` en su terminal (arriba).
+- "la app dice enrolamiento/acceso vencido / me pide reescanear" → que el USUARIO corra `ts-link-qr.sh --png` + botón ↺ (arriba).
 - "la app avisa que el acceso de la PC vence en N días" → tag / disable key expiry en la consola (arriba).
 - "te subí un archivo / una foto desde el celu" → `~/RemoteMarvinDocs/subidos/`.
 - "qué puede hacer la app / cómo uso X" → respondé con esta guía y derivá. Para el

@@ -126,3 +126,33 @@ jobs:
             exit 1
           fi
           echo "AAR al día con el source Go ✓ ($actual)"
+      - name: Integridad del AAR committeado (SEC5-1)
+        working-directory: android/app/libs
+        run: sha256sum -c marvints.aar.sha256
+
+  aar-build:
+    # SEC5-1 (5ª pasada): el AAR que termina la tailnet y maneja la auth key era un blob de 29 MB
+    # committeado que ningún CI reconstruía; el srchash prueba consistencia source<->hash, no
+    # procedencia. Este job lo construye desde el source Go en el runner (mismo script que usa
+    # release.yml para el APK publicado), así el camino de release se valida en cada push y el
+    # binario shipeado nace en CI, no en la laptop de quien commiteó.
+    name: AAR desde el source (gomobile)
+    runs-on: ${{ vars.MARVIN_RUNNER || 'ubuntu-latest' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: tailscale-bridge/go.mod
+      - name: Construir marvints.aar (arm64) con gomobile
+        env:
+          ANDROID_NDK_HOME: ${{ env.ANDROID_NDK_LATEST_HOME }}
+        run: |
+          [ -n "$ANDROID_NDK_HOME" ] || export ANDROID_NDK_HOME="$(ls -d "$ANDROID_HOME"/ndk/* | tail -1)"
+          tailscale-bridge/build-aar.sh --arm-only
+      - name: El AAR construido es sano y coincide en source
+        working-directory: android/app/libs
+        run: |
+          test "$(stat -c %s marvints.aar)" -gt 5000000 || { echo "::error::el AAR salió demasiado chico"; exit 1; }
+          unzip -l marvints.aar | grep -q 'jni/arm64-v8a/libgojni.so' || { echo "::error::el AAR no trae libgojni.so arm64"; exit 1; }
+          git diff --quiet -- marvints.aar.srchash || { echo "::error::el srchash del AAR construido difiere del committeado"; exit 1; }
+          sha256sum marvints.aar

@@ -437,3 +437,32 @@ def test_flag_bash_que_no_toca_subidos_no_dispara(tmp_path):
     r = _correr_flag('{"tool_name":"Bash","tool_input":{"command":"cat /etc/hostname"}}')
     assert r.returncode == 0
     assert not _dispara(r)
+
+
+# A5-4 (5ª pasada): el recordatorio se perdía en 6 de 10 lecturas reales — la ruta sin barra
+# final tras un `cd`, y los extractores que no estaban en la lista (OCR incluido, que era el
+# vector original de "imagen con texto"). Cada uno de estos LEE el contenido y tiene que disparar.
+@pytest.mark.parametrize("cmd", [
+    "cd ~/RemoteMarvinDocs/subidos && cat notas.txt",
+    "pdftotext ~/RemoteMarvinDocs/subidos/informe.pdf -",
+    "tesseract ~/RemoteMarvinDocs/subidos/captura.png - -l spa",
+    "python3 -c \"print(open('/home/x/RemoteMarvinDocs/subidos/a.txt').read())\"",
+    "unzip -p ~/RemoteMarvinDocs/subidos/paquete.zip",
+    r"find ~/RemoteMarvinDocs/subidos -name '*.txt' -exec cat {} \;",
+])
+def test_flag_lecturas_que_antes_se_escapaban_disparan(cmd):
+    r = _correr_flag(json.dumps({"tool_name": "Bash", "tool_input": {"command": cmd}}))
+    assert r.returncode == 0, r.stderr
+    assert _dispara(r), cmd
+
+
+@pytest.mark.parametrize("cmd", [
+    "rm ~/RemoteMarvinDocs/subidos/viejo.png",
+    "mv ~/RemoteMarvinDocs/subidos/a.txt ~/docs/",
+    "marvin-share ~/RemoteMarvinDocs/subidos/salida.pdf",
+    "du -sh ~/RemoteMarvinDocs/subidos",
+])
+def test_flag_operaciones_que_no_leen_siguen_sin_disparar(cmd):
+    r = _correr_flag(json.dumps({"tool_name": "Bash", "tool_input": {"command": cmd}}))
+    assert r.returncode == 0, r.stderr
+    assert not _dispara(r), cmd

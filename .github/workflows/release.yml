@@ -128,6 +128,21 @@ jobs:
           keyPassword=${KS_KEY_PW}
           EOF
 
+      # SEC5-1: el bridge nativo (tsnet + auth key) se construye ACÁ desde el source Go, no se
+      # toma del blob committeado (que queda para desarrollo local). Mismo script que valida
+      # el job aar-build de ci.yml en cada push.
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: tailscale-bridge/go.mod
+      - name: Construir marvints.aar desde el source (gomobile, arm64)
+        env:
+          ANDROID_NDK_HOME: ${{ env.ANDROID_NDK_LATEST_HOME }}
+        run: |
+          [ -n "$ANDROID_NDK_HOME" ] || export ANDROID_NDK_HOME="$(ls -d "$ANDROID_HOME"/ndk/* | tail -1)"
+          tailscale-bridge/build-aar.sh --arm-only
+          (cd android/app/libs && git diff --quiet -- marvints.aar.srchash) || { echo "::error::el srchash del AAR construido difiere del committeado"; exit 1; }
+          sha256sum android/app/libs/marvints.aar | tee "marvints-${GITHUB_REF_NAME}.aar.sha256"
+
       - name: Build release firmado (arm64, R8)
         working-directory: android
         run: ./gradlew :app:assembleRelease
@@ -154,6 +169,7 @@ jobs:
           files: |
             ${{ steps.apk.outputs.apk }}
             ${{ steps.apk.outputs.apk }}.sha256
+            marvints-${{ github.ref_name }}.aar.sha256
           generate_release_notes: true
           body: |
             **RemoteMarvin ${{ github.ref_name }}** — APK firmado para Android.

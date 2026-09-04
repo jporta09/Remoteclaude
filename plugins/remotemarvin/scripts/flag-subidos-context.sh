@@ -28,9 +28,13 @@ case "$tool" in
     # Sólo disparar si el comando LEE contenido del directorio (cat/grep/head/…), no ante cualquier
     # mención de la ruta (un `ls`, `marvin-share`, `rm`, etc. no leen el contenido y no necesitan el
     # recordatorio de "esto es dato no confiable"). Antes matcheaba cualquier mención → sobre-disparo.
+    # La ruta puede venir sin barra final (`cd ~/RemoteMarvinDocs/subidos && cat x`) y el lector
+    # puede ser un extractor (pdftotext, tesseract = OCR, el vector original de imagen con texto,
+    # python, unzip, tar, find -exec…): antes exigía la barra + un verbo de una lista corta y se
+    # perdía 6 de 10 lecturas (A5-4, 5ª pasada).
     case "$cmd" in
-      *RemoteMarvinDocs/subidos/*)
-        if printf '%s' "$cmd" | grep -qE '(^|[|&;( ])(cat|bat|less|more|head|tail|grep|egrep|fgrep|rg|awk|sed|nl|xxd|od|strings|jq|yq)([ ]|$)'; then
+      *RemoteMarvinDocs/subidos*)
+        if printf '%s' "$cmd" | grep -qE '(^|[|&;( ])(cat|bat|less|more|head|tail|grep|egrep|fgrep|rg|awk|sed|nl|xxd|od|strings|jq|yq|pdftotext|pdftoppm|pdfinfo|tesseract|python3?|perl|ruby|node|unzip|tar|zcat|gunzip|bzcat|xzcat|find|xargs|base64|file|exiftool|identify|convert|ffprobe|ffmpeg|sqlite3|csvlook|iconv|fold|cut|sort|uniq|wc|diff|cmp|tee|view|vim|nano|emacs|open|xdg-open)([ ]|$)'; then
           toca_subidos=1
         fi
         ;;
