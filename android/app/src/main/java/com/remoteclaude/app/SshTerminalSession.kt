@@ -310,7 +310,8 @@ class SshTerminalSession(
                 avisar(
                     AvisoApp.VENCIDO,
                     "El enrolamiento del celu venció — los hosts por tailnet no conectan hasta reescanear " +
-                        "el QR (↺); los de LAN siguen.",
+                        "el QR (↺); los de LAN siguen. ¿No estás en la PC? Mantené apretado el ↺ para pegar " +
+                        "una auth key.",
                 )
                 // Diagnóstico: una sola vez por episodio (no una por pestaña) — ver companion.
                 if (episodioVencidoLogueado.compareAndSet(false, true)) {

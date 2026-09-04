@@ -582,7 +582,8 @@ class MainActivity : AppCompatActivity() {
             // (LAN), en rojo si está caída (probablemente por eso).
             val colorRe = if (estado == SshTerminalSession.Estado.CONECTADO) Paleta.AMBER else Paleta.REC_FG
             barraReconectar.text = Iconos.etiqueta(this, Iconos.REESCANEAR, colorRe, 14f, "Reescanear QR")
-            barraReconectar.contentDescription = "Reescanear el QR de Tailscale"
+            barraReconectar.contentDescription =
+                "Reescanear el QR de Tailscale. Mantené apretado para pegar una auth key."
             barraReconectar.setTextColor(colorRe)
             barraReconectar.setOnClickListener { qrScanner.launch(EnrolarTailscale.opciones()) }
             // UX5-3: toque largo → pegar una auth key (si no estás en la PC para escanear el QR).
